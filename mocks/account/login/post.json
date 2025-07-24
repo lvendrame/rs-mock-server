@@ -1,0 +1,5 @@
+{
+    "username": "testuser",
+    "token": "abc123xyz",
+    "expires_in": 3600
+}
