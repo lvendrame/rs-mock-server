@@ -2,6 +2,14 @@
 name = "rs-mock-server"
 version = "0.1.0"
 edition = "2024"
+description = "A simple, file-based mock API server that maps your directory structure to HTTP routes. Ideal for local development and testing."
+license = "MIT"
+authors = ["Luís Vendrame <lvendrame@gmail.com>"]
+repository = "https://github.com/lvendrame/rs-mock-server"
+readme = "README.md"
+keywords = ["mock", "server", "api", "http", "axum"]
+categories = ["command-line-utilities", "development-tools::testing", "web-programming::http-server"]
+
 
 [dependencies]
 axum = "0.8.4"
