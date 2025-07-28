@@ -12,6 +12,7 @@ It works by scanning a directory and mapping its structure directly to API route
 -   🧩 **Dynamic Path Generation**: Create routes with parameters (`{id}`), specific values (`{admin}`), and even numeric ranges (`{1-10}`) right from the filename.
 -   ⚙️ **Full HTTP Method Support**: Define `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, and `OPTIONS` endpoints.
 -   🖼️ **Static File Serving**: Automatically serves any file (like images, CSS, or JS) with its correct `Content-Type` if the filename doesn't match a method pattern.
+-   🌐 Public Directory Serving: Serve a directory of static files (e.g., a frontend build) from a root public folder, or map a folder like public-assets to a custom /assets route.
 -   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
 
@@ -42,13 +43,25 @@ The following table shows how different filename patterns are mapped to routes, 
 | `[method]{start-end}` | `get{1-5}.json`   | `GET /api/users/1`<br>`GET /api/users/2`<br>...<br>`GET /api/users/5` | A numeric range that generates multiple distinct routes.                                                                                                                       |
 | `[filename].[ext]`    | `avatar.png`      | `GET /api/users/avatar`                                               | **Static File**. Any filename that doesn't match the patterns above is served as a static asset. The `Content-Type` header is automatically set based on the file's extension. |
 
+### Special "Public" Folder for Static Serving
+
+To serve a directory of static assets (like a frontend app), you can use a specially named `public` folder in your mock directory root.
+
+-   **`public` folder**: If you create a folder named `public`, all its contents will be served from the `/public` route.
+
+    -   `./mocks/public/home.html` → `GET /public/home.html`
+
+-   **`public-<alias>` folder**: You can customize the URL path by adding a dash. A folder named `public-static` will serve its files from the `/static` route.
+
+    -   `./mocks/public-static/style.css` → `GET /static/style.css`
+
 ---
 
 ## Installation
 
 ### With Cargo
 
-If the crate is published on [crates.io](https://crates.io), you can install it directly:
+You can install it directly:
 
 ```sh
 cargo install rs-mock-server
@@ -120,8 +133,12 @@ mocks/
 │   │   ├── get{1-3}.json   # Contains a product template for IDs 1, 2, 3
 │   │   └── get{special}.json# Contains a specific "special" product
 │   └── status.txt           # Contains the plain text "API is running"
-└── assets/
-    └── logo.svg             # An SVG image file
+├── assets/
+│   └── logo.svg             # An SVG image file
+└── public-static/
+    ├── image.jpg            # An JPG image file
+    └── css/
+        └── style.css        # A stylesheet
 ```
 
 Running `rs-mock-server` in the same directory will create the following endpoints:
@@ -137,3 +154,5 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 | **GET**  | `/api/products/special` | `mocks/api/products/get{special}.json` | `application/json` |
 | **GET**  | `/api/status.txt`       | `mocks/api/status.txt`                 | `text/plain`       |
 | **GET**  | `/assets/logo`.         | `mocks/assets/logo.svg`                | `image/svg+xml`    |
+| **GET**  | `/static/image.jpg`.    | `mocks/public-static/image.svg`        | `image/jpg`        |
+| **GET**  | `/static/css/style.css` | `mocks/public-static/css/style.css`    | `text/css`         |

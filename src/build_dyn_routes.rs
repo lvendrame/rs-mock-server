@@ -26,12 +26,20 @@ fn load_dir(app: &mut App, parent_route: &str, entries_path: &str) {
 
 fn load_entry(app: &mut App, parent_route: &str, entry: &DirEntry) {
     let binding = entry.file_name();
-    let path = binding.to_string_lossy();
-    let full_route = format!("{}/{}", parent_route, path);
+    let end_point = binding.to_string_lossy();
+    let full_route = format!("{}/{}", parent_route, end_point);
+
+    let file_name = String::from(end_point);
 
     if entry.file_type().unwrap().is_dir() {
-        load_dir(app, &full_route, entry.path().to_str().unwrap());
-    } else if entry.file_type().unwrap().is_file() &&  !entry.file_name().to_string_lossy().starts_with(".") {
+        if file_name.starts_with("public") {
+            return app.build_public_router(file_name,String::from(entry.path().to_string_lossy()));
+        }
+        return load_dir(app, &full_route, entry.path().to_str().unwrap());
+
+    }
+
+    if entry.file_type().unwrap().is_file() &&  !file_name.starts_with(".") {
         // If it's a file, read its contents and register the route
         load_file_route(app, parent_route, entry);
     }

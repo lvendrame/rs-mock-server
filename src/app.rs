@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::RefCell};
 
 use axum::{
     response::IntoResponse, routing::{get, MethodRouter},
@@ -7,7 +7,7 @@ use axum::{
 use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
-use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, trace::TraceLayer};
+use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
 use crate::{build_dyn_routes::load_mock_dir, pages::Pages};
 
@@ -99,6 +99,21 @@ impl App {
 
     async fn handler_404() -> impl IntoResponse {
         (StatusCode::NOT_FOUND, "nothing to see here")
+    }
+
+    pub fn build_public_router(&mut self, file_name: String, path: String) {
+        let  public_end_point = if let Some((_, to)) = file_name.split_once('-') {
+            to
+        } else {
+            "public"
+        };
+
+        let static_files = ServeDir::new(path);
+        let new_router = self.router.take().nest_service(
+            &format!("/{}", public_end_point),
+            static_files
+        );
+        self.replace_router(new_router);
     }
 
     async fn start_server(&self) {
