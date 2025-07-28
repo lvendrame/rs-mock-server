@@ -69,8 +69,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
             let route_path = format!("{}/{}", parent_route, "{id}");
             let router = build_method_router(&file_path, method);
             println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
-            app.pages.links.push(route_path.clone());
-            app.route(&route_path, router);
+            app.route(&route_path, router, Some(method.to_string()));
         }
 
         // Pattern 2: get{1-5}.json -> Range of static routes /path/1, /path/2, ...
@@ -80,8 +79,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
                     for i in start..=end {
                         let route_path = format!("{}/{}", parent_route, i);
                         let router = build_method_router(&file_path, method);
-                        app.pages.links.push(route_path.clone());
-                        app.route(&route_path, router);
+                        app.route(&route_path, router, Some(method.to_string()));
                     }
                     println!("✔️ Mapped {} to {} {}/[{}-{}]", file_name, method.to_uppercase(), parent_route, start, end);
                     return;
@@ -94,8 +92,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
         let router = build_method_router(&file_path, method);
         println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
 
-        app.pages.links.push(route_path.clone());
-        app.route(&route_path, router)
+        app.route(&route_path, router, Some(method.to_string()));
 
     } else if let Some(captures) = RE_METHOD.captures(file_stem) {
         // Default: get.json -> Route on the parent directory /path
@@ -104,16 +101,14 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
         let router = build_method_router(&file_path, method);
         println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), route_path);
 
-        app.pages.links.push(route_path.into());
-        app.route(route_path, router)
+        app.route(route_path, router, Some(method.to_string()))
     } else {
         let route_path = if parent_route.is_empty() { "/" } else { parent_route };
         let route_path = format!("{}/{}", route_path, file_stem);
         let router = build_stream_handler(file_path, "GET");
         println!("✔️ Mapped {} to GET {}", file_name, route_path);
 
-        app.pages.links.push(route_path.clone());
-        app.route(&route_path, router)
+        app.route(&route_path, router, Some(String::from("GET")))
     }
 }
 

@@ -45,10 +45,14 @@ impl App {
         let _old_route = self.router.replace(new_router);
     }
 
-    pub fn route(&mut self, path: &str, method_router: MethodRouter<()>) {
+    pub fn route(&mut self, path: &str, method_router: MethodRouter<()>, method: Option<String>) {
         let new_router = self.get_router().route(path, method_router);
 
         self.replace_router(new_router);
+
+        if let Some(method) = method {
+            self.pages.push_link(method, path.to_string());
+        }
     }
 
     fn build_dyn_routes(&mut self) {
@@ -65,7 +69,7 @@ impl App {
                 headers.insert(CONTENT_TYPE, HeaderValue::from_str("text/html").unwrap());
 
                 (headers, body).into_response()
-            }));
+            }), None);
 
         let home = String::from(self.pages.home_template);
 
@@ -75,7 +79,7 @@ impl App {
             headers.insert(CONTENT_TYPE, HeaderValue::from_str("text/html").unwrap());
 
             (headers, body).into_response()
-        }));
+        }), None);
     }
 
     fn build_middlewares(&mut self) {

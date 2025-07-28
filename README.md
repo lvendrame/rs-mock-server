@@ -40,7 +40,7 @@ The following table shows how different filename patterns are mapped to routes, 
 | `[method]{param}`     | `get{id}.json`    | `GET /api/users/{id}`                                                 | A dynamic segment that accepts any value in that position.                                                                                                                     |
 | `[method]{value}`     | `get{admin}.json` | `GET /api/users/admin`                                                | Matches a specific, hardcoded value.                                                                                                                                           |
 | `[method]{start-end}` | `get{1-5}.json`   | `GET /api/users/1`<br>`GET /api/users/2`<br>...<br>`GET /api/users/5` | A numeric range that generates multiple distinct routes.                                                                                                                       |
-| `[filename].[ext]`    | `avatar.png`      | `GET /api/users/avatar.png`                                           | **Static File**. Any filename that doesn't match the patterns above is served as a static asset. The `Content-Type` header is automatically set based on the file's extension. |
+| `[filename].[ext]`    | `avatar.png`      | `GET /api/users/avatar`                                               | **Static File**. Any filename that doesn't match the patterns above is served as a static asset. The `Content-Type` header is automatically set based on the file's extension. |
 
 ---
 
@@ -136,4 +136,4 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 | **GET**  | `/api/products/3`       | `mocks/api/products/get{1-3}.json`     | `application/json` |
 | **GET**  | `/api/products/special` | `mocks/api/products/get{special}.json` | `application/json` |
 | **GET**  | `/api/status.txt`       | `mocks/api/status.txt`                 | `text/plain`       |
-| **GET**  | `/assets/logo.svg`      | `mocks/assets/logo.svg`                | `image/svg+xml`    |
+| **GET**  | `/assets/logo`.         | `mocks/assets/logo.svg`                | `image/svg+xml`    |

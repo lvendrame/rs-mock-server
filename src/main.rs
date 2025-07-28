@@ -2,6 +2,7 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub mod app;
+pub mod link;
 pub mod pages;
 pub mod build_dyn_routes;
 

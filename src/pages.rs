@@ -1,7 +1,9 @@
+use crate::link::Link;
+
 pub struct Pages {
-    pub links: Vec<String>,
+    links: Vec<Link>,
+    index_template: &'static str,
     pub home_template: &'static str,
-    pub index_template: &'static str,
 }
 
 impl Default for Pages {
@@ -18,12 +20,15 @@ impl Pages {
         Self::default()
     }
 
+    pub fn push_link(&mut self, method: String, url: String){
+        self.links.push(Link::new(method, url));
+    }
+
     pub fn render_index(&self) -> String {
 
         let links = self.links.iter().map(|link|  {
-            format!("<li><a href=\"{}\" target=\"api_mocks\">{}</a></li>", link, link)
+            link.to_string()
         }).collect::<Vec<String>>().join("\n");
-
 
         self.index_template.replace("{{links}}", &links)
     }
