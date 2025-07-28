@@ -51,65 +51,68 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
     let file_stem = file_name.split('.').next().unwrap_or("");
 
     static RE_PARAM: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"^(get|post|put|patch|delete|options)\{(.+)\}$").unwrap()
-    });
-
-    static RE_METHOD: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"^(get|post|put|patch|delete|options)$").unwrap()
+        Regex::new(r"^(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
     });
 
     let file_path = entry.path().into_os_string();
 
     if let Some(captures) = RE_PARAM.captures(file_stem) {
         let method = captures.get(1).unwrap().as_str();
-        let pattern = captures.get(2).unwrap().as_str();
+        let pattern = captures.get(3);
 
-        // Pattern 1: get{id}.json -> Wildcard route /path/:param
-        if pattern == "id" {
-            let route_path = format!("{}/{}", parent_route, "{id}");
-            let router = build_method_router(&file_path, method);
-            println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
-            app.route(&route_path, router, Some(method.to_string()));
-        }
+        if let Some(pattern) = pattern {
+            let pattern = pattern.as_str();
 
-        // Pattern 2: get{1-5}.json -> Range of static routes /path/1, /path/2, ...
-        if pattern.contains('-') {
-            if let Some((start_str, end_str)) = pattern.split_once('-') {
-                if let (Ok(start), Ok(end)) = (start_str.parse::<i32>(), end_str.parse::<i32>()) {
-                    for i in start..=end {
-                        let route_path = format!("{}/{}", parent_route, i);
-                        let router = build_method_router(&file_path, method);
-                        app.route(&route_path, router, Some(method.to_string()));
+            // Pattern 1: get{id}.json -> Wildcard route /path/:param
+            if pattern == "id" {
+                let route_path = format!("{}/{}", parent_route, "{id}");
+                let router = build_method_router(&file_path, method);
+                println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
+                app.route(&route_path, router, Some(method.to_string()));
+                return;
+            }
+
+            // Pattern 2: get{1-5}.json -> Range of static routes /path/1, /path/2, ...
+            if pattern.contains('-') {
+                if let Some((start_str, end_str)) = pattern.split_once('-') {
+                    if let (Ok(start), Ok(end)) = (start_str.parse::<i32>(), end_str.parse::<i32>()) {
+                        for i in start..=end {
+                            let route_path = format!("{}/{}", parent_route, i);
+                            let router = build_method_router(&file_path, method);
+                            app.route(&route_path, router, Some(method.to_string()));
+                        }
+                        println!("✔️ Mapped {} to {} {}/[{}-{}]", file_name, method.to_uppercase(), parent_route, start, end);
+                        return;
                     }
-                    println!("✔️ Mapped {} to {} {}/[{}-{}]", file_name, method.to_uppercase(), parent_route, start, end);
-                    return;
                 }
             }
+
+            // Pattern 3: get{123}.json -> A single static route /path/123
+            let route_path = format!("{}/{}", parent_route, pattern);
+            let router = build_method_router(&file_path, method);
+            println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
+
+            app.route(&route_path, router, Some(method.to_string()));
+            return;
         }
 
-        // Pattern 3: get{123}.json -> A single static route /path/123
-        let route_path = format!("{}/{}", parent_route, pattern);
-        let router = build_method_router(&file_path, method);
-        println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
-
-        app.route(&route_path, router, Some(method.to_string()));
-
-    } else if let Some(captures) = RE_METHOD.captures(file_stem) {
         // Default: get.json -> Route on the parent directory /path
         let method = captures.get(1).unwrap().as_str();
         let route_path = if parent_route.is_empty() { "/" } else { parent_route };
         let router = build_method_router(&file_path, method);
         println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), route_path);
 
-        app.route(route_path, router, Some(method.to_string()))
-    } else {
-        let route_path = if parent_route.is_empty() { "/" } else { parent_route };
-        let route_path = format!("{}/{}", route_path, file_stem);
-        let router = build_stream_handler(file_path, "GET");
-        println!("✔️ Mapped {} to GET {}", file_name, route_path);
+        app.route(route_path, router, Some(method.to_string()));
 
-        app.route(&route_path, router, Some(String::from("GET")))
+        return;
     }
+
+    let route_path = if parent_route.is_empty() { "/" } else { parent_route };
+    let route_path = format!("{}/{}", route_path, file_stem);
+    let router = build_stream_handler(file_path, "GET");
+    println!("✔️ Mapped {} to GET {}", file_name, route_path);
+
+    app.route(&route_path, router, Some(String::from("GET")));
 }
 
 fn get_file_content(file_path: &OsString) -> String {
