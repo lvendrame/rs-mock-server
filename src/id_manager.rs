@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use uuid::Uuid;
 
 pub enum IdType {
@@ -9,6 +11,17 @@ pub enum IdType {
 pub enum IdValue {
     Uuid(String),
     Int(u64),
+}
+
+impl Display for IdValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let id = match self {
+            IdValue::Int(id) => id.to_string(),
+            IdValue::Uuid(uuid) => uuid.clone(),
+        };
+
+        f.write_str(&id)
+    }
 }
 
 pub struct IdManager {

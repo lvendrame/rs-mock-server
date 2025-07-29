@@ -242,7 +242,7 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 | **PUT**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Update company     |
 | **PATCH**  | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Partial update     |
 | **DELETE** | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Delete company     |
-| **GET**    | `/api/status.txt`       | `mocks/api/status.txt`                   | `text/plain`       | Static file                       |
+| **GET**    | `/api/status`           | `mocks/api/status.txt`                   | `text/plain`       | Static file                       |
 | **GET**    | `/assets/logo`          | `mocks/assets/logo.svg`                  | `image/svg+xml`    | Static file                       |
 | **GET**    | `/static/image.jpg`     | `mocks/public-static/image.svg`          | `image/jpg`        | Static file                       |
 | **GET**    | `/static/css/style.css` | `mocks/public-static/css/style.css`      | `text/css`         | Static file                       |

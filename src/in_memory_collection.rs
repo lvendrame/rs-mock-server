@@ -53,10 +53,7 @@ impl InMemoryCollection {
             let mut item = item;
 
             // Convert IdValue to string and add it to the item
-            let id_string = match &id_value {
-                IdValue::Int(id) => id.to_string(),
-                IdValue::Uuid(uuid) => uuid.clone(),
-            };
+            let id_string = id_value.to_string();
 
             // Add the ID to the item using the configured id_key
             if let Value::Object(ref mut map) = item {
