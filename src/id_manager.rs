@@ -8,7 +8,7 @@ pub enum IdType {
 #[derive(Clone)]
 pub enum IdValue {
     Uuid(String),
-    Int(u32),
+    Int(u64),
 }
 
 pub struct IdManager {
@@ -22,6 +22,10 @@ impl IdManager {
             id_type,
             current: None
         }
+    }
+
+    pub fn set_current(&mut self, value: IdValue) {
+        self.current = Some(value);
     }
 }
 

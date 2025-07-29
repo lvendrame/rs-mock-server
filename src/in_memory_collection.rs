@@ -75,6 +75,7 @@ impl InMemoryCollection {
         let mut added_items = Vec::new();
 
         if let Value::Array(items_array) = items {
+            let mut max_id = None;
             for item in items_array {
                 if let Value::Object(ref item_map) = item {
                     let id = item_map.get(&self.id_key);
@@ -84,7 +85,17 @@ impl InMemoryCollection {
                             _ => None
                         },
                         IdType::Int => match id {
-                            Some(Value::Number(id)) => Some(id.to_string()),
+                            Some(Value::Number(id)) => {
+                                if let Some(current) = max_id {
+                                    let id = id.as_u64().unwrap();
+                                    if current < id {
+                                        max_id = Some(id);
+                                    }
+                                } else {
+                                    max_id = id.as_u64();
+                                }
+                                Some(id.to_string())
+                            },
                             _ => None
                         },
                     };
@@ -98,6 +109,11 @@ impl InMemoryCollection {
                     // Skip items that don't have the required ID field
                 }
                 // Skip non-object items
+            }
+
+            // update the id_manager with the max id for an integer id
+            if let Some(value) = max_id {
+                self.id_manager.set_current(IdValue::Int(value));
             }
         }
 
