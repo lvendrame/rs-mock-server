@@ -12,8 +12,8 @@ pub enum IdValue {
 }
 
 pub struct IdManager {
-    id_type: IdType,
-    current: Option<IdValue>,
+    pub id_type: IdType,
+    pub current: Option<IdValue>,
 }
 
 impl IdManager {

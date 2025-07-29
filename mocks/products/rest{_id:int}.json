@@ -1,0 +1,122 @@
+[
+    {
+        "_id": 1,
+        "name": "Wireless Bluetooth Headphones",
+        "description": "Premium quality wireless headphones with noise cancellation and 30-hour battery life",
+        "price": 199.99,
+        "category": "Electronics",
+        "brand": "TechSound",
+        "inStock": true,
+        "quantity": 45,
+        "sku": "TS-WBH-001",
+        "rating": 4.5
+    },
+    {
+        "_id": 2,
+        "name": "Organic Coffee Beans",
+        "description": "Single-origin organic coffee beans from Colombian highlands, medium roast",
+        "price": 24.99,
+        "category": "Food & Beverages",
+        "brand": "Mountain Peak Coffee",
+        "inStock": true,
+        "quantity": 120,
+        "sku": "MPC-OCB-002",
+        "rating": 4.8
+    },
+    {
+        "_id": 3,
+        "name": "Ergonomic Office Chair",
+        "description": "Adjustable height office chair with lumbar support and breathable mesh back",
+        "price": 299.99,
+        "category": "Furniture",
+        "brand": "ComfortWork",
+        "inStock": true,
+        "quantity": 15,
+        "sku": "CW-EOC-003",
+        "rating": 4.3
+    },
+    {
+        "_id": 4,
+        "name": "Stainless Steel Water Bottle",
+        "description": "Insulated water bottle that keeps drinks cold for 24h or hot for 12h, 750ml capacity",
+        "price": 34.99,
+        "category": "Sports & Outdoors",
+        "brand": "HydroFlow",
+        "inStock": true,
+        "quantity": 88,
+        "sku": "HF-SSWB-004",
+        "rating": 4.7
+    },
+    {
+        "_id": 5,
+        "name": "Smart Fitness Tracker",
+        "description": "Advanced fitness tracker with heart rate monitoring, GPS, and 7-day battery life",
+        "price": 149.99,
+        "category": "Electronics",
+        "brand": "FitTech",
+        "inStock": false,
+        "quantity": 0,
+        "sku": "FT-SFT-005",
+        "rating": 4.4
+    },
+    {
+        "_id": 6,
+        "name": "Ceramic Non-Stick Pan Set",
+        "description": "3-piece ceramic non-stick cookware set with heat-resistant handles",
+        "price": 89.99,
+        "category": "Kitchen & Dining",
+        "brand": "ChefMaster",
+        "inStock": true,
+        "quantity": 32,
+        "sku": "CM-CNSP-006",
+        "rating": 4.6
+    },
+    {
+        "_id": 7,
+        "name": "Gaming Mechanical Keyboard",
+        "description": "RGB backlit mechanical keyboard with blue switches and programmable keys",
+        "price": 129.99,
+        "category": "Electronics",
+        "brand": "GamePro",
+        "inStock": true,
+        "quantity": 67,
+        "sku": "GP-GMK-007",
+        "rating": 4.2
+    },
+    {
+        "_id": 8,
+        "name": "Yoga Mat Premium",
+        "description": "Extra thick yoga mat with superior grip and eco-friendly materials, 6mm thickness",
+        "price": 59.99,
+        "category": "Sports & Outdoors",
+        "brand": "ZenFlow",
+        "inStock": true,
+        "quantity": 28,
+        "sku": "ZF-YMP-008",
+        "rating": 4.9
+    },
+    {
+        "_id": 9,
+        "name": "LED Desk Lamp",
+        "description": "Adjustable LED desk lamp with touch controls and USB charging port",
+        "price": 79.99,
+        "category": "Home & Office",
+        "brand": "BrightSpace",
+        "inStock": true,
+        "quantity": 53,
+        "sku": "BS-LDL-009",
+        "rating": 4.1
+    },
+    {
+        "_id": 10,
+        "name": "Portable Phone Charger",
+        "description": "10,000mAh portable battery pack with fast charging and multiple USB ports",
+        "price": 39.99,
+        "category": "Electronics",
+        "brand": "PowerBoost",
+        "inStock": true,
+        "quantity": 94,
+        "sku": "PB-PPC-010",
+        "rating": 4.5
+    }
+]

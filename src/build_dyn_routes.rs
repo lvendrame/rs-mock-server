@@ -158,7 +158,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
         let (id_key, id_type) = get_rest_options(descriptor);
         let route_path = if parent_route.is_empty() { "/" } else { parent_route };
 
-        build_in_memory_routes(app, route_path, id_key, id_type);
+        build_in_memory_routes(app, route_path, file_path, id_key, id_type);
 
         return;
     }
@@ -270,18 +270,20 @@ fn build_method_router(file_path: &OsString, method: &str) -> MethodRouter {
     }
 }
 
-fn build_in_memory_routes(app: &mut App, route_path: &str, id_key: &str, id_type: IdType) {
+fn build_in_memory_routes(app: &mut App, route_path: &str, file_path: OsString, id_key: &str, id_type: IdType) {
     let in_memory_collection = InMemoryCollection::new(id_type, id_key.to_string());
     let collection = Arc::new(Mutex::new(in_memory_collection));
+
+    let load_collection = Arc::clone(&collection);
+    load_initial_data(file_path, load_collection);
 
     // Build REST routes for CRUD operations
     // GET /resource - list all
     let list_collection = Arc::clone(&collection);
     let list_router = get(move || {
-        let collection = list_collection;
         async move {
-            let collection = collection.lock().unwrap();
-            let items = collection.get_all();
+            let list_collection = list_collection.lock().unwrap();
+            let items = list_collection.get_all();
             Json(items).into_response()
         }
     });
@@ -290,10 +292,9 @@ fn build_in_memory_routes(app: &mut App, route_path: &str, id_key: &str, id_type
     // POST /resource - create new
     let create_collection = Arc::clone(&collection);
     let create_router = post(move |Json(payload): Json<Value>| {
-        let collection = create_collection;
         async move {
-            let mut collection = collection.lock().unwrap();
-            match collection.add(payload) {
+            let mut create_collection = create_collection.lock().unwrap();
+            match create_collection.add(payload) {
                 Some(item) => (StatusCode::CREATED, Json(item)).into_response(),
                 None => StatusCode::BAD_REQUEST.into_response(),
             }
@@ -305,10 +306,9 @@ fn build_in_memory_routes(app: &mut App, route_path: &str, id_key: &str, id_type
     let id_route = format!("{}/{{{}}}", route_path, id_key);
     let get_collection = Arc::clone(&collection);
     let get_router = get(move |AxumPath(id): AxumPath<String>| {
-        let collection = get_collection;
         async move {
-            let collection = collection.lock().unwrap();
-            match collection.get(&id) {
+            let get_collection = get_collection.lock().unwrap();
+            match get_collection.get(&id) {
                 Some(item) => Json(item).into_response(),
                 None => StatusCode::NOT_FOUND.into_response(),
             }
@@ -319,10 +319,9 @@ fn build_in_memory_routes(app: &mut App, route_path: &str, id_key: &str, id_type
     // PUT /resource/:id - update by id
     let update_collection = Arc::clone(&collection);
     let put_router = put(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
-        let collection = update_collection;
         async move {
-            let mut collection = collection.lock().unwrap();
-            match collection.update(&id, payload) {
+            let mut update_collection = update_collection.lock().unwrap();
+            match update_collection.update(&id, payload) {
                 Some(item) => Json(item).into_response(),
                 None => StatusCode::NOT_FOUND.into_response(),
             }
@@ -330,13 +329,25 @@ fn build_in_memory_routes(app: &mut App, route_path: &str, id_key: &str, id_type
     });
     app.route(&id_route, put_router, Some("PUT".to_string()));
 
+    // PATCH /resource/:id - partial update by id
+    let patch_collection = Arc::clone(&collection);
+    let patch_router = patch(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
+        async move {
+            let mut patch_collection = patch_collection.lock().unwrap();
+            match patch_collection.update_partial(&id, payload) {
+                Some(item) => Json(item).into_response(),
+                None => StatusCode::NOT_FOUND.into_response(),
+            }
+        }
+    });
+    app.route(&id_route, patch_router, Some("PATCH".to_string()));
+
     // DELETE /resource/:id - delete by id
     let delete_collection = Arc::clone(&collection);
     let delete_router = delete(move |AxumPath(id): AxumPath<String>| {
-        let collection = delete_collection;
         async move {
-            let mut collection = collection.lock().unwrap();
-            match collection.delete(&id) {
+            let mut delete_collection = delete_collection.lock().unwrap();
+            match delete_collection.delete(&id) {
                 Some(item) => Json(item).into_response(),
                 None => StatusCode::NOT_FOUND.into_response(),
             }
@@ -345,4 +356,26 @@ fn build_in_memory_routes(app: &mut App, route_path: &str, id_key: &str, id_type
     app.route(&id_route, delete_router, Some("DELETE".to_string()));
 
     println!("✔️ Built REST routes for {}", route_path);
+}
+
+fn load_initial_data(file_path: OsString, load_collection: Arc<Mutex<InMemoryCollection>>) {
+    // Try to read the file content
+    if let Ok(file_content) = fs::read_to_string(&file_path) {
+        // Try to parse the content as JSON
+        if let Ok(json_value) = serde_json::from_str::<Value>(&file_content) {
+            // Check if it's a JSON Array
+            if let Value::Array(_) = json_value {
+                // Load the array into the collection using add_batch
+                let mut collection = load_collection.lock().unwrap();
+                let added_items = collection.add_batch(json_value);
+                println!("✔️ Loaded {} initial items from {}", added_items.len(), file_path.to_string_lossy());
+            } else {
+                println!("⚠️ File {} does not contain a JSON array, skipping initial data load", file_path.to_string_lossy());
+            }
+        } else {
+            println!("⚠️ File {} does not contain valid JSON, skipping initial data load", file_path.to_string_lossy());
+        }
+    } else {
+        println!("⚠️ Could not read file {}, skipping initial data load", file_path.to_string_lossy());
+    }
 }

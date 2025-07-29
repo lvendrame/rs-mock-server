@@ -18,18 +18,15 @@ impl<T> From<PoisonError<T>> for CollectionError {
 pub type CollectionResult<T> = Result<T, CollectionError>;
 
 pub struct InMemoryCollection {
-    db: Mutex<HashMap<String, Value>>,
-    id_manager: Mutex<IdManager>,
+    db: HashMap<String, Value>,
+    id_manager: IdManager,
     id_key: String,
 }
 
 impl InMemoryCollection {
     pub fn new(id_type: IdType, id_key: String) -> Self {
         let db: HashMap<String, Value> = HashMap::new();
-        let db = Mutex::new(db);
-
         let id_manager = IdManager::new(id_type);
-        let id_manager = Mutex::new(id_manager);
         Self {
             db,
             id_manager,
@@ -38,13 +35,11 @@ impl InMemoryCollection {
     }
 
     pub fn get_all(&self) -> Vec<Value> {
-        let data = self.db.lock().unwrap();
-        data.values().cloned().collect::<Vec<Value>>()
+        self.db.values().cloned().collect::<Vec<Value>>()
     }
 
     pub fn get_paginated(&self, offset: usize, limit: usize) -> Vec<Value> {
-        let data = self.db.lock().unwrap();
-        data.values()
+        self.db.values()
             .skip(offset)
             .take(limit)
             .cloned()
@@ -52,23 +47,20 @@ impl InMemoryCollection {
     }
 
     pub fn get(&self, id: &str) -> Option<Value> {
-        let data = self.db.lock().unwrap();
-        data.get(id).cloned()
+        self.db.get(id).cloned()
     }
 
     pub fn exists(&self, id: &str) -> bool {
-        let data = self.db.lock().unwrap();
-        data.contains_key(id)
+        self.db.contains_key(id)
     }
 
     pub fn count(&self) -> usize {
-        let data = self.db.lock().unwrap();
-        data.len()
+        self.db.len()
     }
 
     pub fn add(&mut self, item: Value) -> Option<Value> {
         let next_id = {
-            self.id_manager.lock().unwrap().next()
+            self.id_manager.next()
         };
 
         if let Some(id_value) = next_id {
@@ -85,9 +77,7 @@ impl InMemoryCollection {
                 map.insert(self.id_key.clone(), Value::String(id_string.clone()));
             }
 
-            // Lock the database and insert the item
-            let mut data = self.db.lock().unwrap();
-            data.insert(id_string, item.clone());
+            self.db.insert(id_string, item.clone());
 
             return Some(item);
         }
@@ -99,15 +89,24 @@ impl InMemoryCollection {
         let mut added_items = Vec::new();
 
         if let Value::Array(items_array) = items {
-            // Lock the database once for the entire batch operation
-            let mut data = self.db.lock().unwrap();
-
             for item in items_array {
                 if let Value::Object(ref item_map) = item {
+                    let id = item_map.get(&self.id_key);
+                    let id = match self.id_manager.id_type {
+                        IdType::Uuid => match id {
+                            Some(Value::String(id)) => Some(id.clone()),
+                            _ => None
+                        },
+                        IdType::Int => match id {
+                            Some(Value::Number(id)) => Some(id.to_string()),
+                            _ => None
+                        },
+                    };
+
                     // Extract the ID from the item using the configured id_key
-                    if let Some(Value::String(id)) = item_map.get(&self.id_key) {
+                    if let Some(id) = id {
                         // Insert the item with its existing ID
-                        data.insert(id.clone(), item.clone());
+                        self.db.insert(id.clone(), item.clone());
                         added_items.push(item);
                     }
                     // Skip items that don't have the required ID field
@@ -127,10 +126,8 @@ impl InMemoryCollection {
             map.insert(self.id_key.clone(), Value::String(id.to_string()));
         }
 
-        // Lock the database and update the item if it exists
-        let mut data = self.db.lock().unwrap();
-        if data.contains_key(id) {
-            data.insert(id.to_string(), item.clone());
+        if self.db.contains_key(id) {
+            self.db.insert(id.to_string(), item.clone());
             Some(item)
         } else {
             None
@@ -138,10 +135,7 @@ impl InMemoryCollection {
     }
 
     pub fn update_partial(&mut self, id: &str, partial_item: Value) -> Option<Value> {
-        // Lock the database and check if item exists
-        let mut data = self.db.lock().unwrap();
-
-        if let Some(existing_item) = data.get(id).cloned() {
+        if let Some(existing_item) = self.db.get(id).cloned() {
             // Merge the partial update with the existing item
             let updated_item = Self::merge_json_values(existing_item, partial_item);
 
@@ -152,7 +146,7 @@ impl InMemoryCollection {
             }
 
             // Update the item in the database
-            data.insert(id.to_string(), final_item.clone());
+            self.db.insert(id.to_string(), final_item.clone());
             Some(final_item)
         } else {
             None
@@ -160,15 +154,12 @@ impl InMemoryCollection {
     }
 
     pub fn delete(&mut self, id: &str) -> Option<Value> {
-        // Lock the database and remove the item if it exists
-        let mut data = self.db.lock().unwrap();
-        data.remove(id)
+        self.db.remove(id)
     }
 
     pub fn clear(&mut self) -> usize {
-        let mut data = self.db.lock().unwrap();
-        let count = data.len();
-        data.clear();
+        let count = self.db.len();
+        self.db.clear();
         count
     }
 
