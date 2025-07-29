@@ -1,21 +1,7 @@
-use std::{collections::HashMap, sync::{Mutex, PoisonError}};
+use std::{collections::HashMap};
 use serde_json::Value;
 
 use crate::id_manager::{IdManager, IdType, IdValue};
-
-#[derive(Debug)]
-pub enum CollectionError {
-    MutexPoisoned,
-    ItemNotFound,
-}
-
-impl<T> From<PoisonError<T>> for CollectionError {
-    fn from(_: PoisonError<T>) -> Self {
-        CollectionError::MutexPoisoned
-    }
-}
-
-pub type CollectionResult<T> = Result<T, CollectionError>;
 
 pub struct InMemoryCollection {
     db: HashMap<String, Value>,
