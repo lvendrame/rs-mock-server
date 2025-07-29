@@ -1,16 +1,17 @@
-use std::{ffi::OsString, fs::{self, DirEntry}, path::Path};
+use std::{ffi::OsString, fs::{self, DirEntry}, path::Path, sync::{Arc, Mutex}};
 
 use axum::{
-    body::Body, response::IntoResponse, routing::{delete, get, options, patch, post, put, MethodRouter}
+    body::Body, response::IntoResponse, routing::{delete, get, options, patch, post, put, MethodRouter}, extract::{Path as AxumPath, Json}, http::StatusCode
 };
-use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode};
+use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue};
 use mime_guess::from_path;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use serde_json::Value;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
-use crate::app::App;
+use crate::{app::App, id_manager::IdType, in_memory_collection::InMemoryCollection};
 
 pub fn load_mock_dir(app: &mut App) {
     load_dir(app, "", &app.root_path.clone());
@@ -45,6 +46,34 @@ fn load_entry(app: &mut App, parent_route: &str, entry: &DirEntry) {
     }
 }
 
+/// id:uuid, uuid, int, id, _id, _id:int
+fn get_rest_options(descriptor: &str) -> (&str, IdType) {
+    let parts: Vec<&str> = descriptor.split(':').collect();
+
+    if parts.len() == 1 {
+        // Single value like "uuid", "int", "id", "_id"
+        let part = parts[0];
+        match part {
+            "uuid" => ("id", IdType::Uuid),
+            "int" => ("id", IdType::Int),
+            id_key => (id_key, IdType::Uuid), // Default fallback
+        }
+    } else if parts.len() == 2 {
+        // Key:type format like "id:uuid", "_id:int"
+        let id_key = parts[0];
+        let type_str = parts[1];
+        let id_type = match type_str {
+            "uuid" => IdType::Uuid,
+            "int" => IdType::Int,
+            _ => IdType::Uuid, // Default to UUID
+        };
+        (id_key, id_type)
+    } else {
+        // Invalid format, return defaults
+        ("id", IdType::Uuid)
+    }
+}
+
 // Routes examples:
 // /mocks
 // /mocks/login/get.json,post.json,delete.json,put.json,patch.json
@@ -58,13 +87,17 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
     let file_name = binding.to_string_lossy();
     let file_stem = file_name.split('.').next().unwrap_or("");
 
-    static RE_PARAM: Lazy<Regex> = Lazy::new(|| {
+    static RE_METHODS: Lazy<Regex> = Lazy::new(|| {
         Regex::new(r"^(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
+    });
+
+    static RE_REST: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"^(rest)(\{(.+)\})?$").unwrap()
     });
 
     let file_path = entry.path().into_os_string();
 
-    if let Some(captures) = RE_PARAM.captures(file_stem) {
+    if let Some(captures) = RE_METHODS.captures(file_stem) {
         let method = captures.get(1).unwrap().as_str();
         let pattern = captures.get(3);
 
@@ -111,6 +144,21 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
         println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), route_path);
 
         app.route(route_path, router, Some(method.to_string()));
+
+        return;
+    }
+
+    if let Some(captures) = RE_REST.captures(file_stem) {
+        let descriptor = if let Some(pattern) = captures.get(3) {
+            pattern.as_str()
+        } else {
+            "id:uuid"
+        };
+
+        let (id_key, id_type) = get_rest_options(descriptor);
+        let route_path = if parent_route.is_empty() { "/" } else { parent_route };
+
+        build_in_memory_routes(app, route_path, id_key, id_type);
 
         return;
     }
@@ -220,4 +268,81 @@ fn build_method_router(file_path: &OsString, method: &str) -> MethodRouter {
     } else {
         build_stream_handler(file_path, method)
     }
+}
+
+fn build_in_memory_routes(app: &mut App, route_path: &str, id_key: &str, id_type: IdType) {
+    let in_memory_collection = InMemoryCollection::new(id_type, id_key.to_string());
+    let collection = Arc::new(Mutex::new(in_memory_collection));
+
+    // Build REST routes for CRUD operations
+    // GET /resource - list all
+    let list_collection = Arc::clone(&collection);
+    let list_router = get(move || {
+        let collection = list_collection;
+        async move {
+            let collection = collection.lock().unwrap();
+            let items = collection.get_all();
+            Json(items).into_response()
+        }
+    });
+    app.route(route_path, list_router, Some("GET".to_string()));
+
+    // POST /resource - create new
+    let create_collection = Arc::clone(&collection);
+    let create_router = post(move |Json(payload): Json<Value>| {
+        let collection = create_collection;
+        async move {
+            let mut collection = collection.lock().unwrap();
+            match collection.add(payload) {
+                Some(item) => (StatusCode::CREATED, Json(item)).into_response(),
+                None => StatusCode::BAD_REQUEST.into_response(),
+            }
+        }
+    });
+    app.route(route_path, create_router, Some("POST".to_string()));
+
+    // GET /resource/:id - get by id
+    let id_route = format!("{}/{{{}}}", route_path, id_key);
+    let get_collection = Arc::clone(&collection);
+    let get_router = get(move |AxumPath(id): AxumPath<String>| {
+        let collection = get_collection;
+        async move {
+            let collection = collection.lock().unwrap();
+            match collection.get(&id) {
+                Some(item) => Json(item).into_response(),
+                None => StatusCode::NOT_FOUND.into_response(),
+            }
+        }
+    });
+    app.route(&id_route, get_router, Some("GET".to_string()));
+
+    // PUT /resource/:id - update by id
+    let update_collection = Arc::clone(&collection);
+    let put_router = put(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
+        let collection = update_collection;
+        async move {
+            let mut collection = collection.lock().unwrap();
+            match collection.update(&id, payload) {
+                Some(item) => Json(item).into_response(),
+                None => StatusCode::NOT_FOUND.into_response(),
+            }
+        }
+    });
+    app.route(&id_route, put_router, Some("PUT".to_string()));
+
+    // DELETE /resource/:id - delete by id
+    let delete_collection = Arc::clone(&collection);
+    let delete_router = delete(move |AxumPath(id): AxumPath<String>| {
+        let collection = delete_collection;
+        async move {
+            let mut collection = collection.lock().unwrap();
+            match collection.delete(&id) {
+                Some(item) => Json(item).into_response(),
+                None => StatusCode::NOT_FOUND.into_response(),
+            }
+        }
+    });
+    app.route(&id_route, delete_router, Some("DELETE".to_string()));
+
+    println!("✔️ Built REST routes for {}", route_path);
 }

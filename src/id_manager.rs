@@ -1,0 +1,43 @@
+use uuid::Uuid;
+
+pub enum IdType {
+    Uuid,
+    Int
+}
+
+#[derive(Clone)]
+pub enum IdValue {
+    Uuid(String),
+    Int(u32),
+}
+
+pub struct IdManager {
+    id_type: IdType,
+    current: Option<IdValue>,
+}
+
+impl IdManager {
+    pub fn new(id_type: IdType) -> Self {
+        Self {
+            id_type,
+            current: None
+        }
+    }
+}
+
+impl Iterator for IdManager{
+    type Item = IdValue;
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = match &self.current {
+            Some(IdValue::Int(id)) => IdValue::Int(id + 1),
+            Some(IdValue::Uuid(_)) => IdValue::Uuid(Uuid::new_v4().to_string()),
+            None => match self.id_type {
+                IdType::Int => IdValue::Int(1),
+                IdType::Uuid => IdValue::Uuid(Uuid::new_v4().to_string()),
+            }
+        };
+
+        self.current = Some(item.clone());
+        Some(item)
+    }
+}
