@@ -45,13 +45,13 @@ impl App {
         let _old_route = self.router.replace(new_router);
     }
 
-    pub fn route(&mut self, path: &str, method_router: MethodRouter<()>, method: Option<String>) {
+    pub fn route(&mut self, path: &str, method_router: MethodRouter<()>, method: Option<&str>) {
         let new_router = self.get_router().route(path, method_router);
 
         self.replace_router(new_router);
 
         if let Some(method) = method {
-            self.pages.push_link(method, path.to_string());
+            self.pages.push_link(method.to_string(), path.to_string());
         }
     }
 
