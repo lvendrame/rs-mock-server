@@ -1,13 +1,9 @@
 use std::{ffi::OsString, fs, path::Path, sync::{Arc, Mutex}};
 
 use axum::{
-    body::Body,
-    response::IntoResponse,
-    routing::{delete, get, options, patch, post, put, MethodRouter},
-    extract::{Path as AxumPath, Json},
-    http::StatusCode
+    body::Body, extract::{Json, Multipart, Path as AxumPath}, http::StatusCode, response::IntoResponse, routing::{delete, get, options, patch, post, put, MethodRouter}
 };
-use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue};
+use http::{header::{CONTENT_DISPOSITION, CONTENT_TYPE}, HeaderMap, HeaderValue};
 use mime_guess::from_path;
 use serde_json::Value;
 use tokio::fs::File;
@@ -144,6 +140,7 @@ pub fn build_in_memory_routes(app: &mut App, route_path: &str, file_path: OsStri
 
     let id_route = format!("{}/{{{}}}", route_path, id_key);
 
+    // Build REST routes for CRUD operations
     create_get_all(app, route_path, &collection);
 
     create_insert(app, route_path, &collection);
@@ -160,7 +157,6 @@ pub fn build_in_memory_routes(app: &mut App, route_path: &str, file_path: OsStri
 }
 
 fn create_get_all(app: &mut App, route_path: &str, collection: &Arc<Mutex<InMemoryCollection>>) {
-    // Build REST routes for CRUD operations
     // GET /resource - list all
     let list_collection = Arc::clone(collection);
     let list_router = get(move || {
@@ -247,3 +243,80 @@ fn create_delete(app: &mut App, collection: Arc<Mutex<InMemoryCollection>>, id_r
     });
     app.route(&id_route, delete_router, Some("DELETE"));
 }
+
+pub fn build_upload_routes(app: &mut App, path: String, route: &str) {
+    create_upload_route(app, path.clone(), route);
+
+    create_download_route(app, path.clone(), route);
+}
+
+fn create_upload_route(app: &mut App, upload_path: String, route: &str) {
+    let uploads_route = format!("/{}", route);
+
+    // POST /uploads - create new
+    let uploads_router = post(async move |mut multipart: Multipart| {
+        while let Some(field) = multipart.next_field().await.unwrap() {
+            let field_name = field.name().unwrap_or("file").to_string();
+            let file_name = field.file_name()
+                .map(|name| name.to_string())
+                .unwrap_or_else(|| "uploaded_file.bin".to_string());
+
+            let data = field.bytes().await.unwrap();
+
+            println!("Received file '{}' in field '{}' with {} bytes", file_name, field_name, data.len());
+
+            // Save the file with its original name
+            let file_path = format!("{}/{}", upload_path, file_name);
+            tokio::fs::write(&file_path, &data).await.unwrap();
+        }
+
+        "File uploaded successfully"
+    });
+
+    app.route(&uploads_route, uploads_router, Some("POST"));
+}
+
+fn create_download_route(app: &mut App, download_path: String, route: &str) {
+    let download_route = format!("/{}/{{file_name}}", route);
+
+    // GET /uploads/{filename} - download file
+    let download_router = get(move |AxumPath(file_name): AxumPath<String>| {
+        async move {
+            let file_path = Path::new(&download_path).join(&file_name);
+
+            // Check if file exists
+            if !file_path.exists() {
+                return StatusCode::NOT_FOUND.into_response();
+            }
+
+            // Read file content
+            match tokio::fs::read(&file_path).await {
+                Ok(contents) => {
+                    // Guess MIME type
+                    let mime_type = from_path(&file_path)
+                        .first_or_octet_stream()
+                        .to_string();
+
+                    // Set headers
+                    let mut headers = HeaderMap::new();
+                    headers.insert(CONTENT_TYPE, HeaderValue::from_str(&mime_type).unwrap());
+
+                    headers.insert(
+                        CONTENT_DISPOSITION,
+                        HeaderValue::from_str(&format!(
+                            "attachment; filename=\"{}\"",
+                            file_name
+                        ))
+                        .unwrap(),
+                    );
+
+                    (headers, contents).into_response()
+                },
+                Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            }
+        }
+    });
+
+    app.route(&download_route, download_router, Some("GET"));
+}
+

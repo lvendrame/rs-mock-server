@@ -1,5 +1,6 @@
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tokio::signal::{self, ctrl_c};
 
 pub mod app;
 pub mod link;
@@ -35,5 +36,18 @@ async fn main() {
 
     let args = Args::parse();
 
-    app::App::new(args.port, args.folder).initialize().await;
+    let mut app = app::App::new(args.port, args.folder);
+
+    let main_logic = app.initialize();
+
+    tokio::select! {
+        // Wait for the main logic to complete (which it won't in this case)
+        _ = main_logic => {
+            app.finish();
+        },
+        // Wait for the Ctrl+C signal
+        _ = signal::ctrl_c() => {
+            app.finish();
+        }
+    }
 }

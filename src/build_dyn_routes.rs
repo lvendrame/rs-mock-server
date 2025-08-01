@@ -2,7 +2,19 @@ use std::fs::{self, DirEntry};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{app::App, handlers::{build_in_memory_routes, build_method_router, build_stream_handler}, id_manager::IdType};
+use crate::{app::App, handlers::{build_in_memory_routes, build_method_router, build_stream_handler, build_upload_routes}, id_manager::IdType};
+
+static RE_DIR_UPLOAD: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\{upload\}(\{temp\})?(-.+)?$").unwrap()
+});
+
+static RE_FILE_METHODS: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
+});
+
+static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(rest)(\{(.+)\})?$").unwrap()
+});
 
 pub fn load_mock_dir(app: &mut App) {
     load_dir(app, "", &app.root_path.clone());
@@ -27,8 +39,14 @@ fn load_entry(app: &mut App, parent_route: &str, entry: &DirEntry) {
         if file_name.starts_with("public") {
             return app.build_public_router(file_name,String::from(entry.path().to_string_lossy()));
         }
-        return load_dir(app, &full_route, entry.path().to_str().unwrap());
 
+        if let Some(captures) = RE_DIR_UPLOAD.captures(&file_name) {
+            let path = entry.path().as_os_str().to_str().unwrap().to_string();
+            load_upload_folder(app, path, captures);
+            return;
+        }
+
+        return load_dir(app, &full_route, entry.path().to_str().unwrap());
     }
 
     if entry.file_type().unwrap().is_file() &&  !file_name.starts_with(".") {
@@ -78,17 +96,9 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
     let file_name = binding.to_string_lossy();
     let file_stem = file_name.split('.').next().unwrap_or("");
 
-    static RE_METHODS: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"^(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
-    });
-
-    static RE_REST: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"^(rest)(\{(.+)\})?$").unwrap()
-    });
-
     let file_path = entry.path().into_os_string();
 
-    if let Some(captures) = RE_METHODS.captures(file_stem) {
+    if let Some(captures) = RE_FILE_METHODS.captures(file_stem) {
         let method = captures.get(1).unwrap().as_str();
         let pattern = captures.get(3);
 
@@ -123,7 +133,6 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
             let route_path = format!("{}/{}", parent_route, pattern);
             let router = build_method_router(&file_path, method);
             println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
-
             app.route(&route_path, router, Some(method));
             return;
         }
@@ -139,7 +148,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
         return;
     }
 
-    if let Some(captures) = RE_REST.captures(file_stem) {
+    if let Some(captures) = RE_FILE_REST.captures(file_stem) {
         let descriptor = if let Some(pattern) = captures.get(3) {
             pattern.as_str()
         } else {
@@ -160,4 +169,20 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
     println!("✔️ Mapped {} to GET {}", file_name, route_path);
 
     app.route(&route_path, router, Some("GET"));
+}
+
+
+fn load_upload_folder(app: &mut App, path: String, captures: regex::Captures<'_>) {
+    let is_temp = captures.get(1).is_some();
+    let uploads_route = if let Some(route) = captures.get(2) {
+        route.as_str()
+    } else {
+        "upload"
+    };
+
+    app.set_uploads_config(Some(path.clone()), is_temp);
+
+    build_upload_routes(app, path.clone(), uploads_route);
+
+    println!("✔️ Mapped uploads from folder {} to /{}", path, uploads_route);
 }

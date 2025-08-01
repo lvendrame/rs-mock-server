@@ -16,6 +16,8 @@ pub struct App {
     pub root_path: String,
     pub router: RefCell<Router>,
     pub pages: Pages,
+    uploads_path: Option<String>,
+    clean_uploads: bool,
 }
 
 impl Default for App {
@@ -24,7 +26,9 @@ impl Default for App {
         let root_path = String::from("/");
         let router = RefCell::new(Router::new());
         let pages = Pages::new();
-        App { port, root_path, router, pages }
+        let uploads_path = None;
+        let clean_uploads = false;
+        App { port, root_path, router, pages, uploads_path, clean_uploads }
     }
 }
 
@@ -33,7 +37,14 @@ impl App {
     pub fn new(port: u16, root_path: String) -> Self {
         let routes = RefCell::new(Router::new());
         let pages = Pages::new();
-        App { port, root_path, router: routes, pages }
+        let uploads_path = None;
+        let clean_uploads = false;
+        App { port, root_path, router: routes, pages, uploads_path, clean_uploads }
+    }
+
+    pub fn set_uploads_config(&mut self, uploads_path: Option<String>, clean_uploads: bool) {
+        self.clean_uploads = clean_uploads;
+        self.uploads_path = uploads_path;
     }
 
     fn get_router(&self) -> Router {
@@ -131,5 +142,39 @@ impl App {
         self.build_fallback();
         self.build_middlewares();
         self.start_server().await;
+    }
+
+    fn clean_uploads_folder(path: String) {
+        use std::fs;
+
+        match fs::read_dir(&path) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    let entry_path = entry.path();
+
+                    if entry_path.is_file() {
+                        if let Err(e) = fs::remove_file(&entry_path) {
+                            eprintln!("⚠️ Failed to delete file {}: {}", entry_path.display(), e);
+                        } else {
+                            println!("🗑️ Deleted uploaded file: {}", entry_path.display());
+                        }
+                    }
+                }
+                println!("✔️ Cleaned uploads folder: {}", path);
+            }
+            Err(e) => {
+                eprintln!("⚠️ Failed to read uploads directory {}: {}", path, e);
+            }
+        }
+    }
+
+    pub fn finish(&self) {
+        println!("\n");
+        if self.clean_uploads {
+            if let Some(uploads_path) = self.uploads_path.clone() {
+                Self::clean_uploads_folder(uploads_path);
+            }
+        }
+        println!("\nGoodbye! 👋");
     }
 }
