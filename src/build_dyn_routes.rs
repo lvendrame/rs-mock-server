@@ -2,7 +2,11 @@ use std::fs::{self, DirEntry};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{app::App, handlers::{build_in_memory_routes, build_method_router, build_stream_handler, build_upload_routes}, id_manager::IdType};
+use crate::{
+    app::App,
+    handlers::{build_in_memory_routes, build_method_router, build_stream_handler, build_upload_routes},
+    id_manager::IdType
+};
 
 static RE_DIR_UPLOAD: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^\{upload\}(\{temp\})?(-.+)?$").unwrap()

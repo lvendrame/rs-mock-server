@@ -2,13 +2,12 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use tokio::signal;
 
+pub mod handlers;
+pub mod id_manager;
 pub mod app;
 pub mod link;
 pub mod pages;
-pub mod handlers;
 pub mod build_dyn_routes;
-pub mod id_manager;
-pub mod in_memory_collection;
 pub mod upload_configuration;
 
 /// rs-mock-server is a simple mock server for testing APIs.
