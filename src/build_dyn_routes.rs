@@ -175,12 +175,14 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
 fn load_upload_folder(app: &mut App, path: String, captures: regex::Captures<'_>) {
     let is_temp = captures.get(1).is_some();
     let uploads_route = if let Some(route) = captures.get(2) {
-        route.as_str()
+        let mut ch = route.as_str().chars();
+        ch.next();
+        ch.as_str()
     } else {
         "upload"
     };
 
-    app.set_uploads_config(Some(path.clone()), is_temp);
+    app.push_uploads_config(path.clone(), is_temp);
 
     build_upload_routes(app, path.clone(), uploads_route);
 

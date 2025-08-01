@@ -1,6 +1,6 @@
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use tokio::signal::{self, ctrl_c};
+use tokio::signal;
 
 pub mod app;
 pub mod link;
@@ -9,6 +9,7 @@ pub mod handlers;
 pub mod build_dyn_routes;
 pub mod id_manager;
 pub mod in_memory_collection;
+pub mod upload_configuration;
 
 /// rs-mock-server is a simple mock server for testing APIs.
 /// It serves static files as API responses based on their filenames and directory structure.

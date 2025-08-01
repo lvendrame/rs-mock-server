@@ -12,6 +12,7 @@ It works by scanning a directory and mapping its structure directly to API route
 -   🧩 **Dynamic Path Generation**: Create routes with parameters (`{id}`), specific values (`{admin}`), and even numeric ranges (`{1-10}`) right from the filename.
 -   ⚙️ **Full HTTP Method Support**: Define `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, and `OPTIONS` endpoints.
 -   🔗 **In-Memory REST API**: Create fully functional CRUD APIs with automatic ID generation and data persistence during runtime using special `rest.json` files.
+-   📤 **File Upload & Download**: Create upload endpoints with automatic file handling and download capabilities using special `{upload}` folders.
 -   🖼️ **Static File Serving**: Automatically serves any file (like images, CSS, or JS) with its correct `Content-Type` if the filename doesn't match a method pattern.
 -   🌐 **Public Directory Serving**: Serve a directory of static files (e.g., a frontend build) from a root public folder, or map a folder like public-assets to a custom /assets route.
 -   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
@@ -130,6 +131,37 @@ To serve a directory of static assets (like a frontend app), you can use a speci
 
     -   `./mocks/public-static/style.css` → `GET /static/style.css`
 
+### Special "{upload}" Folder for File Handling
+
+For file upload and download functionality, you can create a specially named `{upload}` folder. When detected, the server automatically creates endpoints for uploading and downloading files.
+
+#### Basic Upload Folder
+
+-   **`{upload}` folder**: Creates upload and download endpoints at `/upload`.
+
+    -   **POST** `/upload` - Upload files (multipart/form-data)
+    -   **GET** `/upload/{filename}` - Download files by name
+
+#### Upload Folder Configuration
+
+The `{upload}` folder supports additional configuration through special naming patterns:
+
+| Folder Pattern        | Upload Route   | Download Route           | Temporary Files | Description                  |
+| :-------------------- | :------------- | :----------------------- | :-------------- | :--------------------------- |
+| `{upload}`            | `POST /upload` | `GET /upload/{filename}` | No              | Basic upload/download        |
+| `{upload}{temp}`      | `POST /upload` | `GET /upload/{filename}` | **Yes**         | Files deleted on server stop |
+| `{upload}-files`      | `POST /files`  | `GET /files/{filename}`  | No              | Custom route name            |
+| `{upload}{temp}-docs` | `POST /docs`   | `GET /docs/{filename}`   | **Yes**         | Custom route + temporary     |
+
+#### Examples
+
+-   **Basic**: `./mocks/{upload}/` creates `POST /upload` and `GET /upload/{filename}`
+-   **Temporary**: `./mocks/{upload}{temp}/` - same endpoints, but files are cleaned up when server stops
+-   **Custom Route**: `./mocks/{upload}-files/` creates `POST /files` and `GET /files/{filename}`
+-   **Combined**: `./mocks/{upload}{temp}-upfiles/` creates `POST /upfiles` and `GET /upfiles/{filename}` with automatic cleanup
+
+All uploaded files are saved in the detected folder with their original filenames, and downloads include proper `Content-Type` and `Content-Disposition` headers.
+
 ---
 
 ## Installation
@@ -213,6 +245,8 @@ mocks/
 │   └── status.txt           # Contains the plain text "API is running"
 ├── assets/
 │   └── logo.svg             # An SVG image file
+├── {upload}/                # Upload folder for file handling
+├── {upload}{temp}-docs/     # Temporary upload folder with custom route
 └── public-static/
     ├── image.jpg            # An JPG image file
     └── css/
@@ -221,30 +255,40 @@ mocks/
 
 Running `rs-mock-server` in the same directory will create the following endpoints:
 
-| Method     | Route                   | Response Body From...                    | `Content-Type`     | Description                       |
-| :--------- | :---------------------- | :--------------------------------------- | :----------------- | :-------------------------------- |
-| **GET**    | `/api/users`            | `mocks/api/users/get.json`               | `application/json` | Static response                   |
-| **POST**   | `/api/users`            | `mocks/api/users/post.json`              | `application/json` | Static response                   |
-| **GET**    | `/api/users/{id}`       | `mocks/api/users/get{id}.json`           | `application/json` | Static response                   |
-| **GET**    | `/api/products`         | In-memory data from `rest{_id:int}.json` | `application/json` | **REST API** - List all products  |
-| **POST**   | `/api/products`         | In-memory database                       | `application/json` | **REST API** - Create new product |
-| **GET**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Get product by ID  |
-| **PUT**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Update product     |
-| **PATCH**  | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Partial update     |
-| **DELETE** | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Delete product     |
-| **GET**    | `/api/products/1`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                   |
-| **GET**    | `/api/products/2`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                   |
-| **GET**    | `/api/products/3`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                   |
-| **GET**    | `/api/products/special` | `mocks/api/products/get{special}.json`   | `application/json` | Static response                   |
-| **GET**    | `/api/companies`        | In-memory data from `rest.json`          | `application/json` | **REST API** - List all companies |
-| **POST**   | `/api/companies`        | In-memory database                       | `application/json` | **REST API** - Create new company |
-| **GET**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Get company by ID  |
-| **PUT**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Update company     |
-| **PATCH**  | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Partial update     |
-| **DELETE** | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Delete company     |
-| **GET**    | `/api/status`           | `mocks/api/status.txt`                   | `text/plain`       | Static file                       |
-| **GET**    | `/assets/logo`          | `mocks/assets/logo.svg`                  | `image/svg+xml`    | Static file                       |
-| **GET**    | `/static/image.jpg`     | `mocks/public-static/image.svg`          | `image/jpg`        | Static file                       |
-| **GET**    | `/static/css/style.css` | `mocks/public-static/css/style.css`      | `text/css`         | Static file                       |
+| Method     | Route                   | Response Body From...                    | `Content-Type`     | Description                          |
+| :--------- | :---------------------- | :--------------------------------------- | :----------------- | :----------------------------------- |
+| **GET**    | `/api/users`            | `mocks/api/users/get.json`               | `application/json` | Static response                      |
+| **POST**   | `/api/users`            | `mocks/api/users/post.json`              | `application/json` | Static response                      |
+| **GET**    | `/api/users/{id}`       | `mocks/api/users/get{id}.json`           | `application/json` | Static response                      |
+| **GET**    | `/api/products`         | In-memory data from `rest{_id:int}.json` | `application/json` | **REST API** - List all products     |
+| **POST**   | `/api/products`         | In-memory database                       | `application/json` | **REST API** - Create new product    |
+| **GET**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Get product by ID     |
+| **PUT**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Update product        |
+| **PATCH**  | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Partial update        |
+| **DELETE** | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Delete product        |
+| **GET**    | `/api/products/1`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                      |
+| **GET**    | `/api/products/2`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                      |
+| **GET**    | `/api/products/3`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                      |
+| **GET**    | `/api/products/special` | `mocks/api/products/get{special}.json`   | `application/json` | Static response                      |
+| **GET**    | `/api/companies`        | In-memory data from `rest.json`          | `application/json` | **REST API** - List all companies    |
+| **POST**   | `/api/companies`        | In-memory database                       | `application/json` | **REST API** - Create new company    |
+| **GET**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Get company by ID     |
+| **PUT**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Update company        |
+| **PATCH**  | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Partial update        |
+| **DELETE** | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Delete company        |
+| **GET**    | `/api/status`           | `mocks/api/status.txt`                   | `text/plain`       | Static file                          |
+| **GET**    | `/assets/logo`          | `mocks/assets/logo.svg`                  | `image/svg+xml`    | Static file                          |
+| **POST**   | `/upload`               | File upload handling                     | `text/plain`       | **Upload** - Upload files            |
+| **GET**    | `/upload/{filename}`    | Files from `{upload}/` folder            | _varies_           | **Download** - Download files        |
+| **POST**   | `/docs`                 | File upload handling (temporary)         | `text/plain`       | **Upload** - Upload files (temp)     |
+| **GET**    | `/docs/{filename}`      | Files from `{upload}{temp}-docs/` folder | _varies_           | **Download** - Download files (temp) |
+| **GET**    | `/static/image.jpg`     | `mocks/public-static/image.svg`          | `image/jpg`        | Static file                          |
+| **GET**    | `/static/css/style.css` | `mocks/public-static/css/style.css`      | `text/css`         | Static file                          |
 
-**Note**: The REST API endpoints provide full CRUD functionality with automatic ID generation, data persistence during runtime, and initial data loading from the JSON files. You can interact with these endpoints using any HTTP client, and the data will persist until the server is restarted.
+**Note**:
+
+-   The REST API endpoints provide full CRUD functionality with automatic ID generation, data persistence during runtime, and initial data loading from the JSON files.
+-   Upload endpoints handle multipart/form-data file uploads and preserve original filenames.
+-   Download endpoints serve files with proper Content-Type detection and Content-Disposition headers.
+-   Temporary upload folders (`{temp}`) automatically clean up all files when the server stops.
+-   You can interact with all endpoints using any HTTP client, and data will persist until the server is restarted.
