@@ -140,25 +140,26 @@ For file upload and download functionality, you can create a specially named `{u
 -   **`{upload}` folder**: Creates upload and download endpoints at `/upload`.
 
     -   **POST** `/upload` - Upload files (multipart/form-data)
+    -   **GET** `/upload` - List all uploaded files
     -   **GET** `/upload/{filename}` - Download files by name
 
 #### Upload Folder Configuration
 
 The `{upload}` folder supports additional configuration through special naming patterns:
 
-| Folder Pattern        | Upload Route   | Download Route           | Temporary Files | Description                  |
-| :-------------------- | :------------- | :----------------------- | :-------------- | :--------------------------- |
-| `{upload}`            | `POST /upload` | `GET /upload/{filename}` | No              | Basic upload/download        |
-| `{upload}{temp}`      | `POST /upload` | `GET /upload/{filename}` | **Yes**         | Files deleted on server stop |
-| `{upload}-files`      | `POST /files`  | `GET /files/{filename}`  | No              | Custom route name            |
-| `{upload}{temp}-docs` | `POST /docs`   | `GET /docs/{filename}`   | **Yes**         | Custom route + temporary     |
+| Folder Pattern        | Upload Route   | List Route    | Download Route           | Temporary Files | Description                  |
+| :-------------------- | :------------- | :------------ | :----------------------- | :-------------- | :--------------------------- |
+| `{upload}`            | `POST /upload` | `GET /upload` | `GET /upload/{filename}` | No              | Basic upload/download        |
+| `{upload}{temp}`      | `POST /upload` | `GET /upload` | `GET /upload/{filename}` | **Yes**         | Files deleted on server stop |
+| `{upload}-files`      | `POST /files`  | `GET /files`  | `GET /files/{filename}`  | No              | Custom route name            |
+| `{upload}{temp}-docs` | `POST /docs`   | `GET /docs`   | `GET /docs/{filename}`   | **Yes**         | Custom route + temporary     |
 
 #### Examples
 
--   **Basic**: `./mocks/{upload}/` creates `POST /upload` and `GET /upload/{filename}`
+-   **Basic**: `./mocks/{upload}/` creates `POST /upload`, `GET /upload`, and `GET /upload/{filename}`
 -   **Temporary**: `./mocks/{upload}{temp}/` - same endpoints, but files are cleaned up when server stops
--   **Custom Route**: `./mocks/{upload}-files/` creates `POST /files` and `GET /files/{filename}`
--   **Combined**: `./mocks/{upload}{temp}-upfiles/` creates `POST /upfiles` and `GET /upfiles/{filename}` with automatic cleanup
+-   **Custom Route**: `./mocks/{upload}-files/` creates `POST /files`, `GET /files`, and `GET /files/{filename}`
+-   **Combined**: `./mocks/{upload}{temp}-upfiles/` creates `POST /upfiles`, `GET /upfiles`, and `GET /upfiles/{filename}` with automatic cleanup
 
 All uploaded files are saved in the detected folder with their original filenames, and downloads include proper `Content-Type` and `Content-Disposition` headers.
 
@@ -279,8 +280,10 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 | **GET**    | `/api/status`           | `mocks/api/status.txt`                   | `text/plain`       | Static file                          |
 | **GET**    | `/assets/logo`          | `mocks/assets/logo.svg`                  | `image/svg+xml`    | Static file                          |
 | **POST**   | `/upload`               | File upload handling                     | `text/plain`       | **Upload** - Upload files            |
+| **GET**    | `/upload`               | List of uploaded files                   | `application/json` | **Upload** - List uploaded files     |
 | **GET**    | `/upload/{filename}`    | Files from `{upload}/` folder            | _varies_           | **Download** - Download files        |
 | **POST**   | `/docs`                 | File upload handling (temporary)         | `text/plain`       | **Upload** - Upload files (temp)     |
+| **GET**    | `/docs`                 | List of uploaded files (temporary)       | `application/json` | **Upload** - List uploaded files     |
 | **GET**    | `/docs/{filename}`      | Files from `{upload}{temp}-docs/` folder | _varies_           | **Download** - Download files (temp) |
 | **GET**    | `/static/image.jpg`     | `mocks/public-static/image.svg`          | `image/jpg`        | Static file                          |
 | **GET**    | `/static/css/style.css` | `mocks/public-static/css/style.css`      | `text/css`         | Static file                          |

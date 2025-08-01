@@ -248,6 +248,8 @@ pub fn build_upload_routes(app: &mut App, path: String, route: &str) {
     create_upload_route(app, path.clone(), route);
 
     create_download_route(app, path.clone(), route);
+
+    create_uploaded_list_route(app, path.clone(), route);
 }
 
 fn create_upload_route(app: &mut App, upload_path: String, route: &str) {
@@ -332,3 +334,36 @@ fn create_download_route(app: &mut App, download_path: String, route: &str) {
     app.route(&download_route, download_router, Some("GET"));
 }
 
+fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
+    let upload_list_route = format!("/{}", route);
+
+    let upload_list_route_cloned = upload_list_route.clone();
+
+    // GET /uploads/{filename} - download file
+    let upload_list_router = get(move || {
+        async move {
+            let upload_path = Path::new(&upload_path);
+
+            // Check if file exists
+            if !upload_path.exists() {
+                return StatusCode::NOT_FOUND.into_response();
+            }
+
+            let entries = fs::read_dir(upload_path).unwrap();
+            let array = entries.map(|entry| {
+                let value = format!("{}/{}",
+                    upload_list_route_cloned,
+                    entry.unwrap().file_name().to_string_lossy()
+                );
+
+                Value::String(value)
+            }).collect();
+
+            let body = Value::Array(array);
+
+            Json(body).into_response()
+        }
+    });
+
+    app.route(&upload_list_route, upload_list_router, Some("GET"));
+}
