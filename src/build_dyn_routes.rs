@@ -28,18 +28,18 @@ static RE_FILE_AUTH: Lazy<Regex> = Lazy::new(|| {
 });
 
 pub fn load_mock_dir(app: &mut App) {
-    load_dir(app, "", &app.root_path.clone());
+    load_dir(app, "", &app.root_path.clone(), false);
 }
 
-fn load_dir(app: &mut App, parent_route: &str, entries_path: &str) {
+fn load_dir(app: &mut App, parent_route: &str, entries_path: &str, is_protected: bool) {
     let entries = fs::read_dir(entries_path).unwrap();
     for entry in entries {
         let entry = entry.unwrap();
-        load_entry(app, parent_route, &entry);
+        load_entry(app, parent_route, &entry, is_protected);
     }
 }
 
-fn load_entry(app: &mut App, parent_route: &str, entry: &DirEntry) {
+fn load_entry(app: &mut App, parent_route: &str, entry: &DirEntry, is_protected: bool) {
     let binding = entry.file_name();
     let end_point = binding.to_string_lossy();
     let full_route = format!("{}/{}", parent_route, end_point);
@@ -47,6 +47,8 @@ fn load_entry(app: &mut App, parent_route: &str, entry: &DirEntry) {
     let file_name = String::from(end_point);
 
     if entry.file_type().unwrap().is_dir() {
+        let is_protected = is_protected || file_name.starts_with("$");
+
         if file_name.starts_with("public") {
             return app.build_public_router(file_name,String::from(entry.path().to_string_lossy()));
         }
@@ -57,12 +59,12 @@ fn load_entry(app: &mut App, parent_route: &str, entry: &DirEntry) {
             return;
         }
 
-        return load_dir(app, &full_route, entry.path().to_str().unwrap());
+        return load_dir(app, &full_route, entry.path().to_str().unwrap(), is_protected);
     }
 
     if entry.file_type().unwrap().is_file() &&  !file_name.starts_with(".") {
         // If it's a file, read its contents and register the route
-        load_file_route(app, parent_route, entry);
+        load_file_route(app, parent_route, entry, is_protected);
     }
 }
 
@@ -115,7 +117,7 @@ fn try_add_auth_middleware_layer(app: &mut App, router: MethodRouter, is_protect
 // get{id}.json => /asd,/123,/456
 // get{123}.json => /123
 // get{1-5}.json => /1, /2, /3, /4, /5
-fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
+fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry, is_protected: bool) {
     let binding = entry.file_name();
     let file_name = binding.to_string_lossy();
     let file_stem = file_name.split('.').next().unwrap_or("");
@@ -123,7 +125,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
     let file_path = entry.path().into_os_string();
 
     if let Some(captures) = RE_FILE_METHODS.captures(file_stem) {
-        let is_protected = captures.get(1).is_some();
+        let is_protected = is_protected || captures.get(1).is_some();
         let method = captures.get(2).unwrap().as_str();
         let pattern = captures.get(4);
 
