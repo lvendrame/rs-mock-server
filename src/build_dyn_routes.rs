@@ -40,13 +40,14 @@ fn load_dir(app: &mut App, parent_route: &str, entries_path: &str, is_protected:
 
 fn load_entry(app: &mut App, parent_route: &str, entry: &DirEntry, is_protected: bool) {
     let binding = entry.file_name();
-    let end_point = binding.to_string_lossy();
+    let binding = binding.to_string_lossy();
+    let end_point = binding.replace("$", "");
     let full_route = format!("{}/{}", parent_route, end_point);
 
-    let file_name = String::from(end_point);
+    let file_name = end_point;
 
     if entry.file_type().unwrap().is_dir() {
-        let is_protected = is_protected || file_name.starts_with("$");
+        let is_protected = is_protected || binding.starts_with("$");
 
         if file_name.starts_with("public") {
             return app.build_public_router(file_name,String::from(entry.path().to_string_lossy()));
