@@ -5,6 +5,7 @@ use uuid::Uuid;
 pub enum IdType {
     Uuid,
     Int,
+    None,
 }
 
 #[derive(Clone)]
@@ -40,6 +41,7 @@ impl IdManager {
     pub fn set_current(&mut self, value: IdValue) {
         self.current = Some(value);
     }
+
 }
 
 impl Iterator for IdManager{
@@ -51,6 +53,7 @@ impl Iterator for IdManager{
             None => match self.id_type {
                 IdType::Int => IdValue::Int(1),
                 IdType::Uuid => IdValue::Uuid(Uuid::new_v4().to_string()),
+                IdType::None => return None,
             }
         };
 

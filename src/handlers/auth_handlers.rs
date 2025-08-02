@@ -1,9 +1,9 @@
-use std::{ffi::OsString, fs, sync::{Arc}};
+use std::{ffi::OsString, fs, pin::Pin, sync::Arc};
 
-use axum::{response::{IntoResponse, Response}, routing::post, Json};
+use axum::{body::Body, extract::Request, middleware::Next, response::{IntoResponse, Response}, routing::post, Json};
 use http::{StatusCode, HeaderValue};
 use serde_json::Value;
-use jsonwebtoken::{encode, Header, EncodingKey};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
@@ -14,7 +14,9 @@ use crate::{
 
 static USERNAME_FIELD: &str = "username";
 static PASSWORD_FIELD: &str = "password";
-static JWT_SECRET: &str = "your-secret-key"; // In production, use environment variable
+static TOKEN_FIELD: &str = "token";
+static AUTH_TOKEN_FIELD: &str = "auth_token";
+static JWT_SECRET: &str = "1!2@3#4$5%6â7&8*9(0)-_=+±§";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -71,7 +73,7 @@ fn check_password(item: &Value, password: String) -> bool {
     false
 }
 
-fn generate_token(item: Value) -> Response<axum::body::Body> {
+fn generate_token(item: Value, auth_collection: &ProtectedMemCollection) -> Response<axum::body::Body> {
     // Extract username from the user data
     let username = item.get(USERNAME_FIELD)
         .and_then(|v| v.as_str())
@@ -113,13 +115,22 @@ fn generate_token(item: Value) -> Response<axum::body::Body> {
 
     let response = AuthResponse {
         token: token.clone(),
-        user: user_data,
+        user: user_data.clone(),
     };
+
+    {
+        let mut user_data = user_data.clone();
+        if let Some(obj) = user_data.as_object_mut() {
+            obj.insert(TOKEN_FIELD.to_string(), Value::String(token.clone())); // add token
+        }
+        let mut auth_collection = auth_collection.lock().unwrap();
+        auth_collection.add(user_data);
+    }
 
     // Create cookie with JWT token
     let cookie_value = format!(
-        "auth_token={}; HttpOnly; Secure; SameSite=Strict; Max-Age=86400; Path=/",
-        token
+        "{}={}; HttpOnly; Secure; SameSite=Strict; Max-Age=86400; Path=/",
+        AUTH_TOKEN_FIELD, token
     );
 
     // Build response with cookie header
@@ -139,39 +150,183 @@ fn generate_token(item: Value) -> Response<axum::body::Body> {
     response
 }
 
-fn create_login_route(app: &mut App, route_path: &str, collection: &ProtectedMemCollection) {
-    // POST /resource - auth
-    let auth_collection = Arc::clone(collection);
+fn create_login_route(
+    app: &mut App,
+    route_path: &str,
+    users_collection: &ProtectedMemCollection,
+    auth_collection: &ProtectedMemCollection,
+) {
+    let login_route = format!("{}/login", route_path);
+
+    // POST /resource/login - auth
+    let user_collection = Arc::clone(users_collection);
+    let auth_collection = Arc::clone(auth_collection);
     let create_router = post(move |Json(payload): Json<Value>| {
         async move {
             if let Some((username, password)) = try_get_auth_info(payload) {
-                let auth_collection = auth_collection.lock().unwrap();
+                let user_collection = user_collection.lock().unwrap();
 
-                return match auth_collection.get(&username) {
+                return match user_collection.get(&username) {
                     Some(item) => if check_password(&item, password) {
-                        (StatusCode::OK, generate_token(item)).into_response()
+                        (StatusCode::OK, generate_token(item, &auth_collection)).into_response()
                     } else {
                         StatusCode::UNAUTHORIZED.into_response()
                     },
-                    None => StatusCode::BAD_REQUEST.into_response(),
+                    None => StatusCode::UNAUTHORIZED.into_response(),
                 }
             }
 
             StatusCode::BAD_REQUEST.into_response()
         }
     });
-    app.route(route_path, create_router, Some("POST"));
+    app.route(&login_route, create_router, Some("POST"));
 }
 
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: OsString) {
-    let in_memory_collection = InMemoryCollection::new(IdType::Uuid, USERNAME_FIELD.to_string());
-    let collection = in_memory_collection.into_protected();
+    let in_memory_collection = InMemoryCollection::new(IdType::None, USERNAME_FIELD.to_string());
+    let users_collection = in_memory_collection.into_protected();
 
-    if !try_load_users(file_path, &collection) {
+    let in_memory_collection = InMemoryCollection::new(IdType::None, TOKEN_FIELD.to_string());
+    let auth_collection = in_memory_collection.into_protected();
+
+    if !try_load_users(file_path, &users_collection) {
         return;
     }
 
-    create_login_route(app, route_path, &collection);
+    create_login_route(app, route_path, &users_collection, &auth_collection);
+    create_logout_route(app, route_path, &auth_collection);
+
+    app.auth_collection = Some(auth_collection);
 
     println!("✔️ Built AUTH routes for {}", route_path);
+}
+
+fn decode_jwt(jwt_token: String) -> Result<TokenData<Claims>, StatusCode> {
+    let result: Result<TokenData<Claims>, StatusCode> = decode(
+        &jwt_token,
+        &DecodingKey::from_secret(JWT_SECRET.as_ref()),
+        &Validation::default(),
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
+    result
+}
+
+fn extract_token_from_request(req: &Request) -> Option<String> {
+    // Try to get token from Authorization header first
+    if let Some(auth_header) = req.headers().get("Authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                return Some(token.to_string());
+            }
+        }
+    }
+
+    // Try to get token from cookies if not found in header
+    if let Some(cookie_header) = req.headers().get("Cookie") {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let cookie = cookie.trim();
+                if let Some((name, value)) = cookie.split_once('=') {
+                    if name.trim() == AUTH_TOKEN_FIELD {
+                        return Some(value.trim().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+// Simple authorization middleware function that can be used with axum::middleware::from_fn
+pub async fn authorization_middleware(
+    req: Request,
+    next: Next,
+) -> Result<Response<Body>, StatusCode> {
+    // This is a simplified version that only validates JWT tokens
+    // For token revocation, you'd need to use the factory function below
+
+    // Extract token from request
+    let token = match extract_token_from_request(&req) {
+        Some(token) => token,
+        None => return Err(StatusCode::UNAUTHORIZED),
+    };
+
+    // Decode and validate JWT token
+    let _token_data = match decode_jwt(token) {
+        Ok(data) => data,
+        Err(status) => return Err(status),
+    };
+
+    // Token is valid, continue with the request
+    let response = next.run(req).await;
+    Ok(response)
+}
+
+type AuthMiddlewareReturn = Pin<Box<dyn std::future::Future<Output = Result<Response<Body>, StatusCode>> + Send + 'static>>;
+
+// For when you need access to the auth collection (token revocation)
+pub fn make_auth_middleware(
+    auth_collection: &ProtectedMemCollection,
+) -> impl Clone + Send + Sync + 'static + Fn(Request, Next) -> AuthMiddlewareReturn {
+    let auth_collection = Arc::clone(auth_collection);
+    move |req: Request, next: Next| {
+        let auth_collection = Arc::clone(&auth_collection);
+        Box::pin(async move {
+            // Extract token from request
+            let token = match extract_token_from_request(&req) {
+                Some(token) => token,
+                None => return Err(StatusCode::UNAUTHORIZED),
+            };
+
+            // Decode and validate JWT token
+            let _token_data = match decode_jwt(token.clone()) {
+                Ok(data) => data,
+                Err(status) => return Err(status),
+            };
+
+            // Check if token exists in auth_collection (for token revocation/blacklisting)
+            {
+                let auth_collection = auth_collection.lock().unwrap();
+                if !auth_collection.exists(&token) {
+                    return Err(StatusCode::UNAUTHORIZED);
+                }
+            }
+
+            // Token is valid, continue with the request
+            let response = next.run(req).await;
+            Ok(response)
+        })
+    }
+}
+
+fn create_logout_route(
+    app: &mut App,
+    route_path: &str,
+    auth_collection: &ProtectedMemCollection,
+) {
+    let logout_route = format!("{}/logout", route_path);
+
+    let auth_collection = Arc::clone(auth_collection);
+    let logout_router = post(move |req: Request| {
+        async move {
+            // Extract token from request
+            let token = match extract_token_from_request(&req) {
+                Some(token) => token,
+                None => return StatusCode::UNAUTHORIZED.into_response(),
+            };
+
+            // Remove token from auth collection (logout/revoke)
+            {
+                let mut auth_collection = auth_collection.lock().unwrap();
+                auth_collection.delete(&token);
+            }
+
+            Json(serde_json::json!({
+                "message": "Successfully logged out"
+            })).into_response()
+        }
+    });
+
+    app.route(&logout_route, logout_router, Some("POST"));
 }

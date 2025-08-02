@@ -1,15 +1,12 @@
-use std::fs::{self, DirEntry};
+use std::{fs::{self, DirEntry}};
+use axum::{routing::MethodRouter, middleware};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::{
     app::App,
     handlers::{
-        build_in_memory_routes,
-        build_method_router,
-        build_stream_handler,
-        build_upload_routes,
-        build_auth_routes
+        build_auth_routes, build_in_memory_routes, build_method_router, build_stream_handler, build_upload_routes, make_auth_middleware
     },
     id_manager::IdType
 };
@@ -19,7 +16,7 @@ static RE_DIR_UPLOAD: Lazy<Regex> = Lazy::new(|| {
 });
 
 static RE_FILE_METHODS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
+    Regex::new(r"^(\$)?(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
 });
 
 static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
@@ -97,6 +94,19 @@ fn get_rest_options(descriptor: &str) -> (&str, IdType) {
     }
 }
 
+fn try_add_auth_middleware_layer(app: &mut App, router: MethodRouter, is_protected: bool) -> MethodRouter {
+    if !is_protected {
+        return router;
+    }
+
+    if let Some(auth_collection) = &app.auth_collection {
+        return router.layer(
+            middleware::from_fn(make_auth_middleware(auth_collection))
+        )
+    }
+    router
+}
+
 // Routes examples:
 // /mocks
 // /mocks/login/get.json,post.json,delete.json,put.json,patch.json
@@ -113,8 +123,9 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
     let file_path = entry.path().into_os_string();
 
     if let Some(captures) = RE_FILE_METHODS.captures(file_stem) {
-        let method = captures.get(1).unwrap().as_str();
-        let pattern = captures.get(3);
+        let is_protected = captures.get(1).is_some();
+        let method = captures.get(2).unwrap().as_str();
+        let pattern = captures.get(4);
 
         if let Some(pattern) = pattern {
             let pattern = pattern.as_str();
@@ -123,6 +134,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
             if pattern == "id" {
                 let route_path = format!("{}/{}", parent_route, "{id}");
                 let router = build_method_router(&file_path, method);
+                let router = try_add_auth_middleware_layer(app, router, is_protected);
                 println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
                 app.route(&route_path, router, Some(method));
                 return;
@@ -135,6 +147,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
                         for i in start..=end {
                             let route_path = format!("{}/{}", parent_route, i);
                             let router = build_method_router(&file_path, method);
+                            let router = try_add_auth_middleware_layer(app, router, is_protected);
                             app.route(&route_path, router, Some(method));
                         }
                         println!("✔️ Mapped {} to {} {}/[{}-{}]", file_name, method.to_uppercase(), parent_route, start, end);
@@ -146,15 +159,17 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
             // Pattern 3: get{123}.json -> A single static route /path/123
             let route_path = format!("{}/{}", parent_route, pattern);
             let router = build_method_router(&file_path, method);
+            let router = try_add_auth_middleware_layer(app, router, is_protected);
             println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), &route_path);
             app.route(&route_path, router, Some(method));
             return;
         }
 
         // Default: get.json -> Route on the parent directory /path
-        let method = captures.get(1).unwrap().as_str();
+        let method = captures.get(2).unwrap().as_str();
         let route_path = if parent_route.is_empty() { "/" } else { parent_route };
         let router = build_method_router(&file_path, method);
+        let router = try_add_auth_middleware_layer(app, router, is_protected);
         println!("✔️ Mapped {} to {} {}", file_name, method.to_uppercase(), route_path);
 
         app.route(route_path, router, Some(method));

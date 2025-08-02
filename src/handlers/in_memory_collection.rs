@@ -55,8 +55,9 @@ impl InMemoryCollection {
             self.id_manager.next()
         };
 
-        if let Some(id_value) = next_id {
-            let mut item = item;
+        let item_cloned = item.clone();
+        let id_string = if let Some(id_value) = next_id {
+            let mut item = item_cloned;
 
             // Convert IdValue to string and add it to the item
             let id_string = id_value.to_string();
@@ -65,7 +66,14 @@ impl InMemoryCollection {
             if let Value::Object(ref mut map) = item {
                 map.insert(self.id_key.clone(), Value::String(id_string.clone()));
             }
+            Some(id_string)
+        } else if let Some(Value::String(id_string)) = item.get(self.id_key.clone()){
+            Some(id_string.clone())
+        } else {
+            None
+        };
 
+        if let Some(id_string) = id_string {
             self.db.insert(id_string, item.clone());
 
             return Some(item);
@@ -101,6 +109,10 @@ impl InMemoryCollection {
                             },
                             _ => None
                         },
+                        IdType::None => match item.get(self.id_key.clone()) {
+                            Some(Value::String(id_string)) => Some(id_string.clone()),
+                            _ => None
+                        }
                     };
 
                     // Extract the ID from the item using the configured id_key

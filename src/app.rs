@@ -9,13 +9,14 @@ use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
-use crate::{build_dyn_routes::load_mock_dir, pages::Pages, upload_configuration::UploadConfiguration};
+use crate::{build_dyn_routes::load_mock_dir, handlers::in_memory_collection::ProtectedMemCollection, pages::Pages, upload_configuration::UploadConfiguration};
 
 pub struct App {
     pub port: u16,
     pub root_path: String,
     pub router: RefCell<Router>,
     pub pages: Pages,
+    pub auth_collection: Option<ProtectedMemCollection>,
     uploads_configurations: Vec<UploadConfiguration>,
 }
 
@@ -26,7 +27,8 @@ impl Default for App {
         let router = RefCell::new(Router::new());
         let pages = Pages::new();
         let uploads_configurations = vec![];
-        App { port, root_path, router, pages, uploads_configurations }
+        let auth_collection = None;
+        App { port, root_path, router, pages, uploads_configurations, auth_collection }
     }
 }
 
@@ -36,7 +38,8 @@ impl App {
         let routes = RefCell::new(Router::new());
         let pages = Pages::new();
         let uploads_configurations = vec![];
-        App { port, root_path, router: routes, pages, uploads_configurations }
+        let auth_collection = None;
+        App { port, root_path, router: routes, pages, uploads_configurations, auth_collection }
     }
 
     pub fn push_uploads_config(&mut self, uploads_path: String, clean_uploads: bool) {
