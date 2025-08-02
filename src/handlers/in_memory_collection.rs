@@ -1,7 +1,9 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 use serde_json::Value;
 
 use crate::id_manager::{IdManager, IdType, IdValue};
+
+pub type ProtectedMemCollection = Arc<Mutex<InMemoryCollection>>;
 
 pub struct InMemoryCollection {
     db: HashMap<String, Value>,
@@ -18,6 +20,10 @@ impl InMemoryCollection {
             id_manager,
             id_key
         }
+    }
+
+    pub fn into_protected(self) -> ProtectedMemCollection {
+        Arc::new(Mutex::new(self))
     }
 
     pub fn get_all(&self) -> Vec<Value> {

@@ -4,7 +4,13 @@ use regex::Regex;
 
 use crate::{
     app::App,
-    handlers::{build_in_memory_routes, build_method_router, build_stream_handler, build_upload_routes},
+    handlers::{
+        build_in_memory_routes,
+        build_method_router,
+        build_stream_handler,
+        build_upload_routes,
+        build_auth_routes
+    },
     id_manager::IdType
 };
 
@@ -18,6 +24,10 @@ static RE_FILE_METHODS: Lazy<Regex> = Lazy::new(|| {
 
 static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(rest)(\{(.+)\})?$").unwrap()
+});
+
+static RE_FILE_AUTH: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\{auth\}$").unwrap()
 });
 
 pub fn load_mock_dir(app: &mut App) {
@@ -164,6 +174,13 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry) {
 
         build_in_memory_routes(app, route_path, file_path, id_key, id_type);
 
+        return;
+    }
+
+    if RE_FILE_AUTH.is_match(file_stem) {
+        let route_path = if parent_route.is_empty() { "/" } else { parent_route };
+
+        build_auth_routes(app, route_path, file_path);
         return;
     }
 

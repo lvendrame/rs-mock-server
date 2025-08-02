@@ -1,0 +1,23 @@
+[
+    {
+        "id": "550e8400-e29b-41d4-a716-446655440001",
+        "username": "admin",
+        "password": "admin123",
+        "email": "admin@example.com",
+        "role": "administrator"
+    },
+    {
+        "id": "550e8400-e29b-41d4-a716-446655440002",
+        "username": "user",
+        "password": "user123",
+        "email": "user@example.com",
+        "role": "user"
+    },
+    {
+        "id": "550e8400-e29b-41d4-a716-446655440003",
+        "username": "john.doe",
+        "password": "password123",
+        "email": "john.doe@example.com",
+        "role": "user"
+    }
+]

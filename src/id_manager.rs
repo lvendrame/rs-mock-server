@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 pub enum IdType {
     Uuid,
-    Int
+    Int,
 }
 
 #[derive(Clone)]
