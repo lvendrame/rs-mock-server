@@ -1,14 +1,13 @@
 use std::{fs::{self, DirEntry}};
-use axum::{routing::MethodRouter, middleware};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::{
     app::App,
     handlers::{
-        build_auth_routes, build_in_memory_routes, build_method_router, build_stream_handler, build_upload_routes, make_auth_middleware
+        build_auth_routes, build_rest_routes, build_method_router, build_stream_handler, build_upload_routes
     },
-    id_manager::IdType
+    id_manager::IdType, utils::try_add_auth_middleware_layer
 };
 
 static RE_DIR_UPLOAD: Lazy<Regex> = Lazy::new(|| {
@@ -20,7 +19,7 @@ static RE_FILE_METHODS: Lazy<Regex> = Lazy::new(|| {
 });
 
 static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^(rest)(\{(.+)\})?$").unwrap()
+    Regex::new(r"^(\$)?(rest)(\{(.+)\})?$").unwrap()
 });
 
 static RE_FILE_AUTH: Lazy<Regex> = Lazy::new(|| {
@@ -96,19 +95,6 @@ fn get_rest_options(descriptor: &str) -> (&str, IdType) {
     }
 }
 
-fn try_add_auth_middleware_layer(app: &mut App, router: MethodRouter, is_protected: bool) -> MethodRouter {
-    if !is_protected {
-        return router;
-    }
-
-    if let Some(auth_collection) = &app.auth_collection {
-        return router.layer(
-            middleware::from_fn(make_auth_middleware(auth_collection))
-        )
-    }
-    router
-}
-
 // Routes examples:
 // /mocks
 // /mocks/login/get.json,post.json,delete.json,put.json,patch.json
@@ -180,7 +166,8 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry, is_prote
     }
 
     if let Some(captures) = RE_FILE_REST.captures(file_stem) {
-        let descriptor = if let Some(pattern) = captures.get(3) {
+        let is_protected = is_protected || captures.get(1).is_some();
+        let descriptor = if let Some(pattern) = captures.get(4) {
             pattern.as_str()
         } else {
             "id:uuid"
@@ -189,7 +176,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry, is_prote
         let (id_key, id_type) = get_rest_options(descriptor);
         let route_path = if parent_route.is_empty() { "/" } else { parent_route };
 
-        build_in_memory_routes(app, route_path, file_path, id_key, id_type);
+        build_rest_routes(app, route_path, file_path, id_key, id_type, is_protected);
 
         return;
     }

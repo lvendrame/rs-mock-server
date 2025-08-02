@@ -6,9 +6,7 @@ use axum::{
 use serde_json::Value;
 
 use crate::{
-    app::App,
-    id_manager::IdType,
-    handlers::in_memory_collection::{InMemoryCollection, ProtectedMemCollection}
+    app::App, handlers::in_memory_collection::{InMemoryCollection, ProtectedMemCollection}, id_manager::IdType, utils::try_add_auth_middleware_layer
 };
 
 fn load_initial_data(file_path: OsString, load_collection: &ProtectedMemCollection) {
@@ -30,7 +28,7 @@ fn load_initial_data(file_path: OsString, load_collection: &ProtectedMemCollecti
     eprintln!("⚠️ Could not read file {}, skipping initial data load", file_path.to_string_lossy());
 }
 
-fn create_get_all(app: &mut App, route_path: &str, collection: &ProtectedMemCollection) {
+fn create_get_all(app: &mut App, route_path: &str, collection: &ProtectedMemCollection, is_protected: bool) {
     // GET /resource - list all
     let list_collection = Arc::clone(collection);
     let list_router = get(move || {
@@ -40,10 +38,12 @@ fn create_get_all(app: &mut App, route_path: &str, collection: &ProtectedMemColl
             Json(items).into_response()
         }
     });
+    let list_router = try_add_auth_middleware_layer(app, list_router, is_protected);
+
     app.route(route_path, list_router, Some("GET"));
 }
 
-fn create_insert(app: &mut App, route_path: &str, collection: &ProtectedMemCollection) {
+fn create_insert(app: &mut App, route_path: &str, collection: &ProtectedMemCollection, is_protected: bool) {
     // POST /resource - create new
     let create_collection = Arc::clone(collection);
     let create_router = post(move |Json(payload): Json<Value>| {
@@ -55,10 +55,12 @@ fn create_insert(app: &mut App, route_path: &str, collection: &ProtectedMemColle
             }
         }
     });
+    let create_router = try_add_auth_middleware_layer(app, create_router, is_protected);
+
     app.route(route_path, create_router, Some("POST"));
 }
 
-fn create_get_item(app: &mut App, collection: &ProtectedMemCollection, id_route: &str) {
+fn create_get_item(app: &mut App, collection: &ProtectedMemCollection, id_route: &str, is_protected: bool) {
     // GET /resource/:id - get by id
     let get_collection = Arc::clone(collection);
     let get_router = get(move |AxumPath(id): AxumPath<String>| {
@@ -70,10 +72,12 @@ fn create_get_item(app: &mut App, collection: &ProtectedMemCollection, id_route:
             }
         }
     });
+    let get_router = try_add_auth_middleware_layer(app, get_router, is_protected);
+
     app.route(id_route, get_router, Some("GET"));
 }
 
-fn create_full_update(app: &mut App, collection: &ProtectedMemCollection, id_route: &str) {
+fn create_full_update(app: &mut App, collection: &ProtectedMemCollection, id_route: &str, is_protected: bool) {
     // PUT /resource/:id - update by id
     let update_collection = Arc::clone(collection);
     let put_router = put(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
@@ -85,10 +89,12 @@ fn create_full_update(app: &mut App, collection: &ProtectedMemCollection, id_rou
             }
         }
     });
+    let put_router = try_add_auth_middleware_layer(app, put_router, is_protected);
+
     app.route(id_route, put_router, Some("PUT"));
 }
 
-fn create_partial_update(app: &mut App, collection: &ProtectedMemCollection, id_route: &str) {
+fn create_partial_update(app: &mut App, collection: &ProtectedMemCollection, id_route: &str, is_protected: bool) {
     // PATCH /resource/:id - partial update by id
     let patch_collection = Arc::clone(collection);
     let patch_router = patch(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
@@ -100,10 +106,12 @@ fn create_partial_update(app: &mut App, collection: &ProtectedMemCollection, id_
             }
         }
     });
+    let patch_router = try_add_auth_middleware_layer(app, patch_router, is_protected);
+
     app.route(id_route, patch_router, Some("PATCH"));
 }
 
-fn create_delete(app: &mut App, collection: ProtectedMemCollection, id_route: &str) {
+fn create_delete(app: &mut App, collection: ProtectedMemCollection, id_route: &str, is_protected: bool) {
     // DELETE /resource/:id - delete by id
     let delete_collection = Arc::clone(&collection);
     let delete_router = delete(move |AxumPath(id): AxumPath<String>| {
@@ -115,10 +123,12 @@ fn create_delete(app: &mut App, collection: ProtectedMemCollection, id_route: &s
             }
         }
     });
+    let delete_router = try_add_auth_middleware_layer(app, delete_router, is_protected);
+
     app.route(id_route, delete_router, Some("DELETE"));
 }
 
-pub fn build_in_memory_routes(app: &mut App, route_path: &str, file_path: OsString, id_key: &str, id_type: IdType) {
+pub fn build_rest_routes(app: &mut App, route_path: &str, file_path: OsString, id_key: &str, id_type: IdType, is_protected: bool) {
     let in_memory_collection = InMemoryCollection::new(id_type, id_key.to_string());
     let collection = in_memory_collection.into_protected();
 
@@ -127,17 +137,17 @@ pub fn build_in_memory_routes(app: &mut App, route_path: &str, file_path: OsStri
     let id_route = format!("{}/{{{}}}", route_path, id_key);
 
     // Build REST routes for CRUD operations
-    create_get_all(app, route_path, &collection);
+    create_get_all(app, route_path, &collection, is_protected);
 
-    create_insert(app, route_path, &collection);
+    create_insert(app, route_path, &collection, is_protected);
 
-    create_get_item(app, &collection, &id_route);
+    create_get_item(app, &collection, &id_route, is_protected);
 
-    create_full_update(app, &collection, &id_route);
+    create_full_update(app, &collection, &id_route, is_protected);
 
-    create_partial_update(app, &collection, &id_route);
+    create_partial_update(app, &collection, &id_route, is_protected);
 
-    create_delete(app, collection, &id_route);
+    create_delete(app, collection, &id_route, is_protected);
 
     println!("✔️ Built REST routes for {}", route_path);
 }
