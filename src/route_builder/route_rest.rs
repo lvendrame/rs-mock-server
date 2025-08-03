@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{id_manager::IdType, route_builder::PrintRoute};
+use crate::{id_manager::IdType, route_builder::{route_params::RouteParams, PrintRoute}};
 
 static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\$)?rest(\{(.+)\})?$").unwrap()
@@ -48,11 +48,9 @@ impl RouteRest {
         }
     }
 
-    pub fn try_parse(parent_route: &str, file_name: String, file_path: OsString, is_protected: bool) -> Option<Self> {
-        let file_stem = file_name.split('.').next().unwrap_or("");
-
-        if let Some(captures) = RE_FILE_REST.captures(file_stem) {
-            let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
+    pub fn try_parse(route_params: RouteParams) -> Option<Self> {
+        if let Some(captures) = RE_FILE_REST.captures(&route_params.file_stem) {
+            let is_protected = route_params.is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let descriptor = if let Some(pattern) = captures.get(ELEMENT_DESCRIPTOR) {
                 pattern.as_str()
             } else {
@@ -60,11 +58,10 @@ impl RouteRest {
             };
 
             let (id_key, id_type) = Self::get_rest_options(descriptor);
-            let route = if parent_route.is_empty() { "/" } else { parent_route };
 
             let route_rest = Self {
-                path: file_path,
-                route: route.to_string(),
+                path: route_params.file_path,
+                route: route_params.full_route,
                 id_key: id_key.to_string(),
                 id_type,
                 is_protected,

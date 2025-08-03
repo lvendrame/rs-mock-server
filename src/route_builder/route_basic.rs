@@ -4,7 +4,7 @@ use http::Method;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::route_builder::{method_from_str, PrintRoute};
+use crate::route_builder::{method_from_str, route_params::RouteParams, PrintRoute};
 
 static RE_FILE_METHODS: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\$)?(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
@@ -56,18 +56,16 @@ pub struct RouteBasic {
 }
 
 impl RouteBasic {
-    pub fn try_parse(parent_route: &str, file_name: String, file_path: OsString, is_protected: bool) -> Option<Self> {
-        let file_stem = file_name.split('.').next().unwrap_or("");
-
-        if let Some(captures) = RE_FILE_METHODS.captures(file_stem) {
-            let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
+    pub fn try_parse(route_params: RouteParams) -> Option<Self> {
+        if let Some(captures) = RE_FILE_METHODS.captures(&route_params.file_stem) {
+            let is_protected = route_params.is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let method = captures.get(ELEMENT_METHOD).unwrap().as_str();
             let pattern = captures.get(ELEMENT_DESCRIPTOR);
 
             let route_basic = Self {
-                path: file_path,
+                path: route_params.file_path,
                 method: method_from_str(method),
-                route: parent_route.to_string(),
+                route: route_params.full_route,
                 sub_route: SubRoute::from(pattern),
                 is_protected,
             };

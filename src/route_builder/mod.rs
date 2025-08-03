@@ -5,6 +5,7 @@ pub mod route_basic;
 pub mod route_public;
 pub mod route_rest;
 pub mod route_upload;
+pub mod route_params;
 
 use http::Method;
 pub use route::*;
@@ -14,8 +15,14 @@ pub use route_public::*;
 pub use route_rest::*;
 pub use route_upload::*;
 
+use crate::app::App;
+
 pub trait PrintRoute {
     fn println(&self);
+}
+
+pub trait RouteGenerator {
+    fn make_routes(&self, app: &App);
 }
 
 pub fn method_from_str(value: &str) -> Method {

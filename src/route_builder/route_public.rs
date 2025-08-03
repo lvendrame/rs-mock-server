@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 
-use crate::route_builder::PrintRoute;
+use crate::route_builder::{route_params::RouteParams, PrintRoute};
 
 pub struct  RoutePublic {
     pub path: OsString,
@@ -9,20 +9,20 @@ pub struct  RoutePublic {
 }
 
 impl RoutePublic {
-    pub fn try_parse(parent_route: &str, file_name: String, file_path: OsString) -> Option<Self> {
-        if file_name.starts_with("public") {
-            let public_route = if let Some((_, to)) = file_name.split_once('-') {
+    pub fn try_parse(route_params: RouteParams) -> Option<Self> {
+        if route_params.file_name.starts_with("public") {
+            let public_route = if let Some((_, to)) = route_params.file_name.split_once('-') {
                 to
             } else {
                 "public"
             };
 
-            let route = if parent_route.is_empty() { "/" } else { parent_route };
-            let route = format!("{}/{}", route, public_route);
+
+            let route = format!("{}/{}", route_params.full_route, public_route);
 
             let route_public = Self {
-                path: file_path,
-                route: route.to_string(),
+                path: route_params.file_path,
+                route,
                 is_protected: false,
             };
 
