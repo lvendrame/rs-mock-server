@@ -1,9 +1,9 @@
-use std::ffi::OsString;
+use std::{ffi::OsString};
 
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{id_manager::IdType, route_builder::{route_params::RouteParams, PrintRoute}};
+use crate::{app::App, handlers::{create_delete, create_full_update, create_get_all, create_get_item, create_insert, create_partial_update, load_initial_data}, id_manager::IdType, in_memory_collection::InMemoryCollection, route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}};
 
 static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\$)?rest(\{(.+)\})?$").unwrap()
@@ -12,6 +12,7 @@ static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
 const ELEMENT_IS_PROTECTED: usize = 1;
 const ELEMENT_DESCRIPTOR: usize = 3;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct  RouteRest {
     pub path: OsString,
     pub route: String,
@@ -48,7 +49,7 @@ impl RouteRest {
         }
     }
 
-    pub fn try_parse(route_params: RouteParams) -> Option<Self> {
+    pub fn try_parse(route_params: RouteParams) -> Route {
         if let Some(captures) = RE_FILE_REST.captures(&route_params.file_stem) {
             let is_protected = route_params.is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let descriptor = if let Some(pattern) = captures.get(ELEMENT_DESCRIPTOR) {
@@ -67,10 +68,36 @@ impl RouteRest {
                 is_protected,
             };
 
-            return Some(route_rest);
+            return Route::Rest(route_rest);
         }
 
-        None
+        Route::None
+    }
+}
+
+impl RouteGenerator for RouteRest {
+    fn make_routes(&self, app: &mut App) {
+        let in_memory_collection = InMemoryCollection::new(self.id_type, self.id_key.clone());
+        let collection = in_memory_collection.into_protected();
+
+        let route_path = self.path.to_str().unwrap();
+
+        load_initial_data(&self.path, &collection);
+
+        let id_route = format!("{}/{{{}}}", route_path, self.id_key);
+
+        // Build REST routes for CRUD operations
+        create_get_all(app, route_path, &collection, self.is_protected);
+
+        create_insert(app, route_path, &collection, self.is_protected);
+
+        create_get_item(app, &collection, &id_route, self.is_protected);
+
+        create_full_update(app, &collection, &id_route, self.is_protected);
+
+        create_partial_update(app, &collection, &id_route, self.is_protected);
+
+        create_delete(app, collection, &id_route, self.is_protected);
     }
 }
 

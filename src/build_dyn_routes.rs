@@ -177,7 +177,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry, is_prote
         let (id_key, id_type) = get_rest_options(descriptor);
         let route_path = if parent_route.is_empty() { "/" } else { parent_route };
 
-        build_rest_routes(app, route_path, file_path, id_key, id_type, is_protected);
+        build_rest_routes(app, route_path, &file_path, id_key, id_type, is_protected);
 
         return;
     }
@@ -185,7 +185,7 @@ fn load_file_route(app: &mut App, parent_route: &str, entry: &DirEntry, is_prote
     if RE_FILE_AUTH.is_match(file_stem) {
         let route_path = if parent_route.is_empty() { "/" } else { parent_route };
 
-        build_auth_routes(app, route_path, file_path);
+        build_auth_routes(app, route_path, &file_path);
         return;
     }
 

@@ -9,7 +9,7 @@ use chrono::{Utc, Duration};
 
 use crate::{
     app::App,
-    handlers::in_memory_collection::{InMemoryCollection, ProtectedMemCollection}, id_manager::IdType
+    id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}
 };
 
 static USERNAME_FIELD: &str = "username";
@@ -32,7 +32,7 @@ struct AuthResponse {
     user: Value,
 }
 
-fn try_load_users(file_path: OsString, load_collection: &ProtectedMemCollection) -> bool {
+fn try_load_users(file_path: &OsString, load_collection: &ProtectedMemCollection) -> bool {
     // Try to read the file content
     if let Ok(file_content) = fs::read_to_string(&file_path) {
         // Try to parse the content as JSON
@@ -150,7 +150,7 @@ fn generate_token(item: Value, auth_collection: &ProtectedMemCollection) -> Resp
     response
 }
 
-fn create_login_route(
+pub fn create_login_route(
     app: &mut App,
     route_path: &str,
     users_collection: &ProtectedMemCollection,
@@ -182,7 +182,7 @@ fn create_login_route(
     app.route(&login_route, create_router, Some("POST"));
 }
 
-pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: OsString) {
+pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
     let in_memory_collection = InMemoryCollection::new(IdType::None, USERNAME_FIELD.to_string());
     let users_collection = in_memory_collection.into_protected();
 
@@ -197,8 +197,6 @@ pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: OsString) {
     create_logout_route(app, route_path, &auth_collection);
 
     app.auth_collection = Some(auth_collection);
-
-    println!("✔️ Built AUTH routes for {}", route_path);
 }
 
 fn decode_jwt(jwt_token: String) -> Result<TokenData<Claims>, StatusCode> {
@@ -300,7 +298,7 @@ pub fn make_auth_middleware(
     }
 }
 
-fn create_logout_route(
+pub fn create_logout_route(
     app: &mut App,
     route_path: &str,
     auth_collection: &ProtectedMemCollection,

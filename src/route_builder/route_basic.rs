@@ -4,7 +4,7 @@ use http::Method;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::route_builder::{method_from_str, route_params::RouteParams, PrintRoute};
+use crate::{handlers::build_method_router, route_builder::{method_from_str, route_params::RouteParams, PrintRoute, Route, RouteGenerator, RouteRegistrator}};
 
 static RE_FILE_METHODS: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\$)?(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
@@ -14,7 +14,7 @@ const ELEMENT_IS_PROTECTED: usize = 1;
 const ELEMENT_METHOD: usize = 2;
 const ELEMENT_DESCRIPTOR: usize = 4;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum SubRoute {
     #[default]
     None,
@@ -46,7 +46,7 @@ impl SubRoute {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RouteBasic {
     pub path: OsString,
     pub method: Method,
@@ -56,7 +56,7 @@ pub struct RouteBasic {
 }
 
 impl RouteBasic {
-    pub fn try_parse(route_params: RouteParams) -> Option<Self> {
+    pub fn try_parse(route_params: RouteParams) -> Route {
         if let Some(captures) = RE_FILE_METHODS.captures(&route_params.file_stem) {
             let is_protected = route_params.is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let method = captures.get(ELEMENT_METHOD).unwrap().as_str();
@@ -70,10 +70,41 @@ impl RouteBasic {
                 is_protected,
             };
 
-            return Some(route_basic);
+            return Route::Basic(route_basic);
         }
 
-        None
+        Route::None
+    }
+}
+
+impl RouteGenerator for RouteBasic {
+    fn make_routes(&self, app: &mut crate::app::App) {
+        let method = self.method.as_str();
+
+        match &self.sub_route {
+            SubRoute::None => {
+                let router = build_method_router(&self.path, method);
+                app.push_route(&self.route, router, Some(method), self.is_protected);
+            },
+            SubRoute::Id => {
+                let route_path = format!("{}/{}", self.route, "{id}");
+                let router = build_method_router(&self.path, method);
+                app.push_route(&route_path, router, Some(method), self.is_protected);
+            },
+            SubRoute::Range(start, end) => {
+                for i in *start..=*end {
+                    let route_path = format!("{}/{}", self.route, i);
+                    let router = build_method_router(&self.path, method);
+                    app.push_route(&route_path, router, Some(method), self.is_protected);
+                }
+            },
+            SubRoute::Static(end_point) => {
+                let route_path = format!("{}/{}", self.route, end_point);
+                let router = build_method_router(&self.path, method);
+                app.push_route(&route_path, router, Some(method), self.is_protected);
+            },
+        }
+
     }
 }
 

@@ -2,13 +2,15 @@ use std::fmt::Display;
 
 use uuid::Uuid;
 
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum IdType {
+    #[default]
     Uuid,
     Int,
     None,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IdValue {
     Uuid(String),
     Int(u64),

@@ -1,15 +1,14 @@
-use std::{cell::RefCell};
+use std::{cell::RefCell, ffi::OsString};
 
 use axum::{
-    response::IntoResponse, routing::{get, MethodRouter},
-    Router
+    middleware, response::IntoResponse, routing::{get, MethodRouter}, Router
 };
 use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
-use crate::{build_dyn_routes::load_mock_dir, handlers::in_memory_collection::ProtectedMemCollection, pages::Pages, upload_configuration::UploadConfiguration};
+use crate::{build_dyn_routes::load_mock_dir, handlers::make_auth_middleware, in_memory_collection::ProtectedMemCollection, pages::Pages, route_builder::RouteRegistrator, upload_configuration::UploadConfiguration};
 
 pub struct App {
     pub port: u16,
@@ -57,14 +56,27 @@ impl App {
         let _old_route = self.router.replace(new_router);
     }
 
-    pub fn route(&mut self, path: &str, method_router: MethodRouter<()>, method: Option<&str>) {
-        let new_router = self.get_router().route(path, method_router);
+    pub fn route(&mut self, path: &str, router: MethodRouter<()>, method: Option<&str>) {
+        let new_router = self.get_router().route(path, router);
 
         self.replace_router(new_router);
 
         if let Some(method) = method {
             self.pages.push_link(method.to_string(), path.to_string());
         }
+    }
+
+    pub fn try_add_auth_middleware_layer(&mut self, router: MethodRouter, is_protected: bool) -> MethodRouter {
+        if !is_protected {
+            return router;
+        }
+
+        if let Some(auth_collection) = &self.auth_collection {
+            return router.layer(
+                middleware::from_fn(make_auth_middleware(auth_collection))
+            )
+        }
+        router
     }
 
     fn build_dyn_routes(&mut self) {
@@ -128,6 +140,15 @@ impl App {
         self.replace_router(new_router);
     }
 
+    pub fn build_public_router_v2(&mut self, path: &OsString, route: &str) {
+        let static_files = ServeDir::new(path);
+        let new_router = self.router.take().nest_service(
+            route,
+            static_files
+        );
+        self.replace_router(new_router);
+    }
+
     async fn start_server(&self) {
         let address = format!("0.0.0.0:{}", self.port);
 
@@ -152,5 +173,13 @@ impl App {
             upload_config.clean_upload_folder();
         }
         println!("\nGoodbye! 👋");
+    }
+}
+
+impl RouteRegistrator for App {
+    fn push_route(&mut self, path: &str, router: MethodRouter, method: Option<&str>, is_protected: bool) {
+        let router = self.try_add_auth_middleware_layer(router, is_protected);
+
+        self.route(path, router, method);
     }
 }

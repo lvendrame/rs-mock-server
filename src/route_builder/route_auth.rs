@@ -3,19 +3,24 @@ use std::ffi::OsString;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::route_builder::{route_params::RouteParams, PrintRoute};
+use crate::{
+    app::App,
+    handlers::build_auth_routes,
+    route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}
+};
 
 static RE_FILE_AUTH: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^\{auth\}$").unwrap()
 });
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct  RouteAuth {
     pub path: OsString,
     pub route: String,
 }
 
 impl RouteAuth {
-    pub fn try_parse(route_params: RouteParams) -> Option<Self> {
+    pub fn try_parse(route_params: RouteParams) -> Route {
         if RE_FILE_AUTH.is_match(&route_params.file_stem) {
 
             let route_auth = Self {
@@ -23,10 +28,16 @@ impl RouteAuth {
                 route: route_params.full_route,
             };
 
-            return Some(route_auth);
+            return Route::Auth(route_auth);
         }
 
-        None
+        Route::None
+    }
+}
+
+impl RouteGenerator for RouteAuth {
+    fn make_routes(&self, app: &mut App) {
+        build_auth_routes(app, &self.route, &self.path);
     }
 }
 

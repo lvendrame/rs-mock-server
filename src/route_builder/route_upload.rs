@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::route_builder::{route_params::RouteParams, PrintRoute};
+use crate::{handlers::build_upload_routes, route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}};
 
 static RE_DIR_UPLOAD: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\$)?\{upload\}(\{temp\})?(-(.+))?$").unwrap()
@@ -13,6 +13,7 @@ const ELEMENT_IS_PROTECTED: usize = 1;
 const ELEMENT_IS_TEMPORARY: usize = 2;
 const ELEMENT_ROUTE: usize = 4;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct  RouteUpload {
     pub path: OsString,
     pub route: String,
@@ -21,7 +22,7 @@ pub struct  RouteUpload {
 }
 
 impl RouteUpload {
-    pub fn try_parse(route_params: RouteParams) -> Option<Self> {
+    pub fn try_parse(route_params: RouteParams) -> Route {
         if let Some(captures) = RE_DIR_UPLOAD.captures(&route_params.file_name) {
             let is_protected = route_params.is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let is_temporary = captures.get(ELEMENT_IS_TEMPORARY).is_some();
@@ -40,10 +41,19 @@ impl RouteUpload {
                 is_protected,
             };
 
-            return Some(route_upload);
+            return Route::Upload(route_upload);
         }
 
-        None
+        Route::None
+    }
+}
+
+impl RouteGenerator for RouteUpload {
+    fn make_routes(&self, app: &mut crate::app::App) {
+        let path = self.path.to_string_lossy();
+        app.push_uploads_config(path.to_string(), self.is_temporary);
+
+        build_upload_routes(app, path.to_string(), &self.route);
     }
 }
 

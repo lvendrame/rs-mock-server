@@ -1,7 +1,8 @@
 use std::ffi::OsString;
 
-use crate::route_builder::{route_params::RouteParams, PrintRoute};
+use crate::{app::App, route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct  RoutePublic {
     pub path: OsString,
     pub route: String,
@@ -9,7 +10,7 @@ pub struct  RoutePublic {
 }
 
 impl RoutePublic {
-    pub fn try_parse(route_params: RouteParams) -> Option<Self> {
+    pub fn try_parse(route_params: RouteParams) -> Route {
         if route_params.file_name.starts_with("public") {
             let public_route = if let Some((_, to)) = route_params.file_name.split_once('-') {
                 to
@@ -26,10 +27,16 @@ impl RoutePublic {
                 is_protected: false,
             };
 
-            return Some(route_public);
+            return Route::Public(route_public);
         }
 
-        None
+        Route::None
+    }
+}
+
+impl RouteGenerator for RoutePublic {
+    fn make_routes(&self, app: &mut App) {
+        app.build_public_router_v2(&self.path, &self.route);
     }
 }
 

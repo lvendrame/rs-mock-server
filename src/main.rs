@@ -2,6 +2,7 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use tokio::signal;
 
+pub mod in_memory_collection;
 pub mod route_builder;
 pub mod handlers;
 pub mod id_manager;
