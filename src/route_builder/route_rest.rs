@@ -80,24 +80,22 @@ impl RouteGenerator for RouteRest {
         let in_memory_collection = InMemoryCollection::new(self.id_type, self.id_key.clone());
         let collection = in_memory_collection.into_protected();
 
-        let route_path = self.path.to_str().unwrap();
-
         load_initial_data(&self.path, &collection);
 
-        let id_route = format!("{}/{{{}}}", route_path, self.id_key);
+        let id_route = format!("{}/{{{}}}", self.route, self.id_key);
 
         // Build REST routes for CRUD operations
-        create_get_all(app, route_path, &collection, self.is_protected);
+        create_get_all(app, &self.route, self.is_protected, &collection);
 
-        create_insert(app, route_path, &collection, self.is_protected);
+        create_insert(app, &self.route, self.is_protected, &collection);
 
-        create_get_item(app, &collection, &id_route, self.is_protected);
+        create_get_item(app, &id_route, self.is_protected, &collection);
 
-        create_full_update(app, &collection, &id_route, self.is_protected);
+        create_full_update(app, &id_route, self.is_protected, &collection);
 
-        create_partial_update(app, &collection, &id_route, self.is_protected);
+        create_partial_update(app, &id_route, self.is_protected, &collection);
 
-        create_delete(app, collection, &id_route, self.is_protected);
+        create_delete(app, &id_route, self.is_protected, &collection);
     }
 }
 

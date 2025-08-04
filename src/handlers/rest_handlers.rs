@@ -28,7 +28,7 @@ pub fn load_initial_data(file_path: &OsString, load_collection: &ProtectedMemCol
     eprintln!("⚠️ Could not read file {}, skipping initial data load", file_path.to_string_lossy());
 }
 
-pub fn create_get_all(app: &mut App, route_path: &str, collection: &ProtectedMemCollection, is_protected: bool) {
+pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
     // GET /resource - list all
     let list_collection = Arc::clone(collection);
     let list_router = get(move || {
@@ -39,10 +39,10 @@ pub fn create_get_all(app: &mut App, route_path: &str, collection: &ProtectedMem
         }
     });
 
-    app.push_route(route_path, list_router, Some("GET"), is_protected);
+    app.push_route(route, list_router, Some("GET"), is_protected);
 }
 
-pub fn create_insert(app: &mut App, route_path: &str, collection: &ProtectedMemCollection, is_protected: bool) {
+pub fn create_insert(app: &mut App, route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
     // POST /resource - create new
     let create_collection = Arc::clone(collection);
     let create_router = post(move |Json(payload): Json<Value>| {
@@ -55,10 +55,10 @@ pub fn create_insert(app: &mut App, route_path: &str, collection: &ProtectedMemC
         }
     });
 
-    app.push_route(route_path, create_router, Some("POST"), is_protected);
+    app.push_route(route, create_router, Some("POST"), is_protected);
 }
 
-pub fn create_get_item(app: &mut App, collection: &ProtectedMemCollection, id_route: &str, is_protected: bool) {
+pub fn create_get_item(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
     // GET /resource/:id - get by id
     let get_collection = Arc::clone(collection);
     let get_router = get(move |AxumPath(id): AxumPath<String>| {
@@ -74,7 +74,7 @@ pub fn create_get_item(app: &mut App, collection: &ProtectedMemCollection, id_ro
     app.push_route(id_route, get_router, Some("GET"), is_protected);
 }
 
-pub fn create_full_update(app: &mut App, collection: &ProtectedMemCollection, id_route: &str, is_protected: bool) {
+pub fn create_full_update(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
     // PUT /resource/:id - update by id
     let update_collection = Arc::clone(collection);
     let put_router = put(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
@@ -90,7 +90,7 @@ pub fn create_full_update(app: &mut App, collection: &ProtectedMemCollection, id
     app.push_route(id_route, put_router, Some("PUT"), is_protected);
 }
 
-pub fn create_partial_update(app: &mut App, collection: &ProtectedMemCollection, id_route: &str, is_protected: bool) {
+pub fn create_partial_update(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
     // PATCH /resource/:id - partial update by id
     let patch_collection = Arc::clone(collection);
     let patch_router = patch(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
@@ -106,7 +106,7 @@ pub fn create_partial_update(app: &mut App, collection: &ProtectedMemCollection,
     app.push_route(id_route, patch_router, Some("PATCH"), is_protected);
 }
 
-pub fn create_delete(app: &mut App, collection: ProtectedMemCollection, id_route: &str, is_protected: bool) {
+pub fn create_delete(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
     // DELETE /resource/:id - delete by id
     let delete_collection = Arc::clone(&collection);
     let delete_router = delete(move |AxumPath(id): AxumPath<String>| {
@@ -128,20 +128,20 @@ pub fn build_rest_routes(app: &mut App, route_path: &str, file_path: &OsString, 
 
     load_initial_data(file_path, &collection);
 
-    let id_route = format!("{}/{{{}}}", route_path, id_key);
+    let id_route = &format!("{}/{{{}}}", route_path, id_key);
 
     // Build REST routes for CRUD operations
-    create_get_all(app, route_path, &collection, is_protected);
+    create_get_all(app, route_path, is_protected, &collection);
 
-    create_insert(app, route_path, &collection, is_protected);
+    create_insert(app, route_path, is_protected, &collection);
 
-    create_get_item(app, &collection, &id_route, is_protected);
+    create_get_item(app, id_route, is_protected, &collection);
 
-    create_full_update(app, &collection, &id_route, is_protected);
+    create_full_update(app, id_route, is_protected, &collection);
 
-    create_partial_update(app, &collection, &id_route, is_protected);
+    create_partial_update(app, id_route, is_protected, &collection);
 
-    create_delete(app, collection, &id_route, is_protected);
+    create_delete(app, id_route, is_protected, &collection);
 
     println!("✔️ Built REST routes for {}", route_path);
 }

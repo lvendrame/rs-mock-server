@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::route_builder::{
     RouteParams,
     PrintRoute,
@@ -15,8 +17,8 @@ pub enum Route {
     None,
     Auth(RouteAuth),
     Basic(RouteBasic),
-    Public(RoutePublic),
     Rest(RouteRest),
+    Public(RoutePublic),
     Upload(RouteUpload),
 }
 
@@ -89,6 +91,58 @@ impl PrintRoute for Route {
             Route::Public(route_public) => route_public.println(),
             Route::Rest(route_rest) => route_rest.println(),
             Route::Upload(route_upload) => route_upload.println(),
+        }
+    }
+}
+
+impl PartialOrd for Route {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+
+        // First compare by enum discriminant order
+        let self_order = match self {
+            Route::None => 0,
+            Route::Auth(_) => 1,
+            Route::Basic(_) => 2,
+            Route::Rest(_) => 3,
+            Route::Public(_) => 4,
+            Route::Upload(_) => 5,
+        };
+        let other_order = match other {
+            Route::None => 0,
+            Route::Auth(_) => 1,
+            Route::Basic(_) => 2,
+            Route::Rest(_) => 3,
+            Route::Public(_) => 4,
+            Route::Upload(_) => 5,
+        };
+
+        match self_order.cmp(&other_order) {
+            Ordering::Equal => {
+                // Same enum variant, compare by path then method
+                match (self, other) {
+                    (Route::None, Route::None) => Some(Ordering::Equal),
+                    (Route::Auth(a), Route::Auth(b)) => {
+                        a.path.partial_cmp(&b.path)
+                    },
+                    (Route::Basic(a), Route::Basic(b)) => {
+                        match a.path.cmp(&b.path) {
+                            Ordering::Equal => a.method.to_string().partial_cmp(&b.method.to_string()),
+                            other => Some(other),
+                        }
+                    },
+                    (Route::Rest(a), Route::Rest(b)) => {
+                        a.path.partial_cmp(&b.path)
+                    },
+                    (Route::Public(a), Route::Public(b)) => {
+                        a.path.partial_cmp(&b.path)
+                    },
+                    (Route::Upload(a), Route::Upload(b)) => {
+                        a.path.partial_cmp(&b.path)
+                    },
+                    _ => unreachable!(),
+                }
+            },
+            other => Some(other),
         }
     }
 }

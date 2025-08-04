@@ -190,6 +190,7 @@ pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) 
     let auth_collection = in_memory_collection.into_protected();
 
     if !try_load_users(file_path, &users_collection) {
+        println!("⚠️ Authentication routes were not created");
         return;
     }
 

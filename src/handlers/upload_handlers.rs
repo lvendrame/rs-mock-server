@@ -10,9 +10,7 @@ use serde_json::Value;
 use crate::{app::App};
 
 fn create_upload_route(app: &mut App, upload_path: String, route: &str) {
-    let uploads_route = format!("/{}", route);
-
-    let uploads_route_cloned = uploads_route.clone();
+    let uploads_route = route.to_string();
 
     // POST /uploads - create new
     let uploads_router = post(async move |mut multipart: Multipart| {
@@ -37,18 +35,18 @@ fn create_upload_route(app: &mut App, upload_path: String, route: &str) {
             map.insert("status".to_string(), Value::String("success".to_string()));
             map.insert("message".to_string(), Value::String("File uploaded successfully".to_string()));
             map.insert("filename".to_string(), Value::String(file_name.clone()));
-            map.insert("filepath".to_string(), Value::String(format!("{}/{}", uploads_route_cloned, file_name) ));
+            map.insert("filepath".to_string(), Value::String(format!("{}/{}", uploads_route, file_name) ));
             map
         });
 
         Json(response).into_response()
     });
 
-    app.route(&uploads_route, uploads_router, Some("POST"));
+    app.route(route, uploads_router, Some("POST"));
 }
 
 fn create_download_route(app: &mut App, download_path: String, route: &str) {
-    let download_route = format!("/{}/{{file_name}}", route);
+    let download_route = format!("{}/{{file_name}}", route);
 
     // GET /uploads/{filename} - download file
     let download_router = get(move |AxumPath(file_name): AxumPath<String>| {
@@ -92,9 +90,7 @@ fn create_download_route(app: &mut App, download_path: String, route: &str) {
 }
 
 fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
-    let upload_list_route = format!("/{}", route);
-
-    let upload_list_route_cloned = upload_list_route.clone();
+    let upload_list_route = route.to_string();
 
     // GET /uploads/{filename} - download file
     let upload_list_router = get(move || {
@@ -109,7 +105,7 @@ fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
             let entries = fs::read_dir(upload_path).unwrap();
             let array = entries.map(|entry| {
                 let value = format!("{}/{}",
-                    upload_list_route_cloned,
+                    upload_list_route,
                     entry.unwrap().file_name().to_string_lossy()
                 );
 
@@ -122,7 +118,7 @@ fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
         }
     });
 
-    app.route(&upload_list_route, upload_list_router, Some("GET"));
+    app.route(route, upload_list_router, Some("GET"));
 }
 
 pub fn build_upload_routes(app: &mut App, path: String, route: &str) {

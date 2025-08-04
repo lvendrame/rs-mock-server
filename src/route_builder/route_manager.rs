@@ -1,4 +1,4 @@
-use std::fs::{self, DirEntry};
+use std::{fs::{self, DirEntry}};
 
 use crate::{app::App, route_builder::{PrintRoute, Route, RouteGenerator, RouteParams}};
 
@@ -14,8 +14,15 @@ impl RouteManager {
     }
 
     pub fn from_dir(root_path: &str) -> Self {
+        let start_time = std::time::Instant::now();
+        println!("Start - Loading routes");
+
         let mut manager = Self::new();
         manager.load_dir("", root_path, false);
+        manager.sort();
+
+        println!("Finish - Loading routes. Routes loaded in {:?}", start_time.elapsed());
+
         manager
     }
 
@@ -44,13 +51,24 @@ impl RouteManager {
         }
 
         if let Route::Auth(_) = route {
+            if self.auth_route.is_some() {
+                panic!("Only one auth route is allowed");
+            }
             self.auth_route = route;
         } else {
             self.routes.push(route);
         }
     }
+
+    fn sort(&mut self) {
+        self.routes.sort_by(|ra, rb| {
+            ra.partial_cmp(rb).unwrap_or(std::cmp::Ordering::Equal)
+        });
+    }
+
     fn make_route(&self, app: &mut App, route: &Route){
         if route.is_some() {
+            route.make_routes(app);
             route.println();
         }
     }
