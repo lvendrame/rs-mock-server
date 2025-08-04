@@ -9,8 +9,9 @@ use crate::route_builder::{
     RouteUpload
 };
 
-#[derive(PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub enum Route {
+    #[default]
     None,
     Auth(RouteAuth),
     Basic(RouteBasic),
@@ -28,14 +29,18 @@ impl Route {
         *self != Route::None
     }
 
-    pub fn try_parse(route_params: RouteParams) -> Route {
+    pub fn try_parse(route_params: &RouteParams) -> Route {
+        if route_params.file_name.starts_with(".") {
+            return Route::None;
+        }
+
         if route_params.is_dir {
             let route = RoutePublic::try_parse(route_params.clone());
             if route.is_some() {
                 return route;
             }
 
-            let route = RouteUpload::try_parse(route_params);
+            let route = RouteUpload::try_parse(route_params.clone());
             if route.is_some() {
                 return route;
             }
@@ -53,7 +58,7 @@ impl Route {
             return route;
         }
 
-        let route = RouteAuth::try_parse(route_params);
+        let route = RouteAuth::try_parse(route_params.clone());
         if route.is_some() {
             return route;
         }

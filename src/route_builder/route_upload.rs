@@ -59,6 +59,6 @@ impl RouteGenerator for RouteUpload {
 
 impl PrintRoute for RouteUpload {
     fn println(&self) {
-        println!("✔️ Mapped uploads from folder {} to /{}", self.path.to_string_lossy(), self.route);
+        println!("✔️ Mapped uploads from folder {} to {}", self.path.to_string_lossy(), self.route);
     }
 }

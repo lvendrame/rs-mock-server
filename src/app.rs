@@ -8,7 +8,7 @@ use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
-use crate::{build_dyn_routes::load_mock_dir, handlers::make_auth_middleware, in_memory_collection::ProtectedMemCollection, pages::Pages, route_builder::RouteRegistrator, upload_configuration::UploadConfiguration};
+use crate::{build_dyn_routes::load_mock_dir, handlers::make_auth_middleware, in_memory_collection::ProtectedMemCollection, pages::Pages, route_builder::{route_manager::RouteManager, RouteGenerator, RouteRegistrator}, upload_configuration::UploadConfiguration};
 
 pub struct App {
     pub port: u16,
@@ -80,6 +80,8 @@ impl App {
     }
 
     fn build_dyn_routes(&mut self) {
+        // let manager = RouteManager::from_dir(&self.root_path);
+        // manager.make_routes(self);
         load_mock_dir(self);
     }
 

@@ -6,6 +6,7 @@ pub mod route_public;
 pub mod route_rest;
 pub mod route_upload;
 pub mod route_params;
+pub mod route_manager;
 
 use axum::routing::MethodRouter;
 use http::Method;

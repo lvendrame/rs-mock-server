@@ -19,7 +19,7 @@ impl RoutePublic {
             };
 
 
-            let route = format!("{}/{}", route_params.full_route, public_route);
+            let route = format!("{}/{}", route_params.parent_route, public_route);
 
             let route_public = Self {
                 path: route_params.file_path,
@@ -42,6 +42,6 @@ impl RouteGenerator for RoutePublic {
 
 impl PrintRoute for RoutePublic {
     fn println(&self) {
-        println!("✔️ Built public routes for {}", self.route);
+        println!("✔️ Built public routes from folder {} to {}", self.path.to_string_lossy(), self.route);
     }
 }

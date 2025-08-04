@@ -13,8 +13,7 @@ pub struct RouteParams {
 
 impl RouteParams {
     pub fn new(parent_route: &str, entry: &DirEntry, is_protected: bool) -> Self {
-        let parent_route = (if parent_route.is_empty() { "/" } else { parent_route }).to_string();
-
+        let parent_route = parent_route.to_string();
         let file_name = entry.file_name().to_string_lossy().to_string();
         let file_stem = file_name.split('.').next().unwrap_or("").to_string();
 
