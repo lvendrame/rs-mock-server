@@ -1,3 +1,0 @@
-pub fn common() {
-    todo!()
-}

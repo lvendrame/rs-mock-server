@@ -1,4 +1,3 @@
-pub mod common;
 pub mod route;
 pub mod route_auth;
 pub mod route_basic;
