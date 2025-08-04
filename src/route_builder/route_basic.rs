@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::{ffi::OsString, fmt::Display};
 
 use http::Method;
 use once_cell::sync::Lazy;
@@ -46,6 +46,17 @@ impl SubRoute {
     }
 }
 
+impl Display for SubRoute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SubRoute::None => write!(f, ""),
+            SubRoute::Id => write!(f, "/{{id}}"),
+            SubRoute::Static(value) => write!(f, "/{{{}}}", value),
+            SubRoute::Range(start, end) => write!(f, "/{{{}-{}}}", start, end),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouteBasic {
     pub path: OsString,
@@ -73,7 +84,15 @@ impl RouteBasic {
             return Route::Basic(route_basic);
         }
 
-        Route::None
+        let route_basic = Self {
+            path: route_params.file_path,
+            method: Method::GET,
+            route: format!("{}/{}", route_params.full_route, route_params.file_stem) ,
+            sub_route: SubRoute::None,
+            is_protected: route_params.is_protected,
+        };
+
+        Route::Basic(route_basic)
     }
 }
 
@@ -113,9 +132,463 @@ impl PrintRoute for RouteBasic {
         let path = &self.path.to_string_lossy();
         let method = self.method.as_str();
         let route = &self.route;
-        match self.sub_route {
-            SubRoute::Range(start, end) => println!("✔️ Mapped {} to {} {}/[{}-{}]", path, method, route, start, end),
-            _ => println!("✔️ Mapped {} to {} {}", path, method, route),
+        let subroute = self.sub_route.to_string();
+
+        println!("✔️ Mapped {} to {} {}{}", path, method, route, subroute);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::route_builder::route_params::RouteParams;
+    use std::fs::File;
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    fn create_test_file(dir: &Path, filename: &str) -> std::fs::DirEntry {
+        let file_path = dir.join(filename);
+        File::create(&file_path).unwrap();
+        let mut entries = dir.read_dir().unwrap();
+        entries.find(|entry| {
+            entry.as_ref().unwrap().file_name() == filename
+        }).unwrap().unwrap()
+    }
+
+    #[test]
+    fn test_try_parse_get_method() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "get.json");
+        let route_params = RouteParams::new("/api", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_post_method() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "post.json");
+        let route_params = RouteParams::new("/api/users", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::POST);
+                assert_eq!(route_basic.route, "/api/users");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_protected_method() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "$put.json");
+        let route_params = RouteParams::new("/api/data", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::PUT);
+                assert_eq!(route_basic.route, "/api/data");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_method_with_id_descriptor() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "get{id}.json");
+        let route_params = RouteParams::new("/api/items", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api/items");
+                assert_eq!(route_basic.sub_route, SubRoute::Id);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_method_with_range_descriptor() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "delete{1-5}.json");
+        let route_params = RouteParams::new("/api/resources", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::DELETE);
+                assert_eq!(route_basic.route, "/api/resources");
+                assert_eq!(route_basic.sub_route, SubRoute::Range(1, 5));
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_method_with_static_descriptor() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "patch{admin}.json");
+        let route_params = RouteParams::new("/api/config", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::PATCH);
+                assert_eq!(route_basic.route, "/api/config");
+                assert_eq!(route_basic.sub_route, SubRoute::Static("admin".to_string()));
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_protected_with_descriptor() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "$options{special}.json");
+        let route_params = RouteParams::new("/api/auth", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::OPTIONS);
+                assert_eq!(route_basic.route, "/api/auth");
+                assert_eq!(route_basic.sub_route, SubRoute::Static("special".to_string()));
+                assert!(route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_inherited_protection() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "get.json");
+        let route_params = RouteParams::new("/api/secure", &entry, true);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api/secure");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_all_http_methods() {
+        let temp_dir = TempDir::new().unwrap();
+        let methods = vec![
+            ("get.json", Method::GET),
+            ("post.json", Method::POST),
+            ("put.json", Method::PUT),
+            ("patch.json", Method::PATCH),
+            ("delete.json", Method::DELETE),
+            ("options.json", Method::OPTIONS),
+        ];
+
+        for (filename, expected_method) in methods {
+            let entry = create_test_file(temp_dir.path(), filename);
+            let route_params = RouteParams::new("/api/test", &entry, false);
+            let result = RouteBasic::try_parse(route_params);
+
+            match result {
+                Route::Basic(route_basic) => {
+                    assert_eq!(route_basic.method, expected_method, "Failed for {}", filename);
+                }
+                _ => panic!("Expected Route::Basic for {}", filename),
+            }
+        }
+    }
+
+    #[test]
+    fn test_try_parse_non_method_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "config.json");
+        let route_params = RouteParams::new("/api", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                // Now it should create a static GET route with the file stem
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api/config");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic for non-method file"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_complex_range() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "get{10-20}.json");
+        let route_params = RouteParams::new("/api/pages", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api/pages");
+                assert_eq!(route_basic.sub_route, SubRoute::Range(10, 20));
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_file_path_preservation() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "get.json");
+        let route_params = RouteParams::new("/api", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                let expected_path = temp_dir.path().join("get.json").into_os_string();
+                assert_eq!(route_basic.path, expected_path);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    // Tests for new static route behavior (non-method files)
+
+    #[test]
+    fn test_try_parse_static_route_simple() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "users.json");
+        let route_params = RouteParams::new("/api", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api/users");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic for static route"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_static_route_with_protection() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "admin.json");
+        let route_params = RouteParams::new("/api", &entry, true);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api/admin");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(route_basic.is_protected); // Should inherit protection
+            }
+            _ => panic!("Expected Route::Basic for protected static route"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_static_route_different_extensions() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_cases = vec![
+            ("data.json", "data"),
+            ("info.xml", "info"),
+            ("config.yaml", "config"),
+            ("settings.txt", "settings"),
+            ("readme.md", "readme"),
+        ];
+
+        for (filename, expected_stem) in test_cases {
+            let entry = create_test_file(temp_dir.path(), filename);
+            let route_params = RouteParams::new("/files", &entry, false);
+            let result = RouteBasic::try_parse(route_params);
+
+            match result {
+                Route::Basic(route_basic) => {
+                    assert_eq!(route_basic.method, Method::GET);
+                    assert_eq!(route_basic.route, format!("/files/{}", expected_stem));
+                    assert_eq!(route_basic.sub_route, SubRoute::None);
+                    assert!(!route_basic.is_protected);
+                }
+                _ => panic!("Expected Route::Basic for {}", filename),
+            }
+        }
+    }
+
+    #[test]
+    fn test_try_parse_static_route_complex_names() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_cases = vec![
+            ("user-profile.json", "user-profile"),
+            ("api_documentation.md", "api_documentation"),
+            ("system.config.xml", "system"),
+            ("data-2024.csv", "data-2024"),
+        ];
+
+        for (filename, expected_stem) in test_cases {
+            let entry = create_test_file(temp_dir.path(), filename);
+            let route_params = RouteParams::new("/resources", &entry, false);
+            let result = RouteBasic::try_parse(route_params);
+
+            match result {
+                Route::Basic(route_basic) => {
+                    assert_eq!(route_basic.method, Method::GET);
+                    assert_eq!(route_basic.route, format!("/resources/{}", expected_stem));
+                    assert_eq!(route_basic.sub_route, SubRoute::None);
+                    assert!(!route_basic.is_protected);
+                }
+                _ => panic!("Expected Route::Basic for {}", filename),
+            }
+        }
+    }
+
+    #[test]
+    fn test_try_parse_static_route_nested_paths() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "statistics.json");
+        let route_params = RouteParams::new("/api/v1/reports", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api/v1/reports/statistics");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic for nested static route"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_static_route_with_empty_parent() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "index.html");
+        let route_params = RouteParams::new("", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/index");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic for static route with empty parent"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_static_route_no_extension() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "readme");
+        let route_params = RouteParams::new("/docs", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/docs/readme");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic for file without extension"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_static_route_vs_method_precedence() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Method files should still work as before
+        let method_entry = create_test_file(temp_dir.path(), "get.json");
+        let method_params = RouteParams::new("/api", &method_entry, false);
+        let method_result = RouteBasic::try_parse(method_params);
+
+        match method_result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+            }
+            _ => panic!("Expected Route::Basic for method file"),
+        }
+
+        // Non-method files should create static routes
+        let static_entry = create_test_file(temp_dir.path(), "getconfig.json");
+        let static_params = RouteParams::new("/api", &static_entry, false);
+        let static_result = RouteBasic::try_parse(static_params);
+
+        match static_result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::GET);
+                assert_eq!(route_basic.route, "/api/getconfig");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+            }
+            _ => panic!("Expected Route::Basic for static file"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_static_route_file_path_preservation() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "metadata.json");
+        let route_params = RouteParams::new("/api", &entry, false);
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                let expected_path = temp_dir.path().join("metadata.json").into_os_string();
+                assert_eq!(route_basic.path, expected_path);
+                assert_eq!(route_basic.route, "/api/metadata");
+            }
+            _ => panic!("Expected Route::Basic"),
         }
     }
 }

@@ -34,7 +34,7 @@ struct AuthResponse {
 
 fn try_load_users(file_path: &OsString, load_collection: &ProtectedMemCollection) -> bool {
     // Try to read the file content
-    if let Ok(file_content) = fs::read_to_string(&file_path) {
+    if let Ok(file_content) = fs::read_to_string(file_path) {
         // Try to parse the content as JSON
         if let Ok(json_value) = serde_json::from_str::<Value>(&file_content) {
             // Check if it's a JSON Array
@@ -183,10 +183,10 @@ pub fn create_login_route(
 }
 
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
-    let in_memory_collection = InMemoryCollection::new(IdType::None, USERNAME_FIELD.to_string());
+    let in_memory_collection = InMemoryCollection::new(IdType::None, USERNAME_FIELD.to_string(), Some("{{auth}}-users".to_string()));
     let users_collection = in_memory_collection.into_protected();
 
-    let in_memory_collection = InMemoryCollection::new(IdType::None, TOKEN_FIELD.to_string());
+    let in_memory_collection = InMemoryCollection::new(IdType::None, TOKEN_FIELD.to_string(), Some("{{auth}}-tokens".to_string()));
     let auth_collection = in_memory_collection.into_protected();
 
     if !try_load_users(file_path, &users_collection) {

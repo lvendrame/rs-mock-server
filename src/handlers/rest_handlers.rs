@@ -123,7 +123,7 @@ pub fn create_delete(app: &mut App, id_route: &str, is_protected: bool, collecti
 }
 
 pub fn build_rest_routes(app: &mut App, route_path: &str, file_path: &OsString, id_key: &str, id_type: IdType, is_protected: bool) {
-    let in_memory_collection = InMemoryCollection::new(id_type, id_key.to_string());
+    let in_memory_collection = InMemoryCollection::new(id_type, id_key.to_string(), Some(route_path.to_string()));
     let collection = in_memory_collection.into_protected();
 
     load_initial_data(file_path, &collection);
