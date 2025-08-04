@@ -456,3 +456,111 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 -   Download endpoints serve files with proper Content-Type detection and Content-Disposition headers.
 -   Temporary upload folders (`{temp}`) automatically clean up all files when the server stops.
 -   You can interact with all endpoints using any HTTP client, and data will persist until the server is restarted.
+
+---
+
+## Development
+
+### Getting Started
+
+1. **Clone the repository**:
+
+    ```bash
+    git clone https://github.com/lvendrame/rs-mock-server.git
+    cd rs-mock-server
+    ```
+
+2. **Install dependencies**:
+
+    ```bash
+    cargo build
+    ```
+
+3. **Set up development environment**:
+    ```bash
+    make dev-setup
+    ```
+
+### Development Commands
+
+The project includes a Makefile with convenient development commands:
+
+```bash
+# Run tests
+make test
+
+# Run tests in watch mode (requires cargo-watch)
+make test-watch
+
+# Run all quality checks (tests, clippy, formatting)
+make check-all
+
+# Format code
+make fmt
+
+# Run Clippy linter
+make clippy
+
+# Build the project
+make build
+
+# Run the application
+make run
+
+# Set up Git hooks
+make setup-hooks
+```
+
+### Pre-commit Hooks
+
+This project uses Git pre-commit hooks to ensure code quality. The hooks automatically:
+
+-   ✅ Run all tests before each commit
+-   ❌ Block commits if tests fail
+-   🎯 Ensure consistent code quality
+
+**Automatic setup**: Pre-commit hooks are installed automatically when you run `make dev-setup` or `make setup-hooks`.
+
+**Manual bypass** (not recommended): If you need to commit without running tests:
+
+```bash
+git commit --no-verify -m "Your message"
+```
+
+**Configuration**: You can customize the pre-commit checks by editing `.git/hooks/pre-commit`. The hook supports:
+
+-   Running tests (enabled by default)
+-   Running Clippy checks (disabled by default)
+-   Checking code formatting (disabled by default)
+
+### Testing
+
+The project includes comprehensive test coverage:
+
+```bash
+# Run all tests
+cargo test
+
+# Run specific test module
+cargo test id_manager
+cargo test in_memory_collection
+cargo test route_builder
+
+# Run tests with output
+cargo test -- --nocapture
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and ensure tests pass
+4. Commit your changes (pre-commit hooks will run automatically)
+5. Push to your fork and submit a pull request
+
+**Code Quality**: All contributions must:
+
+-   Pass existing tests
+-   Include tests for new functionality
+-   Follow Rust formatting standards (`cargo fmt`)
+-   Pass Clippy linting (`cargo clippy`)
