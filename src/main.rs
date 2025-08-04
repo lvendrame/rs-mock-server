@@ -9,7 +9,6 @@ pub mod id_manager;
 pub mod app;
 pub mod link;
 pub mod pages;
-pub mod build_dyn_routes;
 pub mod upload_configuration;
 pub mod utils;
 
@@ -19,7 +18,7 @@ pub mod utils;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Port to run the server on
-    #[arg(short, long, default_value_t = 4520,)]
+    #[arg(short, long, default_value_t = 4520)]
     port: u16,
 
     /// Directory to load mock files from
