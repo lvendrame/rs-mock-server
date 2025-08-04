@@ -108,7 +108,7 @@ pub fn create_partial_update(app: &mut App, id_route: &str, is_protected: bool, 
 
 pub fn create_delete(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
     // DELETE /resource/:id - delete by id
-    let delete_collection = Arc::clone(&collection);
+    let delete_collection = Arc::clone(collection);
     let delete_router = delete(move |AxumPath(id): AxumPath<String>| {
         async move {
             let mut delete_collection = delete_collection.lock().unwrap();

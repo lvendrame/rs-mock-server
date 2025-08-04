@@ -1,15 +1,8 @@
 use std::cmp::Ordering;
 
-use crate::route_builder::{
-    RouteParams,
-    PrintRoute,
-    RouteAuth,
-    RouteBasic,
-    RouteGenerator,
-    RoutePublic,
-    RouteRest,
-    RouteUpload
-};
+use crate::{app::App, route_builder::{
+    PrintRoute, RouteAuth, RouteBasic, RouteGenerator, RouteParams, RoutePublic, RouteRest, RouteUpload
+}};
 
 #[derive(Debug, Default, PartialEq)]
 pub enum Route {
@@ -67,10 +60,19 @@ impl Route {
 
         Route::None
     }
+
+
+
+    pub fn make_routes_and_print(&self, app: &mut App){
+        if self.is_some() {
+            self.make_routes(app);
+            self.println();
+        }
+    }
 }
 
 impl RouteGenerator for Route {
-    fn make_routes(&self, app: &mut crate::app::App) {
+    fn make_routes(&self, app: &mut App) {
         match self {
             Route::None => (),
             Route::Auth(route_auth) => route_auth.make_routes(app),

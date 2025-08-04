@@ -85,9 +85,8 @@ impl App {
     }
 
     fn build_dyn_routes(&mut self) {
-        let manager = RouteManager::from_dir(&self.root_path);
-        manager.make_routes(self);
-        //load_mock_dir(self);
+        RouteManager::from_dir(&self.root_path)
+            .make_routes(self);
     }
 
     fn build_index_routes(&mut self) {

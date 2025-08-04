@@ -1,6 +1,6 @@
 use std::{fs::{self, DirEntry}};
 
-use crate::{app::App, route_builder::{PrintRoute, Route, RouteGenerator, RouteParams}};
+use crate::{app::App, route_builder::{Route, RouteGenerator, RouteParams}};
 
 #[derive(Debug, Default)]
 pub struct RouteManager {
@@ -66,21 +66,14 @@ impl RouteManager {
         });
     }
 
-    fn make_route(&self, app: &mut App, route: &Route){
-        if route.is_some() {
-            route.make_routes(app);
-            route.println();
-        }
-    }
-
 }
 
 impl RouteGenerator for RouteManager {
     fn make_routes(&self, app: &mut App) {
-        self.make_route(app, &self.auth_route);
+        self.auth_route.make_routes_and_print(app);
 
         for route in self.routes.iter() {
-            self.make_route(app, route);
+            route.make_routes_and_print(app);
         }
     }
 }
