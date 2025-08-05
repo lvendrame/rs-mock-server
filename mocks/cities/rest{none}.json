@@ -1,0 +1,37 @@
+[
+    {
+        "id": 1,
+        "name": "New York",
+        "country": "USA",
+        "population": 8419600,
+        "area": 789.43
+    },
+    {
+        "id": 2,
+        "name": "Los Angeles",
+        "country": "USA",
+        "population": 3980400,
+        "area": 1214.9
+    },
+    {
+        "id": 3,
+        "name": "Chicago",
+        "country": "USA",
+        "population": 2716000,
+        "area": 589.56
+    },
+    {
+        "id": 4,
+        "name": "Houston",
+        "country": "USA",
+        "population": 2328000,
+        "area": 1651.11
+    },
+    {
+        "id": 5,
+        "name": "Phoenix",
+        "country": "USA",
+        "population": 1690000,
+        "area": 1340.6
+    }
+]

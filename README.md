@@ -55,7 +55,7 @@ For rapid prototyping and testing, you can create fully functional CRUD APIs usi
 1. **Loads initial data** from the JSON array in the file
 2. **Creates a complete REST API** with all CRUD operations
 3. **Maintains data in memory** during the server's lifetime
-4. **Handles ID generation** automatically for new items
+4. **Handles ID generation** automatically for new items (except for None ID Type)
 
 #### REST File Naming Convention
 
@@ -64,9 +64,11 @@ The `{params}` in the filename configures the ID field behavior:
 | Filename Pattern      | ID Key | ID Type | Example Usage                                |
 | :-------------------- | :----- | :------ | :------------------------------------------- |
 | `rest.json`           | `id`   | UUID    | Default configuration                        |
+| `rest{none}.json`     | `id`   | None    | Explicit None type                           |
 | `rest{uuid}.json`     | `id`   | UUID    | Explicit UUID type                           |
 | `rest{int}.json`      | `id`   | Integer | Integer IDs starting from 1                  |
 | `rest{_id}.json`      | `_id`  | UUID    | Custom ID field name with UUID               |
+| `rest{_id:none}.json` | `_id`  | None    | Custom ID field name with explicit None type |
 | `rest{_id:uuid}.json` | `_id`  | UUID    | Custom ID field name with explicit UUID type |
 | `rest{_id:int}.json`  | `_id`  | Integer | Custom ID field name with integer type       |
 

@@ -69,7 +69,9 @@ impl InMemoryCollection {
             Some(id_string)
         } else if let Some(Value::String(id_string)) = item.get(self.id_key.clone()){
             Some(id_string.clone())
-        } else {
+        } else if let Some(Value::Number(id_number)) = item.get(self.id_key.clone()){
+            Some(id_number.to_string())
+        }else {
             None
         };
 
@@ -111,6 +113,7 @@ impl InMemoryCollection {
                         },
                         IdType::None => match item.get(self.id_key.clone()) {
                             Some(Value::String(id_string)) => Some(id_string.clone()),
+                            Some(Value::Number(id_number)) => Some(id_number.to_string()),
                             _ => None
                         }
                     };
@@ -387,6 +390,18 @@ mod tests {
     }
 
     #[test]
+    fn test_add_with_none_id_number_existing() {
+        let mut collection = create_none_collection();
+
+        let item = collection.add(json!({"id": 1, "name": "Test Item"}));
+        assert!(item.is_some());
+
+        let item = item.unwrap();
+        assert_eq!(item.get("name").unwrap(), "Test Item");
+        assert_eq!(item.get("id").unwrap(), 1);
+    }
+
+    #[test]
     fn test_add_with_none_id_missing() {
         let mut collection = create_none_collection();
 
@@ -437,12 +452,13 @@ mod tests {
         let batch = json!([
             {"id": "custom-1", "name": "Item 1"},
             {"id": "custom-2", "name": "Item 2"},
-            {"name": "Item 3"} // This should be skipped
+            {"name": "Item 3"}, // This should be skipped
+            {"id": 3, "name": "Item 4"},
         ]);
 
         let added_items = collection.add_batch(batch);
-        assert_eq!(added_items.len(), 2);
-        assert_eq!(collection.count(), 2);
+        assert_eq!(added_items.len(), 3);
+        assert_eq!(collection.count(), 3);
     }
 
     #[test]

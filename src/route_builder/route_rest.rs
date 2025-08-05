@@ -29,6 +29,7 @@ impl RouteRest {
             // Single value like "uuid", "int", "id", "_id"
             let part = parts[0];
             match part {
+                "none" => ("id", IdType::None),
                 "uuid" => ("id", IdType::Uuid),
                 "int" => ("id", IdType::Int),
                 id_key => (id_key, IdType::Uuid), // Default fallback
@@ -38,6 +39,7 @@ impl RouteRest {
             let id_key = parts[0];
             let type_str = parts[1];
             let id_type = match type_str {
+                "none" => IdType::None,
                 "uuid" => IdType::Uuid,
                 "int" => IdType::Int,
                 _ => IdType::Uuid, // Default to UUID
@@ -157,6 +159,25 @@ mod tests {
                 assert_eq!(route_rest.id_key, "id");
                 assert_eq!(route_rest.id_type, IdType::Uuid);
                 assert!(route_rest.is_protected);
+            }
+            _ => panic!("Expected Route::Rest"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_rest_with_none_descriptor() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "rest{none}.json");
+        let route_params = RouteParams::new("/api/products", &entry, false);
+
+        let result = RouteRest::try_parse(route_params);
+
+        match result {
+            Route::Rest(route_rest) => {
+                assert_eq!(route_rest.route, "/api/products");
+                assert_eq!(route_rest.id_key, "id");
+                assert_eq!(route_rest.id_type, IdType::None);
+                assert!(!route_rest.is_protected);
             }
             _ => panic!("Expected Route::Rest"),
         }
@@ -369,6 +390,7 @@ mod tests {
     fn test_try_parse_complex_descriptor_formats() {
         let temp_dir = TempDir::new().unwrap();
         let test_cases = vec![
+            ("rest{company_id:none}.json", "company_id", IdType::None),
             ("rest{product_id:int}.json", "product_id", IdType::Int),
             ("rest{order_uuid:uuid}.json", "order_uuid", IdType::Uuid),
             ("rest{user_pk:int}.json", "user_pk", IdType::Int),
@@ -430,6 +452,7 @@ mod tests {
 
     #[test]
     fn test_get_rest_options_single_values() {
+        assert_eq!(RouteRest::get_rest_options("none"), ("id", IdType::None));
         assert_eq!(RouteRest::get_rest_options("uuid"), ("id", IdType::Uuid));
         assert_eq!(RouteRest::get_rest_options("int"), ("id", IdType::Int));
         assert_eq!(RouteRest::get_rest_options("_id"), ("_id", IdType::Uuid));
@@ -438,8 +461,10 @@ mod tests {
 
     #[test]
     fn test_get_rest_options_key_type_pairs() {
+        assert_eq!(RouteRest::get_rest_options("id:none"), ("id", IdType::None));
         assert_eq!(RouteRest::get_rest_options("id:uuid"), ("id", IdType::Uuid));
         assert_eq!(RouteRest::get_rest_options("id:int"), ("id", IdType::Int));
+        assert_eq!(RouteRest::get_rest_options("_id:none"), ("_id", IdType::None));
         assert_eq!(RouteRest::get_rest_options("_id:uuid"), ("_id", IdType::Uuid));
         assert_eq!(RouteRest::get_rest_options("user_id:int"), ("user_id", IdType::Int));
     }
