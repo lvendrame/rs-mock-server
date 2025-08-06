@@ -168,12 +168,15 @@ impl App {
  |   |     ░█▀▄░▀▀█░▄▄▄░█░█░█░█░█░░░█▀▄░▄▄▄░▀▀█░█▀▀░█▀▄░▀▄▀░█▀▀░█▀▄     |   |
  |   |     ░▀░▀░▀▀▀░░░░░▀░▀░▀▀▀░▀▀▀░▀░▀░░░░░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀     |   |
  |   |                                                                  |   |
+ |   |                             {{{{}}}}                             |   |
  |___|                                                                  |___|
 (_____)----------------------------------------------------------------(_____)
 
 ";
 
-        let _ = std::io::stdout().write_all(banner.as_bytes());
+        let version = format!("v{}", env!("CARGO_PKG_VERSION"));
+        let version = format!("{:^8}", version);
+        let _ = std::io::stdout().write_all(banner.replace("{{{{}}}}", &version).as_bytes());
     }
 
     async fn start_server(&self) {
