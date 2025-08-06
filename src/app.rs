@@ -1,9 +1,10 @@
-use std::{cell::RefCell, ffi::OsString};
+use std::{cell::RefCell, ffi::OsString, io::Write};
 
 use axum::{
     middleware, response::IntoResponse, routing::{get, MethodRouter}, Router
 };
 use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode};
+use terminal_link::Link;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
@@ -155,11 +156,35 @@ impl App {
         self.replace_router(new_router);
     }
 
+    pub fn show_greetings() {
+        let banner = r"
+                                  ___     ___
+                                 (o o)   (o o)
+ _____                          (  V  ) (  V  )                         _____
+( ___ )------------------------ /--m-m- /--m-m-------------------------( ___ )
+ |   |                                                                  |   |
+ |   |                                                                  |   |
+ |   |     ░█▀▄░█▀▀░░░░░█▄█░█▀█░█▀▀░█░█░░░░░█▀▀░█▀▀░█▀▄░█░█░█▀▀░█▀▄     |   |
+ |   |     ░█▀▄░▀▀█░▄▄▄░█░█░█░█░█░░░█▀▄░▄▄▄░▀▀█░█▀▀░█▀▄░▀▄▀░█▀▀░█▀▄     |   |
+ |   |     ░▀░▀░▀▀▀░░░░░▀░▀░▀▀▀░▀▀▀░▀░▀░░░░░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀     |   |
+ |   |                                                                  |   |
+ |___|                                                                  |___|
+(_____)----------------------------------------------------------------(_____)
+
+";
+
+        let _ = std::io::stdout().write_all(banner.as_bytes());
+    }
+
     async fn start_server(&self) {
         let address = format!("0.0.0.0:{}", self.port);
 
         let listener = TcpListener::bind(address.clone()).await.unwrap();
-        println!("🚀 RS-Mock Server listening on {}", address);
+        App::show_greetings();
+
+        let link = format!("http://localhost:{}", self.port);
+        let link = Link::new(&link, &link);
+        println!("🚀 Listening on {}", link);
 
         axum::serve(listener, self.get_router()).await.unwrap();
     }
@@ -178,7 +203,7 @@ impl App {
         for upload_config in self.uploads_configurations.iter() {
             upload_config.clean_upload_folder();
         }
-        println!("\nGoodbye! 👋");
+        println!("\n👋👋👋👋👋 Goodbye! 👋👋👋👋👋👋");
     }
 }
 
