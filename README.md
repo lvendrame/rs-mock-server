@@ -38,15 +38,15 @@ The name of a file determines the **HTTP method** and the **final URL segment**.
 
 The following table shows how different filename patterns are mapped to routes, assuming they are inside a `./mocks/api/users` directory:
 
-| Filename Pattern      | Example File      | Generated Route(s)                                                                                                                             | Description                                                                                                                                                                    |
-| :-------------------- | :---------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[method]`            | `get.json`        | `GET /api/users`                                                                                                                               | Creates a route for a standard HTTP method.                                                                                                                                    |
-| `[method]{id}`        | `get{id}.json`    | `GET /api/users/{id}`                                                                                                                          | A dynamic segment that accepts any value in that position.                                                                                                                     |
-| `[method]{value}`     | `get{admin}.json` | `GET /api/users/admin`                                                                                                                         | Matches a specific, hardcoded value.                                                                                                                                           |
-| `[method]{start-end}` | `get{1-5}.json`   | `GET /api/users/1`<br>`GET /api/users/2`<br>...<br>`GET /api/users/5`                                                                          | A numeric range that generates multiple distinct routes.                                                                                                                       |
-| `rest[{params}]`      | `rest.json`       | `GET /api/users`<br>`POST /api/users`<br>`GET /api/users/{id}`<br>`PUT /api/users/{id}`<br>`PATCH /api/users/{id}`<br>`DELETE /api/users/{id}` | **In-Memory REST API**. Creates a full CRUD API with automatic ID generation, data persistence, and initial data loading from the JSON array in the file.                      |
-| `{auth}`              | `{auth}.json`     | `POST /api/login`<br>`POST /api/logout`                                                                                                        | **JWT Authentication**. Creates login and logout endpoints with JWT token generation and validation middleware for route protection.                                           |
-| `[filename].[ext]`    | `avatar.png`      | `GET /api/users/  avatar`                                                                                                                      | **Static File**. Any filename that doesn't match the patterns above is served as a static asset. The `Content-Type` header is automatically set based on the file's extension. |
+| Filename Pattern      | Example File      | Generated Route(s)                                                                                                                             | Description                                                                                                                                                                       |
+| :-------------------- | :---------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[method]`            | `get.json`        | `GET /api/users`                                                                                                                               | Creates a route for a standard HTTP method.                                                                                                                                       |
+| `[method]{id}`        | `get{id}.json`    | `GET /api/users/{id}`                                                                                                                          | A dynamic segment that accepts any value in that position.                                                                                                                        |
+| `[method]{value}`     | `get{admin}.json` | `GET /api/users/admin`                                                                                                                         | Matches a specific, hardcoded value.                                                                                                                                              |
+| `[method]{start-end}` | `get{1-5}.json`   | `GET /api/users/1`<br>`GET /api/users/2`<br>...<br>`GET /api/users/5`                                                                          | A numeric range that generates multiple distinct routes.                                                                                                                          |
+| `rest[{params}]`      | `rest.json`       | `GET /api/users`<br>`POST /api/users`<br>`GET /api/users/{id}`<br>`PUT /api/users/{id}`<br>`PATCH /api/users/{id}`<br>`DELETE /api/users/{id}` | **In-Memory REST API**.<br>Creates a full CRUD API with automatic ID generation, data persistence,<br>and initial data loading from the JSON array in the file.                   |
+| `{auth}`              | `{auth}.json`     | `POST /api/login`<br>`POST /api/logout`                                                                                                        | **JWT Authentication**. Creates login and logout endpoints with JWT token generation<br>and validation middleware for route protection.                                           |
+| `[filename].[ext]`    | `avatar.png`      | `GET /api/users/  avatar`                                                                                                                      | **Static File**. Any filename that doesn't match the patterns above is served as a static asset.<br>The `Content-Type` header is automatically set based on the file's extension. |
 
 ### In-Memory REST API
 
@@ -129,18 +129,19 @@ For applications requiring user authentication, you can create a complete JWT-ba
 
 1. **Loads user credentials** from the JSON array in the file
 2. **Creates authentication endpoints** for login and logout
-3. **Generates JWT tokens** with secure cookies
-4. **Provides middleware** for protecting routes with authentication
+3. **Creates REST endpoints** for user
+4. **Generates JWT tokens** with secure cookies
+5. **Provides middleware** for protecting routes with authentication
 
 #### Authentication File Detection
 
 Only **one authentication route is allowed** per server instance. The `{auth}` file creates authentication endpoints based on its folder location:
 
-| File Location                  | Generated Routes                                  | Description                           |
-| :----------------------------- | :------------------------------------------------ | :------------------------------------ |
-| `./mocks/account/{auth}.json`  | `POST /account/login`<br>`POST /account/logout`   | Authentication for account management |
-| `./mocks/api/auth/{auth}.json` | `POST /api/auth/login`<br>`POST /api/auth/logout` | API authentication endpoints          |
-| `./mocks/{auth}.json`          | `POST /login`<br>`POST /logout`                   | Root-level authentication             |
+| File Location                  | Generated Routes                                                            | Description                           |
+| :----------------------------- | :-------------------------------------------------------------------------- | :------------------------------------ |
+| `./mocks/account/{auth}.json`  | `POST /account/login`<br>`POST /account/logout`<br>`REST /account/users`    | Authentication for account management |
+| `./mocks/api/auth/{auth}.json` | `POST /api/auth/login`<br>`POST /api/auth/logout`<br>`REST /api/auth/users` | API authentication endpoints          |
+| `./mocks/{auth}.json`          | `POST /login`<br>`POST /logout`<br>`REST /users`                            | Root-level authentication             |
 
 #### Credentials File Format
 
@@ -186,6 +187,12 @@ The `{auth}.json` file should contain an array of user objects with `username` a
 -   **Response**: Success message
 -   **Action**: Revokes the token from valid tokens list
 
+**Users REST Endpoint** - `GET,POST,PUT,PATCH,DELETE /{folder}/users[/{username}]`
+
+-   **IdType**: None
+-   **IdKey**: `username`
+-   **Protected**: All REST end-points are protected and only accessible with authentication token
+
 #### Route Protection
 
 To protect routes with authentication, prefix folder names or filenames with `$`:
@@ -197,8 +204,8 @@ mocks/
 ├── api/
 │   ├── cities/
 │   │   └── $get.json        # Protected: GET /api/cities
-│   └── users/
-│       └── get.json         # Public: GET /api/users
+│   └── companies/
+│       └── get.json         # Public: GET /api/companies
 ```
 
 **Protected Folders** (protects all children)
@@ -206,8 +213,8 @@ mocks/
 ```
 mocks/
 ├── $admin/                  # All routes under /admin are protected
-│   ├── users/
-│   │   └── rest.json        # Protected: Full CRUD at /admin/users/*
+│   ├── repositories/
+│   │   └── rest.json        # Protected: Full CRUD at /admin/repositories/*
 │   └── settings/
 │       └── get.json         # Protected: GET /admin/settings
 └── open/
@@ -244,14 +251,14 @@ Option A: Authorization Header
 
 ```bash
 curl -H "Authorization: Bearer <jwt_token>" \
-  http://localhost:4520/admin/users
+  http://localhost:4520/admin/repositories
 ```
 
 Option B: Cookie (automatic)
 
 ```bash
 curl -b "auth_token=<jwt_token>" \
-  http://localhost:4520/admin/users
+  http://localhost:4520/admin/repositories
 ```
 
 **Logout Request**

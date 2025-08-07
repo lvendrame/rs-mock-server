@@ -8,8 +8,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App,
-    id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}
+    app::App, handlers::build_rest_routes, id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}
 };
 
 static USERNAME_FIELD: &str = "username";
@@ -158,26 +157,26 @@ pub fn create_login_route(
 }
 
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
-    let mut in_memory_collection = InMemoryCollection::new(IdType::None, USERNAME_FIELD.to_string(), Some("{{auth}}-users".to_string()));
-
-    match in_memory_collection.load_from_file(file_path) {
-        Ok(msg) => println!("{}", msg),
-        Err(msg) => {
-            eprintln!("{}", msg);
-            return eprintln!("⚠️ Authentication routes were not created")
-        },
-    }
-
-    let users_collection = in_memory_collection.into_protected();
+    println!("Starting loading Auth route");
 
     let in_memory_collection = InMemoryCollection::new(IdType::None, TOKEN_FIELD.to_string(), Some("{{auth}}-tokens".to_string()));
     let auth_collection = in_memory_collection.into_protected();
 
+    // The app.auth_collection should be set before to load the rest routes
+    app.auth_collection = Some(Arc::clone( &auth_collection));
+
+    let users_routes = format!("{}/users", route_path);
+    let users_collection = build_rest_routes(app, &users_routes, file_path, USERNAME_FIELD, IdType::None, true);
+    println!("✔️ Built REST routes for {}", users_routes);
+
+    if users_collection.lock().unwrap().count() == 0 {
+        app.auth_collection = None;
+        return eprintln!("⚠️ Authentication routes were not created")
+    }
 
     create_login_route(app, route_path, &users_collection, &auth_collection);
     create_logout_route(app, route_path, &auth_collection);
 
-    app.auth_collection = Some(auth_collection);
 }
 
 fn decode_jwt(jwt_token: String) -> Result<TokenData<Claims>, StatusCode> {

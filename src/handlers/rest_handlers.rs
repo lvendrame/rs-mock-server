@@ -1,4 +1,4 @@
-use std::{ffi::OsString, fs, sync::{Arc}};
+use std::{ffi::OsString, sync::{Arc}};
 
 use axum::{
     extract::{Json, Path as AxumPath}, http::StatusCode, response::IntoResponse, routing::{delete, get, patch, post, put}
@@ -8,25 +8,6 @@ use serde_json::Value;
 use crate::{
     app::App, id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}, route_builder::RouteRegistrator
 };
-
-pub fn load_initial_data(file_path: &OsString, load_collection: &ProtectedMemCollection) {
-    // Try to read the file content
-    if let Ok(file_content) = fs::read_to_string(file_path) {
-        // Try to parse the content as JSON
-        if let Ok(json_value) = serde_json::from_str::<Value>(&file_content) {
-            // Check if it's a JSON Array
-            if let Value::Array(_) = json_value {
-                // Load the array into the collection using add_batch
-                let mut collection = load_collection.lock().unwrap();
-                let added_items = collection.add_batch(json_value);
-                return println!("✔️ Loaded {} initial items from {}", added_items.len(), file_path.to_string_lossy());
-            }
-            return eprintln!("⚠️ File {} does not contain a JSON array, skipping initial data load", file_path.to_string_lossy());
-        }
-        return eprintln!("⚠️ File {} does not contain valid JSON, skipping initial data load", file_path.to_string_lossy());
-    }
-    eprintln!("⚠️ Could not read file {}, skipping initial data load", file_path.to_string_lossy());
-}
 
 pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
     // GET /resource - list all
@@ -122,8 +103,15 @@ pub fn create_delete(app: &mut App, id_route: &str, is_protected: bool, collecti
     app.push_route(id_route, delete_router, Some("DELETE"), is_protected);
 }
 
-pub fn build_rest_routes(app: &mut App, route_path: &str, file_path: &OsString, id_key: &str, id_type: IdType, is_protected: bool) {
-    let mut in_memory_collection = InMemoryCollection::new(id_type, id_key.to_string(), Some(route_path.to_string()));
+pub fn build_rest_routes(
+    app: &mut App,
+    route: &str,
+    file_path: &OsString,
+    id_key: &str,
+    id_type: IdType,
+    is_protected: bool,
+) -> ProtectedMemCollection {
+    let mut in_memory_collection = InMemoryCollection::new(id_type, id_key.to_string(), Some(route.to_string()));
 
     // load_initial_data(file_path, &collection);
     match in_memory_collection.load_from_file(file_path) {
@@ -133,12 +121,12 @@ pub fn build_rest_routes(app: &mut App, route_path: &str, file_path: &OsString, 
 
     let collection = in_memory_collection.into_protected();
 
-    let id_route = &format!("{}/{{{}}}", route_path, id_key);
+    let id_route = &format!("{}/{{{}}}", route, id_key);
 
     // Build REST routes for CRUD operations
-    create_get_all(app, route_path, is_protected, &collection);
+    create_get_all(app, route, is_protected, &collection);
 
-    create_insert(app, route_path, is_protected, &collection);
+    create_insert(app, route, is_protected, &collection);
 
     create_get_item(app, id_route, is_protected, &collection);
 
@@ -148,5 +136,5 @@ pub fn build_rest_routes(app: &mut App, route_path: &str, file_path: &OsString, 
 
     create_delete(app, id_route, is_protected, &collection);
 
-    println!("✔️ Built REST routes for {}", route_path);
+    collection
 }

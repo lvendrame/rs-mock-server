@@ -43,7 +43,8 @@ impl RouteGenerator for RouteAuth {
 
 impl PrintRoute for RouteAuth {
     fn println(&self) {
-        println!("✔️ Built AUTH routes for {}", self.route);
+        println!("✔️ Built AUTH route for {}/login", self.route);
+        println!("✔️ Built logout routes for {}/logout", self.route);
     }
 }
 
