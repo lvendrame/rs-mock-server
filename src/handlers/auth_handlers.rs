@@ -1,4 +1,4 @@
-use std::{ffi::OsString, fs, pin::Pin, sync::Arc};
+use std::{ffi::OsString, pin::Pin, sync::Arc};
 
 use axum::{body::Body, extract::Request, middleware::Next, response::{IntoResponse, Response}, routing::post, Json};
 use http::{StatusCode, HeaderValue};
@@ -30,31 +30,6 @@ struct Claims {
 struct AuthResponse {
     token: String,
     user: Value,
-}
-
-fn try_load_users(file_path: &OsString, load_collection: &ProtectedMemCollection) -> bool {
-    // Try to read the file content
-    if let Ok(file_content) = fs::read_to_string(file_path) {
-        // Try to parse the content as JSON
-        if let Ok(json_value) = serde_json::from_str::<Value>(&file_content) {
-            // Check if it's a JSON Array
-            if let Value::Array(_) = json_value {
-                // Load the array into the collection using add_batch
-                let mut collection = load_collection.lock().unwrap();
-                let added_items = collection.add_batch(json_value);
-                println!("✔️ Loaded {} credentials from {}", added_items.len(), file_path.to_string_lossy());
-                return true;
-            }
-
-            eprintln!("⚠️ File {} does not contain a JSON array, skipping initial data load", file_path.to_string_lossy());
-            return false;
-        }
-        eprintln!("⚠️ File {} does not contain valid JSON, skipping initial data load", file_path.to_string_lossy());
-        return false;
-    }
-
-    eprintln!("⚠️ Could not read file {}, skipping initial data load", file_path.to_string_lossy());
-    false
 }
 
 fn try_get_auth_info(payload: Value) -> Option<(String, String)> {
@@ -183,16 +158,21 @@ pub fn create_login_route(
 }
 
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
-    let in_memory_collection = InMemoryCollection::new(IdType::None, USERNAME_FIELD.to_string(), Some("{{auth}}-users".to_string()));
+    let mut in_memory_collection = InMemoryCollection::new(IdType::None, USERNAME_FIELD.to_string(), Some("{{auth}}-users".to_string()));
+
+    match in_memory_collection.load_from_file(file_path) {
+        Ok(msg) => println!("{}", msg),
+        Err(msg) => {
+            eprintln!("{}", msg);
+            return eprintln!("⚠️ Authentication routes were not created")
+        },
+    }
+
     let users_collection = in_memory_collection.into_protected();
 
     let in_memory_collection = InMemoryCollection::new(IdType::None, TOKEN_FIELD.to_string(), Some("{{auth}}-tokens".to_string()));
     let auth_collection = in_memory_collection.into_protected();
 
-    if !try_load_users(file_path, &users_collection) {
-        println!("⚠️ Authentication routes were not created");
-        return;
-    }
 
     create_login_route(app, route_path, &users_collection, &auth_collection);
     create_logout_route(app, route_path, &auth_collection);

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{collections::HashMap, ffi::OsString, fs, sync::{Arc, Mutex}};
 use serde_json::Value;
 
 use crate::id_manager::{IdManager, IdType, IdValue};
@@ -204,6 +204,25 @@ impl InMemoryCollection {
             // For non-object values, replace entirely
             (_, update_value) => update_value,
         }
+    }
+
+    pub fn load_from_file(&mut self, file_path: &OsString) -> Result<String, String> {
+        // Guard: Try to read the file content
+        let file_content = fs::read_to_string(file_path)
+            .map_err(|_| format!("⚠️ Could not read file {}, skipping initial data load", file_path.to_string_lossy()))?;
+
+        // Guard: Try to parse the content as JSON
+        let json_value = serde_json::from_str::<Value>(&file_content)
+            .map_err(|_| format!("⚠️ File {} does not contain valid JSON, skipping initial data load", file_path.to_string_lossy()))?;
+
+        // Guard: Check if it's a JSON Array
+        let Value::Array(_) = json_value else {
+            return Err(format!("⚠️ File {} does not contain a JSON array, skipping initial data load", file_path.to_string_lossy()));
+        };
+
+        // Load the array into the collection using add_batch
+        let added_items = self.add_batch(json_value);
+        Ok(format!("✔️ Loaded {} initial items from {}", added_items.len(), file_path.to_string_lossy()))
     }
 }
 
@@ -689,5 +708,319 @@ mod tests {
         // Test retrieval
         let retrieved = collection.get("1").unwrap();
         assert_eq!(retrieved.get("customId").unwrap(), "1");
+    }
+
+    // Tests for load_from_file method
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_load_from_file_valid_json_array() {
+        let mut collection = create_test_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test_data.json");
+
+        // Create a test JSON file with valid array data
+        let test_data = json!([
+            {"id": 1, "name": "Item 1", "description": "First item"},
+            {"id": 2, "name": "Item 2", "description": "Second item"},
+            {"id": 3, "name": "Item 3", "description": "Third item"}
+        ]);
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        // Load data from file
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Loaded 3 initial items"));
+        assert_eq!(collection.count(), 3);
+
+        // Verify the data was loaded correctly
+        assert!(collection.exists("1"));
+        assert!(collection.exists("2"));
+        assert!(collection.exists("3"));
+
+        let item1 = collection.get("1").unwrap();
+        assert_eq!(item1.get("name").unwrap(), "Item 1");
+        assert_eq!(item1.get("description").unwrap(), "First item");
+    }
+
+    #[test]
+    fn test_load_from_file_empty_array() {
+        let mut collection = create_test_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("empty_array.json");
+
+        // Create a test JSON file with empty array
+        let test_data = json!([]);
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        // Load data from file
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Loaded 0 initial items"));
+        assert_eq!(collection.count(), 0);
+    }
+
+    #[test]
+    fn test_load_from_file_with_uuid_collection() {
+        let mut collection = create_uuid_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("uuid_data.json");
+
+        // Create a test JSON file with UUID data
+        let test_data = json!([
+            {"id": "uuid-1", "name": "Item 1"},
+            {"id": "uuid-2", "name": "Item 2"}
+        ]);
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        // Load data from file
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Loaded 2 initial items"));
+        assert_eq!(collection.count(), 2);
+
+        assert!(collection.exists("uuid-1"));
+        assert!(collection.exists("uuid-2"));
+    }
+
+    #[test]
+    fn test_load_from_file_with_mixed_id_types() {
+        let mut collection = create_none_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("mixed_data.json");
+
+        // Create a test JSON file with mixed ID types
+        let test_data = json!([
+            {"id": "string-id", "name": "Item 1"},
+            {"id": 42, "name": "Item 2"},
+            {"name": "Item 3"} // This should be skipped (no ID)
+        ]);
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        // Load data from file
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Loaded 2 initial items"));
+        assert_eq!(collection.count(), 2);
+
+        assert!(collection.exists("string-id"));
+        assert!(collection.exists("42"));
+    }
+
+    #[test]
+    fn test_load_from_file_nonexistent_file() {
+        let mut collection = create_test_collection();
+        let nonexistent_path = std::ffi::OsString::from("/path/that/does/not/exist.json");
+
+        let result = collection.load_from_file(&nonexistent_path);
+
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Could not read file"));
+        assert!(error_msg.contains("skipping initial data load"));
+        assert_eq!(collection.count(), 0);
+    }
+
+    #[test]
+    fn test_load_from_file_invalid_json() {
+        let mut collection = create_test_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("invalid.json");
+
+        // Create a file with invalid JSON
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(b"{ invalid json content }").unwrap();
+
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("does not contain valid JSON"));
+        assert!(error_msg.contains("skipping initial data load"));
+        assert_eq!(collection.count(), 0);
+    }
+
+    #[test]
+    fn test_load_from_file_json_object_not_array() {
+        let mut collection = create_test_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("object.json");
+
+        // Create a JSON file with an object instead of array
+        let test_data = json!({"id": 1, "name": "Single Item"});
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("does not contain a JSON array"));
+        assert!(error_msg.contains("skipping initial data load"));
+        assert_eq!(collection.count(), 0);
+    }
+
+    #[test]
+    fn test_load_from_file_json_primitive_not_array() {
+        let mut collection = create_test_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("primitive.json");
+
+        // Create a JSON file with a primitive value
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(b"\"just a string\"").unwrap();
+
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not contain a JSON array"));
+        assert_eq!(collection.count(), 0);
+    }
+
+    #[test]
+    fn test_load_from_file_updates_id_manager() {
+        let mut collection = create_test_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("id_update_test.json");
+
+        // Create data with high ID values
+        let test_data = json!([
+            {"id": 10, "name": "Item 1"},
+            {"id": 15, "name": "Item 2"},
+            {"id": 5, "name": "Item 3"}
+        ]);
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        // Load data from file
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+        assert!(result.is_ok());
+
+        // Add a new item - should get ID 16 (max + 1)
+        let new_item = collection.add(json!({"name": "New Item"})).unwrap();
+        assert_eq!(new_item.get("id").unwrap(), "16");
+    }
+
+    #[test]
+    fn test_load_from_file_large_dataset() {
+        let mut collection = create_test_collection();
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("large_dataset.json");
+
+        // Create a large dataset
+        let mut items = Vec::new();
+        for i in 1..=1000 {
+            items.push(json!({
+                "id": i,
+                "name": format!("Item {}", i),
+                "value": i * 10
+            }));
+        }
+        let test_data = json!(items);
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        // Load data from file
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Loaded 1000 initial items"));
+        assert_eq!(collection.count(), 1000);
+
+        // Verify some random items
+        assert!(collection.exists("1"));
+        assert!(collection.exists("500"));
+        assert!(collection.exists("1000"));
+
+        let item_500 = collection.get("500").unwrap();
+        assert_eq!(item_500.get("name").unwrap(), "Item 500");
+        assert_eq!(item_500.get("value").unwrap(), 5000);
+    }
+
+    #[test]
+    fn test_load_from_file_with_existing_data() {
+        let mut collection = create_test_collection();
+
+        // Add some existing data
+        collection.add(json!({"name": "Existing Item 1"}));
+        collection.add(json!({"name": "Existing Item 2"}));
+        assert_eq!(collection.count(), 2);
+
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("additional_data.json");
+
+        // Create additional data
+        let test_data = json!([
+            {"id": 10, "name": "Loaded Item 1"},
+            {"id": 11, "name": "Loaded Item 2"}
+        ]);
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        // Load additional data from file
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Loaded 2 initial items"));
+        assert_eq!(collection.count(), 4); // 2 existing + 2 loaded
+
+        // Verify all data exists
+        assert!(collection.exists("1")); // Existing
+        assert!(collection.exists("2")); // Existing
+        assert!(collection.exists("10")); // Loaded
+        assert!(collection.exists("11")); // Loaded
+    }
+
+    #[test]
+    fn test_load_from_file_custom_id_key() {
+        let mut collection = InMemoryCollection::new(
+            IdType::Int,
+            "customId".to_string(),
+            Some("custom_collection".to_string())
+        );
+
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("custom_id_data.json");
+
+        // Create data with custom ID key
+        let test_data = json!([
+            {"customId": 1, "name": "Item 1"},
+            {"customId": 2, "name": "Item 2"}
+        ]);
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(test_data.to_string().as_bytes()).unwrap();
+
+        // Load data from file
+        let result = collection.load_from_file(&file_path.as_os_str().to_os_string());
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Loaded 2 initial items"));
+        assert_eq!(collection.count(), 2);
+
+        assert!(collection.exists("1"));
+        assert!(collection.exists("2"));
+
+        let item1 = collection.get("1").unwrap();
+        assert_eq!(item1.get("customId").unwrap(), 1);
+        assert_eq!(item1.get("name").unwrap(), "Item 1");
     }
 }
