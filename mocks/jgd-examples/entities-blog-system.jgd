@@ -1,0 +1,51 @@
+{
+  "$format": "jgd/v1",
+  "version": "1.0.0",
+  "seed": 12345,
+  "entities": {
+    "users": {
+      "count": 5,
+      "fields": {
+        "id": "${ulid}",
+        "name": "${name.name}",
+        "email": "${internet.safeEmail}",
+        "bio": {
+          "optional": {
+            "of": "${lorem.paragraph(1,3)}",
+            "prob": 0.7
+          }
+        }
+      }
+    },
+    "categories": {
+      "count": 3,
+      "fields": {
+        "id": "${uuid.v4}",
+        "name": "${lorem.word}",
+        "description": "${lorem.sentence(5,10)}"
+      }
+    },
+    "posts": {
+      "count": [15, 25],
+      "fields": {
+        "id": "${uuid.v4}",
+        "authorId": {
+          "ref": "users.id"
+        },
+        "categoryId": {
+          "ref": "categories.id"
+        },
+        "title": "${lorem.sentence(3,8)}",
+        "content": "${lorem.paragraphs(2,5)}",
+        "tags": {
+          "array": {
+            "count": [1, 5],
+            "of": "${lorem.word}"
+          }
+        },
+        "published": "${boolean.boolean(85)}",
+        "createdAt": "${chrono.dateTimeBetween(2023-01-01T00:00:00Z,2024-12-31T23:59:59Z)}"
+      }
+    }
+  }
+}

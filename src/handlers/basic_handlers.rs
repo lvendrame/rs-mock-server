@@ -7,6 +7,7 @@ use axum::{
     routing::{delete, get, options, patch, post, put, MethodRouter}
 };
 use http::{header::{CONTENT_TYPE}, HeaderMap, HeaderValue};
+use jgd_rs::generate_jgd_from_file;
 use mime_guess::{from_path};
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
@@ -81,12 +82,27 @@ fn get_file_extension(file_path: &OsString) -> String {
 
 fn is_text_file(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
-    extension == "txt" || extension == "md" || extension == "json"
+    extension == "txt" || extension == "md" || extension == "json" || extension == "jgd"
+}
+
+fn is_jgd(file_path: &OsString) -> bool {
+    let extension = get_file_extension(file_path);
+    extension == "jgd"
 }
 
 pub fn content_handler(file_path: OsString, method: &str) -> MethodRouter {
     let file_path = file_path.clone();
-    let handler = move || async move { get_file_content(&file_path) };
+    let handler = move || {
+        let file_path = file_path.clone();
+        async move {
+            if is_jgd(&file_path) {
+                let json = generate_jgd_from_file(&file_path.into());
+                serde_json::to_string_pretty(&json).unwrap()
+            } else {
+                get_file_content(&file_path)
+            }
+        }
+    };
 
     match method.to_uppercase().as_str() {
         "GET" => get(handler),

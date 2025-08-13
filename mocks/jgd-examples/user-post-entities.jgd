@@ -1,0 +1,41 @@
+{
+  "$format": "jgd/v1",
+  "version": "1.2",
+  "entities": {
+    "admin": {
+      "fields": {
+        "id": "${ulid}",
+        "name": "${name.name}",
+        "email": "${internet.safeEmail}",
+        "city": "${address.cityName}",
+        "label": "${name.lastName}, ${name.firstName}"
+      }
+    },
+    "users": {
+      "count": 3,
+      "fields": {
+        "id": "${ulid}",
+        "name": "${name.name}",
+        "email": "${internet.safeEmail}",
+        "city": "${address.cityName}",
+        "label": "${name.lastName}, ${name.firstName}"
+      }
+    },
+    "posts": {
+      "count": 10,
+      "fields": {
+        "id": "${uuid.v4}",
+        "userId": { "ref": "users.id" },
+        "title": "${lorem.sentence(3,7)}",
+        "content": "${lorem.paragraphs(2,4)}",
+        "createdAt": "${chrono.dateTimeBetween(2021-01-01T00:00:00Z,2022-12-31T23:59:59Z)}",
+        "tags": {
+          "array": {
+            "count": [1, 5],
+            "of": "${lorem.word}"
+          }
+        }
+      }
+    }
+  }
+}

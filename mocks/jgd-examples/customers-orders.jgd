@@ -1,0 +1,72 @@
+{
+  "$format": "jgd/v1",
+  "version": "1.0.0",
+  "seed": 20250812,
+  "defaultLocale": "en_US",
+  "entities": {
+    "customers": {
+      "count": 20,
+      "uniqueBy": ["email"],
+      "fields": {
+        "customerId": "${uuid.v4}",
+        "firstName": "${name.firstName}",
+        "lastName": "${name.lastName}",
+        "email": "${internet.safeEmail}",
+        "phone": "${phone_number.phoneNumber}",
+        "joinedAt": "${chrono.dateTimeBefore(2025-01-01T00:00:00Z)}",
+        "shippingAddress": {
+          "fields": {
+            "street": "${address.streetName}",
+            "building": "${address.buildingNumber}",
+            "city": "${address.cityName}",
+            "zip": "${address.zipCode}",
+            "country": "${address.countryCode}"
+          }
+        }
+      }
+    },
+
+    "products": {
+      "count": 100,
+      "uniqueBy": ["productCode"],
+      "fields": {
+        "productId": "${ulid}",
+        "productName": "${company.catchPhrase}",
+        "description": "${lorem.paragraph(2, 4)}",
+        "productCode": "${barcode.isbn13}",
+        "version": "${filesystem.semverStable}",
+        "price": {
+          "number": { "min": 9.99, "max": 1999.99 }
+        },
+        "currency": "${currency.currencyCode}"
+      }
+    },
+
+    "orders": {
+      "count": 50,
+      "fields": {
+        "orderId": "${uuid.v4}",
+        "customerId": { "ref": "customers.customerId" },
+        "orderDate": "${chrono.dateTimeBetween(2025-01-01T00:00:00Z, 2025-08-12T00:00:00Z)}",
+        "orderStatus": "${http.rfcStatusCode}",
+        "items": {
+          "array": {
+            "count": [1, 5],
+            "of": { "ref": "products.productId" }
+          }
+        },
+        "paymentInfo": {
+          "optional": {
+            "prob": 0.95,
+            "of": {
+              "fields": {
+                "card": "${creditcard.creditCardNumber}",
+                "bic": "${finance.bic}"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

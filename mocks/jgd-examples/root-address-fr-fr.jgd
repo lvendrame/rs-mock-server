@@ -1,0 +1,12 @@
+{
+  "$format": "jgd/v1",
+  "version": "1.0.0",
+  "defaultLocale": "FR_FR",
+  "root": {
+    "count": [20, 30],
+    "fields": {
+      "name": "${name.name}",
+      "city": "${address.cityName}"
+    }
+  }
+}

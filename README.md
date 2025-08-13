@@ -15,6 +15,7 @@ It works by scanning a directory and mapping its structure directly to API route
 -   🔐 **JWT Authentication**: Automatic authentication system with login/logout endpoints and route protection using special `{auth}` files.
 -   📤 **File Upload & Download**: Create upload endpoints with automatic file handling and download capabilities using special `{upload}` folders.
 -   🖼️ **Static File Serving**: Automatically serves any file (like images, CSS, or JS) with its correct `Content-Type` if the filename doesn't match a method pattern.
+-   📊 **JGD Support**: Generate dynamic JSON responses using JGD (JSON Generation Definition) files with the [JGD-rs library](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs) for realistic test data.
 -   🌐 **Public Directory Serving**: Serve a directory of static files (e.g., a frontend build) from a root public folder, or map a folder like public-assets to a custom /assets route.
 -   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
@@ -46,7 +47,8 @@ The following table shows how different filename patterns are mapped to routes, 
 | `[method]{start-end}` | `get{1-5}.json`   | `GET /api/users/1`<br>`GET /api/users/2`<br>...<br>`GET /api/users/5`                                                                          | A numeric range that generates multiple distinct routes.                                                                                                                          |
 | `rest[{params}]`      | `rest.json`       | `GET /api/users`<br>`POST /api/users`<br>`GET /api/users/{id}`<br>`PUT /api/users/{id}`<br>`PATCH /api/users/{id}`<br>`DELETE /api/users/{id}` | **In-Memory REST API**.<br>Creates a full CRUD API with automatic ID generation, data persistence,<br>and initial data loading from the JSON array in the file.                   |
 | `{auth}`              | `{auth}.json`     | `POST /api/login`<br>`POST /api/logout`                                                                                                        | **JWT Authentication**. Creates login and logout endpoints with JWT token generation<br>and validation middleware for route protection.                                           |
-| `[filename].[ext]`    | `avatar.png`      | `GET /api/users/  avatar`                                                                                                                      | **Static File**. Any filename that doesn't match the patterns above is served as a static asset.<br>The `Content-Type` header is automatically set based on the file's extension. |
+| `[filename].[ext]`    | `avatar.png`      | `GET /api/users/avatar`                                                                                                                        | **Static File**. Any filename that doesn't match the patterns above is served as a static asset.<br>The `Content-Type` header is automatically set based on the file's extension. |
+| `[filename].jgd`      | `users.jgd`       | `GET /api/users/users`                                                                                                                         | **JGD File**. JSON Generation Definition files that dynamically generate realistic JSON data<br>using the [JGD-rs library](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs). |
 
 ### In-Memory REST API
 
@@ -279,6 +281,75 @@ curl -X POST http://localhost:4520/account/logout \
 -   **Password Protection**: Login responses exclude password fields
 -   **Route-Level Protection**: Granular control over protected endpoints
 
+### JGD (JSON Generation Definition) Files
+
+For generating dynamic and realistic test data, rs-mock-server supports JGD files using the [JGD-rs library](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs). JGD is a powerful JSON generation definition language that allows you to create realistic mock data with minimal configuration.
+
+#### How JGD Works
+
+When the server detects a file with the `.jgd` extension, it automatically processes it using the JGD-rs library to generate JSON responses dynamically. This is perfect for:
+
+-   **Realistic Test Data**: Generate users, products, orders with proper relationships
+-   **Dynamic Content**: Data changes on each request for more realistic testing
+-   **Complex Structures**: Nested objects, arrays, and references
+-   **Localization**: Generate data in different languages and formats
+
+#### JGD File Examples
+
+**Basic User Generation** (`users.jgd`):
+
+```jgd
+{
+  "users": [
+    {
+      "id": "{{uuid}}",
+      "name": "{{name}}",
+      "email": "{{email}}",
+      "age": "{{number(18, 80)}}",
+      "created_at": "{{timestamp}}"
+    }
+  ] * 10
+}
+```
+
+**Complex Product Catalog** (`products.jgd`):
+
+```jgd
+{
+  "products": [
+    {
+      "id": "{{uuid}}",
+      "name": "{{product_name}}",
+      "description": "{{lorem(50)}}",
+      "price": "{{number(10.99, 999.99, 2)}}",
+      "category": "{{random(['Electronics', 'Clothing', 'Books', 'Home'])}}",
+      "in_stock": "{{boolean}}",
+      "tags": ["{{word}}", "{{word}}", "{{word}}"],
+      "created_at": "{{timestamp}}",
+      "updated_at": "{{timestamp}}"
+    }
+  ] * 25
+}
+```
+
+#### JGD Route Generation
+
+JGD files follow the same naming conventions as other files:
+
+| JGD File Pattern     | Generated Route(s)              | Description                    |
+| :------------------- | :------------------------------ | :----------------------------- |
+| `get.jgd`            | `GET /api/data`                 | Dynamic JSON for GET method    |
+| `post{products}.jgd` | `POST /api/data/products`       | Dynamic JSON for POST method   |
+| `users{1-5}.jgd`     | `GET /api/data/users/1` to `/5` | Range-based dynamic generation |
+| `sample.jgd`         | `GET /api/data/sample`          | Static file route with JGD     |
+
+#### JGD vs Static JSON
+
+-   **Static JSON** (`.json`): Same response every time, perfect for consistent test scenarios
+-   **JGD Files** (`.jgd`): Dynamic responses on each request, ideal for realistic testing and development
+
+For more information about JGD syntax and capabilities, visit the [JGD-rs documentation](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs).
+
 ### Special "Public" Folder for Static Serving
 
 To serve a directory of static assets (like a frontend app), you can use a specially named `public` folder in your mock directory root.
@@ -396,11 +467,13 @@ mocks/
 │   ├── users/
 │   │   ├── get.json         # Contains a JSON array of all users
 │   │   ├── post.json        # Contains a success message for user creation
-│   │   └── get{id}.json    # Contains a single user object template
+│   │   ├── get{id}.json     # Contains a single user object template
+│   │   └── sample.jgd       # Dynamic JSON generation using JGD
 │   ├── products/
 │   │   ├── rest{_id:int}.json # In-memory REST API with integer IDs
-│   │   ├── get{1-3}.json   # Contains a product template for IDs 1, 2, 3
-│   │   └── get{special}.json# Contains a specific "special" product
+│   │   ├── get{1-3}.json    # Contains a product template for IDs 1, 2, 3
+│   │   ├── get{special}.json # Contains a specific "special" product
+│   │   └── catalog.jgd      # Dynamic product catalog generation
 │   ├── companies/
 │   │   └── rest.json        # In-memory REST API with UUID IDs
 │   ├── auth/
@@ -426,6 +499,7 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 | **GET**    | `/api/users`            | `mocks/api/users/get.json`               | `application/json` | Static response                         |
 | **POST**   | `/api/users`            | `mocks/api/users/post.json`              | `application/json` | Static response                         |
 | **GET**    | `/api/users/{id}`       | `mocks/api/users/get{id}.json`           | `application/json` | Static response                         |
+| **GET**    | `/api/users/sample`     | Dynamic JGD from `sample.jgd`            | `application/json` | **JGD** - Dynamic JSON generation       |
 | **GET**    | `/api/products`         | In-memory data from `rest{_id:int}.json` | `application/json` | **REST API** - List all products        |
 | **POST**   | `/api/products`         | In-memory database                       | `application/json` | **REST API** - Create new product       |
 | **GET**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Get product by ID        |
@@ -436,6 +510,7 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 | **GET**    | `/api/products/2`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                         |
 | **GET**    | `/api/products/3`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                         |
 | **GET**    | `/api/products/special` | `mocks/api/products/get{special}.json`   | `application/json` | Static response                         |
+| **GET**    | `/api/products/catalog` | Dynamic JGD from `catalog.jgd`           | `application/json` | **JGD** - Dynamic product catalog       |
 | **GET**    | `/api/companies`        | In-memory data from `rest.json`          | `application/json` | **REST API** - List all companies       |
 | **POST**   | `/api/companies`        | In-memory database                       | `application/json` | **REST API** - Create new company       |
 | **GET**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Get company by ID        |
@@ -464,6 +539,7 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 -   Upload endpoints handle multipart/form-data file uploads and preserve original filenames.
 -   Download endpoints serve files with proper Content-Type detection and Content-Disposition headers.
 -   Temporary upload folders (`{temp}`) automatically clean up all files when the server stops.
+-   JGD files (`.jgd`) generate dynamic JSON responses using the JGD-rs library for realistic test data.
 -   You can interact with all endpoints using any HTTP client, and data will persist until the server is restarted.
 
 ---
