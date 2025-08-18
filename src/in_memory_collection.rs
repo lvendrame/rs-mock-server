@@ -206,23 +206,32 @@ impl InMemoryCollection {
         }
     }
 
-    pub fn load_from_file(&mut self, file_path: &OsString) -> Result<String, String> {
-        // Guard: Try to read the file content
-        let file_content = fs::read_to_string(file_path)
-            .map_err(|_| format!("⚠️ Could not read file {}, skipping initial data load", file_path.to_string_lossy()))?;
-
-        // Guard: Try to parse the content as JSON
-        let json_value = serde_json::from_str::<Value>(&file_content)
-            .map_err(|_| format!("⚠️ File {} does not contain valid JSON, skipping initial data load", file_path.to_string_lossy()))?;
-
+    pub fn load_from_json(&mut self, json_value: Value) -> Result<Vec<Value>, String> {
         // Guard: Check if it's a JSON Array
         let Value::Array(_) = json_value else {
-            return Err(format!("⚠️ File {} does not contain a JSON array, skipping initial data load", file_path.to_string_lossy()));
+            return Err("⚠️ Informed JSON does not contain a JSON array in the root, skipping initial data load".to_string());
         };
 
         // Load the array into the collection using add_batch
         let added_items = self.add_batch(json_value);
-        Ok(format!("✔️ Loaded {} initial items from {}", added_items.len(), file_path.to_string_lossy()))
+        Ok(added_items)
+    }
+
+    pub fn load_from_file(&mut self, file_path: &OsString) -> Result<String, String> {
+        let file_path_lossy = file_path.to_string_lossy();
+
+        // Guard: Try to read the file content
+        let file_content = fs::read_to_string(file_path)
+            .map_err(|_| format!("⚠️ Could not read file {}, skipping initial data load", file_path_lossy))?;
+
+        // Guard: Try to parse the content as JSON
+        let json_value = serde_json::from_str::<Value>(&file_content)
+            .map_err(|_| format!("⚠️ File {} does not contain valid JSON, skipping initial data load", file_path_lossy))?;
+
+        match self.load_from_json(json_value) {
+            Ok(added_items) => Ok(format!("✔️ Loaded {} initial items from {}", added_items.len(), file_path_lossy)),
+            Err(error) => Err(format!("Error to process the file {}. Details: {}", file_path_lossy, error)),
+        }
     }
 }
 

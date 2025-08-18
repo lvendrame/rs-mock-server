@@ -1,4 +1,4 @@
-use std::{ffi::OsString, fs, path::Path};
+use std::{ffi::OsString, fs};
 
 use axum::{
     body::Body,
@@ -11,6 +11,8 @@ use jgd_rs::generate_jgd_from_file;
 use mime_guess::{from_path};
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
+
+use crate::handlers::{is_jgd, is_text_file};
 
 fn get_file_content(file_path: &OsString) -> String {
     fs::read_to_string(file_path).unwrap()
@@ -70,24 +72,6 @@ pub fn build_stream_handler(
         // Fallback for an unknown method string
         _ => get(|| async { "Unknown method in filename" }),
     }
-}
-
-fn get_file_extension(file_path: &OsString) -> String {
-    Path::new(file_path)
-        .extension()
-        .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or_default()
-        .to_string()
-}
-
-fn is_text_file(file_path: &OsString) -> bool {
-    let extension = get_file_extension(file_path);
-    extension == "txt" || extension == "md" || extension == "json" || extension == "jgd"
-}
-
-fn is_jgd(file_path: &OsString) -> bool {
-    let extension = get_file_extension(file_path);
-    extension == "jgd"
 }
 
 pub fn content_handler(file_path: OsString, method: &str) -> MethodRouter {

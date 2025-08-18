@@ -11,7 +11,7 @@ It works by scanning a directory and mapping its structure directly to API route
 -   🚀 **File-System Routing**: Your folder structure defines your API routes. No config files needed.
 -   🧩 **Dynamic Path Generation**: Create routes with parameters (`{id}`), specific values (`{admin}`), and even numeric ranges (`{1-10}`) right from the filename.
 -   ⚙️ **Full HTTP Method Support**: Define `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, and `OPTIONS` endpoints.
--   🔗 **In-Memory REST API**: Create fully functional CRUD APIs with automatic ID generation and data persistence during runtime using special `rest.json` files.
+-   🔗 **In-Memory REST API**: Create fully functional CRUD APIs with automatic ID generation and data persistence during runtime using special `rest.json` or `rest.jgd` files.
 -   🔐 **JWT Authentication**: Automatic authentication system with login/logout endpoints and route protection using special `{auth}` files.
 -   📤 **File Upload & Download**: Create upload endpoints with automatic file handling and download capabilities using special `{upload}` folders.
 -   🖼️ **Static File Serving**: Automatically serves any file (like images, CSS, or JS) with its correct `Content-Type` if the filename doesn't match a method pattern.
@@ -46,37 +46,46 @@ The following table shows how different filename patterns are mapped to routes, 
 | `[method]{value}`     | `get{admin}.json` | `GET /api/users/admin`                                                                                                                         | Matches a specific, hardcoded value.                                                                                                                                              |
 | `[method]{start-end}` | `get{1-5}.json`   | `GET /api/users/1`<br>`GET /api/users/2`<br>...<br>`GET /api/users/5`                                                                          | A numeric range that generates multiple distinct routes.                                                                                                                          |
 | `rest[{params}]`      | `rest.json`       | `GET /api/users`<br>`POST /api/users`<br>`GET /api/users/{id}`<br>`PUT /api/users/{id}`<br>`PATCH /api/users/{id}`<br>`DELETE /api/users/{id}` | **In-Memory REST API**.<br>Creates a full CRUD API with automatic ID generation, data persistence,<br>and initial data loading from the JSON array in the file.                   |
+| `rest[{params}]`      | `rest.jgd`        | `GET /api/users`<br>`POST /api/users`<br>`GET /api/users/{id}`<br>`PUT /api/users/{id}`<br>`PATCH /api/users/{id}`<br>`DELETE /api/users/{id}` | **In-Memory REST API with JGD**.<br>Creates a full CRUD API with dynamic fake data generation using JGD<br>as initial data, then maintains persistence during runtime.            |
 | `{auth}`              | `{auth}.json`     | `POST /api/login`<br>`POST /api/logout`                                                                                                        | **JWT Authentication**. Creates login and logout endpoints with JWT token generation<br>and validation middleware for route protection.                                           |
 | `[filename].[ext]`    | `avatar.png`      | `GET /api/users/avatar`                                                                                                                        | **Static File**. Any filename that doesn't match the patterns above is served as a static asset.<br>The `Content-Type` header is automatically set based on the file's extension. |
 | `[filename].jgd`      | `users.jgd`       | `GET /api/users/users`                                                                                                                         | **JGD File**. JSON Generation Definition files that dynamically generate realistic JSON data<br>using the [JGD-rs library](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs). |
 
 ### In-Memory REST API
 
-For rapid prototyping and testing, you can create fully functional CRUD APIs using special `rest.json` files. When the server detects a file named `rest.json` or `rest{params}.json`, it automatically:
+For rapid prototyping and testing, you can create fully functional CRUD APIs using special `rest.json` or `rest.jgd` files. When the server detects a file named `rest.json`, `rest.jgd`, or `rest{params}.json/jgd`, it automatically:
 
-1. **Loads initial data** from the JSON array in the file
+1. **Loads initial data** from the JSON array in the file (for `.json`) or generates fake data using JGD (for `.jgd`)
 2. **Creates a complete REST API** with all CRUD operations
 3. **Maintains data in memory** during the server's lifetime
 4. **Handles ID generation** automatically for new items (except for None ID Type)
 
 #### REST File Naming Convention
 
-The `{params}` in the filename configures the ID field behavior:
+The `{params}` in the filename configures the ID field behavior, and the file extension determines the initial data source:
 
-| Filename Pattern      | ID Key | ID Type | Example Usage                                |
-| :-------------------- | :----- | :------ | :------------------------------------------- |
-| `rest.json`           | `id`   | UUID    | Default configuration                        |
-| `rest{none}.json`     | `id`   | None    | Explicit None type                           |
-| `rest{uuid}.json`     | `id`   | UUID    | Explicit UUID type                           |
-| `rest{int}.json`      | `id`   | Integer | Integer IDs starting from 1                  |
-| `rest{_id}.json`      | `_id`  | UUID    | Custom ID field name with UUID               |
-| `rest{_id:none}.json` | `_id`  | None    | Custom ID field name with explicit None type |
-| `rest{_id:uuid}.json` | `_id`  | UUID    | Custom ID field name with explicit UUID type |
-| `rest{_id:int}.json`  | `_id`  | Integer | Custom ID field name with integer type       |
+| Filename Pattern      | ID Key | ID Type | Initial Data Source    | Example Usage                                                   |
+| :-------------------- | :----- | :------ | :--------------------- | :-------------------------------------------------------------- |
+| `rest.json`           | `id`   | UUID    | Static JSON array      | Default configuration with static data                          |
+| `rest.jgd`            | `id`   | UUID    | Dynamic JGD generation | Default configuration with generated data                       |
+| `rest{none}.json`     | `id`   | None    | Static JSON array      | Explicit None type with static data                             |
+| `rest{none}.jgd`      | `id`   | None    | Dynamic JGD generation | Explicit None type with generated data                          |
+| `rest{uuid}.json`     | `id`   | UUID    | Static JSON array      | Explicit UUID type with static data                             |
+| `rest{uuid}.jgd`      | `id`   | UUID    | Dynamic JGD generation | Explicit UUID type with generated data                          |
+| `rest{int}.json`      | `id`   | Integer | Static JSON array      | Integer IDs starting from 1 with static data                    |
+| `rest{int}.jgd`       | `id`   | Integer | Dynamic JGD generation | Integer IDs starting from 1 with generated data                 |
+| `rest{_id}.json`      | `_id`  | UUID    | Static JSON array      | Custom ID field name with UUID and static data                  |
+| `rest{_id}.jgd`       | `_id`  | UUID    | Dynamic JGD generation | Custom ID field name with UUID and generated data               |
+| `rest{_id:none}.json` | `_id`  | None    | Static JSON array      | Custom ID field name with explicit None type and static data    |
+| `rest{_id:none}.jgd`  | `_id`  | None    | Dynamic JGD generation | Custom ID field name with explicit None type and generated data |
+| `rest{_id:uuid}.json` | `_id`  | UUID    | Static JSON array      | Custom ID field name with explicit UUID type and static data    |
+| `rest{_id:uuid}.jgd`  | `_id`  | UUID    | Dynamic JGD generation | Custom ID field name with explicit UUID type and generated data |
+| `rest{_id:int}.json`  | `_id`  | Integer | Static JSON array      | Custom ID field name with integer type and static data          |
+| `rest{_id:int}.jgd`   | `_id`  | Integer | Dynamic JGD generation | Custom ID field name with integer type and generated data       |
 
 #### Generated Endpoints
 
-For a `rest.json` file in `./mocks/api/products/`, the following endpoints are automatically created:
+For a `rest.json` or `rest.jgd` file in `./mocks/api/products/`, the following endpoints are automatically created:
 
 | Method     | Route                | Description                                    |
 | :--------- | :------------------- | :--------------------------------------------- |
@@ -124,6 +133,71 @@ For integer IDs using `rest{_id:int}.json`:
     }
 ]
 ```
+
+#### JGD REST Files
+
+When using `rest.jgd` files, the server generates dynamic fake data using JGD (JSON Generation Definition) and uses it as initial data for the REST API. This is perfect for creating realistic test data without manually writing JSON arrays.
+
+**Example `rest{_id:int}.jgd` file:**
+
+```jgd
+{
+  "$format": "jgd/v1",
+  "version": "1.0.0",
+  "root": {
+    "count": 25,
+    "fields": {
+      "_id": "${index}",
+      "name": "${lorem.words(2,3)}",
+      "description": "${lorem.sentence(5,12)}",
+      "price": {
+        "number": {
+          "min": 10.99,
+          "max": 999.99,
+          "integer": false
+        }
+      },
+      "category": "${lorem.word}",
+      "in_stock": "${boolean.boolean(80)}",
+      "created_at": "${chrono.dateTime}"
+    }
+  }
+}
+```
+
+**Example `rest{uuid}.jgd` file:**
+
+```jgd
+{
+  "$format": "jgd/v1",
+  "version": "1.0.0",
+  "root": {
+    "count": 50,
+    "fields": {
+      "id": "${uuid.v4}",
+      "name": "${name.name}",
+      "email": "${internet.safeEmail}",
+      "age": {
+        "number": {
+          "min": 18,
+          "max": 80,
+          "integer": true
+        }
+      },
+      "address": {
+        "fields": {
+          "street": "${address.streetName}",
+          "city": "${address.cityName}",
+          "zipcode": "${address.zipCode}"
+        }
+      },
+      "created_at": "${chrono.dateTime}"
+    }
+  }
+}
+```
+
+The generated data becomes the initial dataset for the REST API, and all CRUD operations work normally with persistent in-memory storage during the server's lifetime. For more information about JGD syntax, visit the [JGD-rs documentation](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs).
 
 ### JWT Authentication
 
@@ -300,15 +374,24 @@ When the server detects a file with the `.jgd` extension, it automatically proce
 
 ```jgd
 {
-  "users": [
-    {
-      "id": "{{uuid}}",
-      "name": "{{name}}",
-      "email": "{{email}}",
-      "age": "{{number(18, 80)}}",
-      "created_at": "{{timestamp}}"
+  "$format": "jgd/v1",
+  "version": "1.0.0",
+  "root": {
+    "count": 10,
+    "fields": {
+      "id": "${uuid.v4}",
+      "name": "${name.name}",
+      "email": "${internet.safeEmail}",
+      "age": {
+        "number": {
+          "min": 18,
+          "max": 80,
+          "integer": true
+        }
+      },
+      "created_at": "${chrono.dateTime}"
     }
-  ] * 10
+  }
 }
 ```
 
@@ -316,19 +399,33 @@ When the server detects a file with the `.jgd` extension, it automatically proce
 
 ```jgd
 {
-  "products": [
-    {
-      "id": "{{uuid}}",
-      "name": "{{product_name}}",
-      "description": "{{lorem(50)}}",
-      "price": "{{number(10.99, 999.99, 2)}}",
-      "category": "{{random(['Electronics', 'Clothing', 'Books', 'Home'])}}",
-      "in_stock": "{{boolean}}",
-      "tags": ["{{word}}", "{{word}}", "{{word}}"],
-      "created_at": "{{timestamp}}",
-      "updated_at": "{{timestamp}}"
+  "$format": "jgd/v1",
+  "version": "1.0.0",
+  "root": {
+    "count": 25,
+    "fields": {
+      "id": "${uuid.v4}",
+      "name": "${lorem.words(2,4)}",
+      "description": "${lorem.sentence(8,15)}",
+      "price": {
+        "number": {
+          "min": 10.99,
+          "max": 999.99,
+          "integer": false
+        }
+      },
+      "category": "${lorem.word}",
+      "in_stock": "${boolean.boolean(85)}",
+      "tags": {
+        "array": {
+          "count": [1, 5],
+          "of": "${lorem.word}"
+        }
+      },
+      "created_at": "${chrono.dateTime}",
+      "updated_at": "${chrono.dateTime}"
     }
-  ] * 25
+  }
 }
 ```
 
@@ -347,6 +444,8 @@ JGD files follow the same naming conventions as other files:
 
 -   **Static JSON** (`.json`): Same response every time, perfect for consistent test scenarios
 -   **JGD Files** (`.jgd`): Dynamic responses on each request, ideal for realistic testing and development
+-   **REST with Static JSON** (`rest.json`): Fixed initial data for REST API, CRUD operations work on persistent in-memory data
+-   **REST with JGD** (`rest.jgd`): Generated initial data for REST API, CRUD operations work on persistent in-memory data derived from JGD generation
 
 For more information about JGD syntax and capabilities, visit the [JGD-rs documentation](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs).
 
@@ -470,12 +569,14 @@ mocks/
 │   │   ├── get{id}.json     # Contains a single user object template
 │   │   └── sample.jgd       # Dynamic JSON generation using JGD
 │   ├── products/
-│   │   ├── rest{_id:int}.json # In-memory REST API with integer IDs
+│   │   ├── rest{_id:int}.json # In-memory REST API with integer IDs (static data)
 │   │   ├── get{1-3}.json    # Contains a product template for IDs 1, 2, 3
 │   │   ├── get{special}.json # Contains a specific "special" product
 │   │   └── catalog.jgd      # Dynamic product catalog generation
+│   ├── inventory/
+│   │   └── rest{uuid}.jgd   # In-memory REST API with UUID IDs (generated data)
 │   ├── companies/
-│   │   └── rest.json        # In-memory REST API with UUID IDs
+│   │   └── rest.json        # In-memory REST API with UUID IDs (static data)
 │   ├── auth/
 │   │   └── {auth}.json      # JWT authentication with user credentials
 │   └── status.txt           # Contains the plain text "API is running"
@@ -494,50 +595,61 @@ mocks/
 
 Running `rs-mock-server` in the same directory will create the following endpoints:
 
-| Method     | Route                   | Response Body From...                    | `Content-Type`     | Description                             |
-| :--------- | :---------------------- | :--------------------------------------- | :----------------- | :-------------------------------------- |
-| **GET**    | `/api/users`            | `mocks/api/users/get.json`               | `application/json` | Static response                         |
-| **POST**   | `/api/users`            | `mocks/api/users/post.json`              | `application/json` | Static response                         |
-| **GET**    | `/api/users/{id}`       | `mocks/api/users/get{id}.json`           | `application/json` | Static response                         |
-| **GET**    | `/api/users/sample`     | Dynamic JGD from `sample.jgd`            | `application/json` | **JGD** - Dynamic JSON generation       |
-| **GET**    | `/api/products`         | In-memory data from `rest{_id:int}.json` | `application/json` | **REST API** - List all products        |
-| **POST**   | `/api/products`         | In-memory database                       | `application/json` | **REST API** - Create new product       |
-| **GET**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Get product by ID        |
-| **PUT**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Update product           |
-| **PATCH**  | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Partial update           |
-| **DELETE** | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Delete product           |
-| **GET**    | `/api/products/1`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                         |
-| **GET**    | `/api/products/2`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                         |
-| **GET**    | `/api/products/3`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                         |
-| **GET**    | `/api/products/special` | `mocks/api/products/get{special}.json`   | `application/json` | Static response                         |
-| **GET**    | `/api/products/catalog` | Dynamic JGD from `catalog.jgd`           | `application/json` | **JGD** - Dynamic product catalog       |
-| **GET**    | `/api/companies`        | In-memory data from `rest.json`          | `application/json` | **REST API** - List all companies       |
-| **POST**   | `/api/companies`        | In-memory database                       | `application/json` | **REST API** - Create new company       |
-| **GET**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Get company by ID        |
-| **PUT**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Update company           |
-| **PATCH**  | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Partial update           |
-| **DELETE** | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Delete company           |
-| **GET**    | `/api/status`           | `mocks/api/status.txt`                   | `text/plain`       | Static file                             |
-| **POST**   | `/api/auth/login`       | JWT authentication                       | `application/json` | **Auth** - Login with credentials       |
-| **POST**   | `/api/auth/logout`      | JWT token revocation                     | `application/json` | **Auth** - Logout and revoke token      |
-| **GET**    | `/admin/settings`       | `mocks/$admin/settings/get.json`         | `application/json` | **Protected** - Requires authentication |
-| **GET**    | `/assets/logo`          | `mocks/assets/logo.svg`                  | `image/svg+xml`    | Static file                             |
-| **POST**   | `/upload`               | File upload handling                     | `text/plain`       | **Upload** - Upload files               |
-| **GET**    | `/upload`               | List of uploaded files                   | `application/json` | **Upload** - List uploaded files        |
-| **GET**    | `/upload/{filename}`    | Files from `{upload}/` folder            | _varies_           | **Download** - Download files           |
-| **POST**   | `/docs`                 | File upload handling (temporary)         | `text/plain`       | **Upload** - Upload files (temp)        |
-| **GET**    | `/docs`                 | List of uploaded files (temporary)       | `application/json` | **Upload** - List uploaded files        |
-| **GET**    | `/docs/{filename}`      | Files from `{upload}{temp}-docs/` folder | _varies_           | **Download** - Download files (temp)    |
-| **GET**    | `/static/image.jpg`     | `mocks/public-static/image.svg`          | `image/jpg`        | Static file                             |
-| **GET**    | `/static/css/style.css` | `mocks/public-static/css/style.css`      | `text/css`         | Static file                             |
+| Method     | Route                   | Response Body From...                    | `Content-Type`     | Description                                    |
+| :--------- | :---------------------- | :--------------------------------------- | :----------------- | :--------------------------------------------- |
+| **GET**    | `/api/users`            | `mocks/api/users/get.json`               | `application/json` | Static response                                |
+| **POST**   | `/api/users`            | `mocks/api/users/post.json`              | `application/json` | Static response                                |
+| **GET**    | `/api/users/{id}`       | `mocks/api/users/get{id}.json`           | `application/json` | Static response                                |
+| **GET**    | `/api/users/sample`     | Dynamic JGD from `sample.jgd`            | `application/json` | **JGD** - Dynamic JSON generation              |
+| **GET**    | `/api/products`         | In-memory data from `rest{_id:int}.json` | `application/json` | **REST API** - List all products               |
+| **POST**   | `/api/products`         | In-memory database                       | `application/json` | **REST API** - Create new product              |
+| **GET**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Get product by ID               |
+| **PUT**    | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Update product                  |
+| **PATCH**  | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Partial update                  |
+| **DELETE** | `/api/products/{_id}`   | In-memory database                       | `application/json` | **REST API** - Delete product                  |
+| **GET**    | `/api/products/1`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                                |
+| **GET**    | `/api/products/2`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                                |
+| **GET**    | `/api/products/3`       | `mocks/api/products/get{1-3}.json`       | `application/json` | Static response                                |
+| **GET**    | `/api/products/special` | `mocks/api/products/get{special}.json`   | `application/json` | Static response                                |
+| **GET**    | `/api/products/catalog` | Dynamic JGD from `catalog.jgd`           | `application/json` | **JGD** - Dynamic product catalog              |
+| **GET**    | `/api/inventory`        | In-memory data from `rest{uuid}.jgd`     | `application/json` | **REST API + JGD** - List all inventory items  |
+| **POST**   | `/api/inventory`        | In-memory database                       | `application/json` | **REST API + JGD** - Create new inventory item |
+| **GET**    | `/api/inventory/{id}`   | In-memory database                       | `application/json` | **REST API + JGD** - Get inventory item by ID  |
+| **PUT**    | `/api/inventory/{id}`   | In-memory database                       | `application/json` | **REST API + JGD** - Update inventory item     |
+| **PATCH**  | `/api/inventory/{id}`   | In-memory database                       | `application/json` | **REST API + JGD** - Partial update            |
+| **DELETE** | `/api/inventory/{id}`   | In-memory database                       | `application/json` | **REST API + JGD** - Delete inventory item     |
+| **GET**    | `/api/companies`        | In-memory data from `rest.json`          | `application/json` | **REST API** - List all companies              |
+| **POST**   | `/api/companies`        | In-memory database                       | `application/json` | **REST API** - Create new company              |
+| **GET**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Get company by ID               |
+| **PUT**    | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Update company                  |
+| **PATCH**  | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Partial update                  |
+| **DELETE** | `/api/companies/{id}`   | In-memory database                       | `application/json` | **REST API** - Delete company                  |
+| **GET**    | `/api/status`           | `mocks/api/status.txt`                   | `text/plain`       | Static file                                    |
+| **POST**   | `/api/auth/login`       | JWT authentication                       | `application/json` | **Auth** - Login with credentials              |
+| **POST**   | `/api/auth/logout`      | JWT token revocation                     | `application/json` | **Auth** - Logout and revoke token             |
+| **GET**    | `/admin/settings`       | `mocks/$admin/settings/get.json`         | `application/json` | **Protected** - Requires authentication        |
+| **GET**    | `/assets/logo`          | `mocks/assets/logo.svg`                  | `image/svg+xml`    | Static file                                    |
+| **POST**   | `/upload`               | File upload handling                     | `text/plain`       | **Upload** - Upload files                      |
+| **GET**    | `/upload`               | List of uploaded files                   | `application/json` | **Upload** - List uploaded files               |
+| **GET**    | `/upload/{filename}`    | Files from `{upload}/` folder            | _varies_           | **Download** - Download files                  |
+| **POST**   | `/docs`                 | File upload handling (temporary)         | `text/plain`       | **Upload** - Upload files (temp)               |
+| **GET**    | `/docs`                 | List of uploaded files (temporary)       | `application/json` | **Upload** - List uploaded files               |
+| **GET**    | `/docs/{filename}`      | Files from `{upload}{temp}-docs/` folder | _varies_           | **Download** - Download files (temp)           |
+| **GET**    | `/static/image.jpg`     | `mocks/public-static/image.svg`          | `image/jpg`        | Static file                                    |
+| **GET**    | `/static/css/style.css` | `mocks/public-static/css/style.css`      | `text/css`         | Static file                                    |
 
 **Note**:
 
--   The REST API endpoints provide full CRUD functionality with automatic ID generation, data persistence during runtime, and initial data loading from the JSON files.
+-   The REST API endpoints provide full CRUD functionality with automatic ID generation, data persistence during runtime, and initial data loading from JSON files or JGD generation.
+-   REST files with `.json` extension load static initial data from the JSON array in the file.
+-   REST files with `.jgd` extension generate dynamic fake data using JGD and use it as initial data for the REST API.
 -   Authentication endpoints provide JWT-based login/logout with secure token management and route protection capabilities.
 -   Protected routes (prefixed with `$`) require valid JWT tokens via Authorization header or auth_token cookie.
 -   Upload endpoints handle multipart/form-data file uploads and preserve original filenames.
 -   Download endpoints serve files with proper Content-Type detection and Content-Disposition headers.
+-   Temporary upload folders (`{temp}`) automatically clean up all files when the server stops.
+-   JGD files (`.jgd`) generate dynamic JSON responses using the JGD-rs library for realistic test data.
+-   You can interact with all REST endpoints using any HTTP client, and data will persist until the server is restarted.
 -   Temporary upload folders (`{temp}`) automatically clean up all files when the server stops.
 -   JGD files (`.jgd`) generate dynamic JSON responses using the JGD-rs library for realistic test data.
 -   You can interact with all endpoints using any HTTP client, and data will persist until the server is restarted.

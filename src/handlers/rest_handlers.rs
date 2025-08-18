@@ -1,12 +1,13 @@
-use std::{ffi::OsString, sync::{Arc}};
+use std::{ffi::OsString, path::PathBuf, str::FromStr, sync::Arc};
 
 use axum::{
     extract::{Json, Path as AxumPath}, http::StatusCode, response::IntoResponse, routing::{delete, get, patch, post, put}
 };
+use jgd_rs::generate_jgd_from_file;
 use serde_json::Value;
 
 use crate::{
-    app::App, id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}, route_builder::RouteRegistrator
+    app::App, handlers::{is_jgd}, id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}, route_builder::RouteRegistrator
 };
 
 pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
@@ -113,8 +114,21 @@ pub fn build_rest_routes(
 ) -> ProtectedMemCollection {
     let mut in_memory_collection = InMemoryCollection::new(id_type, id_key.to_string(), Some(route.to_string()));
 
+    let result: Result<String, String> = if is_jgd(file_path) {
+        match generate_jgd_from_file(&PathBuf::from_str(file_path.to_str().unwrap()).unwrap()) {
+            Ok(jgd_json) => {
+                let value = in_memory_collection.load_from_json(jgd_json);
+                value
+                    .map(|items| format!("✔️ Generated {} initial items from {}", items.len(), file_path.to_string_lossy()))
+            },
+            Err(error) => Err(format!("Error to generate JGD Json for file {}. Details: {}", file_path.to_string_lossy(), error)),
+        }
+    } else {
+        in_memory_collection.load_from_file(file_path)
+    };
+
     // load_initial_data(file_path, &collection);
-    match in_memory_collection.load_from_file(file_path) {
+    match result {
         Ok(msg) => println!("{}", msg),
         Err(msg) => eprintln!("{}", msg),
     }

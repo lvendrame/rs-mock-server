@@ -1,0 +1,64 @@
+{
+  "$format": "jgd/v1",
+  "version": "1.0.0",
+  "defaultLocale": "EN",
+  "root": {
+    "count": 100,
+    "fields": {
+      "id": "${uuid.v4}",
+      "sku": "${number.numberWithFormat(ABC-####-###)}",
+      "name": "${lorem.words(2,4)}",
+      "description": "${lorem.sentence(8,15)}",
+      "price": {
+        "number": {
+          "min": 9.99,
+          "max": 999.99,
+          "integer": false
+        }
+      },
+      "inStock": "${boolean.boolean(90)}",
+      "categories": {
+        "array": {
+          "count": [1, 3],
+          "of": "${lorem.word}"
+        }
+      },
+      "metadata": {
+        "fields": {
+          "weight": {
+            "number": {
+              "min": 0.1,
+              "max": 50.0,
+              "integer": false
+            }
+          },
+          "dimensions": {
+            "fields": {
+              "length": {
+                "number": {
+                  "min": 1,
+                  "max": 100,
+                  "integer": true
+                }
+              },
+              "width": {
+                "number": {
+                  "min": 1,
+                  "max": 100,
+                  "integer": true
+                }
+              },
+              "height": {
+                "number": {
+                  "min": 1,
+                  "max": 100,
+                  "integer": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
