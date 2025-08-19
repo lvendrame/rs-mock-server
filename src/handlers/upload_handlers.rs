@@ -42,7 +42,7 @@ fn create_upload_route(app: &mut App, upload_path: String, route: &str) {
         Json(response).into_response()
     });
 
-    app.route(route, uploads_router, Some("POST"));
+    app.route(route, uploads_router, Some("POST"), Some(&["upload".to_string()]));
 }
 
 fn create_download_route(app: &mut App, download_path: String, route: &str) {
@@ -86,7 +86,7 @@ fn create_download_route(app: &mut App, download_path: String, route: &str) {
         }
     });
 
-    app.route(&download_route, download_router, Some("GET"));
+    app.route(&download_route, download_router, Some("GET"), Some(&["download".to_string()]));
 }
 
 fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
@@ -118,7 +118,7 @@ fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
         }
     });
 
-    app.route(route, upload_list_router, Some("GET"));
+    app.route(route, upload_list_router, Some("GET"), None);
 }
 
 pub fn build_upload_routes(app: &mut App, path: String, route: &str) {

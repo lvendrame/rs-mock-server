@@ -21,7 +21,7 @@ pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection
         }
     });
 
-    app.push_route(route, list_router, Some("GET"), is_protected);
+    app.push_route(route, list_router, Some("GET"), is_protected, None);
 }
 
 pub fn create_insert(app: &mut App, route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
@@ -37,7 +37,7 @@ pub fn create_insert(app: &mut App, route: &str, is_protected: bool, collection:
         }
     });
 
-    app.push_route(route, create_router, Some("POST"), is_protected);
+    app.push_route(route, create_router, Some("POST"), is_protected, None);
 }
 
 pub fn create_get_item(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
@@ -53,7 +53,7 @@ pub fn create_get_item(app: &mut App, id_route: &str, is_protected: bool, collec
         }
     });
 
-    app.push_route(id_route, get_router, Some("GET"), is_protected);
+    app.push_route(id_route, get_router, Some("GET"), is_protected, None);
 }
 
 pub fn create_full_update(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
@@ -69,7 +69,7 @@ pub fn create_full_update(app: &mut App, id_route: &str, is_protected: bool, col
         }
     });
 
-    app.push_route(id_route, put_router, Some("PUT"), is_protected);
+    app.push_route(id_route, put_router, Some("PUT"), is_protected, None);
 }
 
 pub fn create_partial_update(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
@@ -85,7 +85,7 @@ pub fn create_partial_update(app: &mut App, id_route: &str, is_protected: bool, 
         }
     });
 
-    app.push_route(id_route, patch_router, Some("PATCH"), is_protected);
+    app.push_route(id_route, patch_router, Some("PATCH"), is_protected, None);
 }
 
 pub fn create_delete(app: &mut App, id_route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
@@ -101,7 +101,7 @@ pub fn create_delete(app: &mut App, id_route: &str, is_protected: bool, collecti
         }
     });
 
-    app.push_route(id_route, delete_router, Some("DELETE"), is_protected);
+    app.push_route(id_route, delete_router, Some("DELETE"), is_protected, None);
 }
 
 pub fn build_rest_routes(

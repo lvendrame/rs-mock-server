@@ -153,7 +153,7 @@ pub fn create_login_route(
             StatusCode::BAD_REQUEST.into_response()
         }
     });
-    app.route(&login_route, create_router, Some("POST"));
+    app.route(&login_route, create_router, Some("POST"), None);
 }
 
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
@@ -306,5 +306,5 @@ pub fn create_logout_route(
         }
     });
 
-    app.route(&logout_route, logout_router, Some("POST"));
+    app.route(&logout_route, logout_router, Some("POST"), None);
 }

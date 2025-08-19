@@ -103,24 +103,24 @@ impl RouteGenerator for RouteBasic {
         match &self.sub_route {
             SubRoute::None => {
                 let router = build_method_router(&self.path, method);
-                app.push_route(&self.route, router, Some(method), self.is_protected);
+                app.push_route(&self.route, router, Some(method), self.is_protected, None);
             },
             SubRoute::Id => {
                 let route_path = format!("{}/{}", self.route, "{id}");
                 let router = build_method_router(&self.path, method);
-                app.push_route(&route_path, router, Some(method), self.is_protected);
+                app.push_route(&route_path, router, Some(method), self.is_protected, None);
             },
             SubRoute::Range(start, end) => {
                 for i in *start..=*end {
                     let route_path = format!("{}/{}", self.route, i);
                     let router = build_method_router(&self.path, method);
-                    app.push_route(&route_path, router, Some(method), self.is_protected);
+                    app.push_route(&route_path, router, Some(method), self.is_protected, None);
                 }
             },
             SubRoute::Static(end_point) => {
                 let route_path = format!("{}/{}", self.route, end_point);
                 let router = build_method_router(&self.path, method);
-                app.push_route(&route_path, router, Some(method), self.is_protected);
+                app.push_route(&route_path, router, Some(method), self.is_protected, None);
             },
         }
 

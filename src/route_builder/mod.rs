@@ -24,7 +24,7 @@ pub trait PrintRoute {
 }
 
 pub trait RouteRegistrator {
-    fn push_route(&mut self, path: &str, router: MethodRouter, method: Option<&str>, is_protected: bool);
+    fn push_route(&mut self, path: &str, router: MethodRouter, method: Option<&str>, is_protected: bool, options: Option<&[String]>);
 }
 
 pub trait RouteGenerator {

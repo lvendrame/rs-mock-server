@@ -62,13 +62,13 @@ impl App {
         let _old_route = self.router.replace(new_router);
     }
 
-    pub fn route(&mut self, path: &str, router: MethodRouter<()>, method: Option<&str>) {
+    pub fn route(&mut self, path: &str, router: MethodRouter<()>, method: Option<&str>, options: Option<&[String]>) {
         let new_router = self.get_router().route(path, router);
 
         self.replace_router(new_router);
 
         if let Some(method) = method {
-            self.pages.push_link(method.to_string(), path.to_string());
+            self.pages.push_link(method.to_string(), path.to_string(), options.unwrap_or(&Vec::<String>::new()));
         }
     }
 
@@ -100,17 +100,7 @@ impl App {
                 headers.insert(CONTENT_TYPE, HeaderValue::from_str("text/html").unwrap());
 
                 (headers, body).into_response()
-            }), None);
-
-        let home = String::from(self.pages.home_template);
-
-        self.route("/home-api", get(|| async {
-            let body = home;
-            let mut headers = HeaderMap::new();
-            headers.insert(CONTENT_TYPE, HeaderValue::from_str("text/html").unwrap());
-
-            (headers, body).into_response()
-        }), None);
+            }), None, None);
     }
 
     fn build_middlewares(&mut self) {
@@ -211,9 +201,9 @@ impl App {
 }
 
 impl RouteRegistrator for App {
-    fn push_route(&mut self, path: &str, router: MethodRouter, method: Option<&str>, is_protected: bool) {
+    fn push_route(&mut self, path: &str, router: MethodRouter, method: Option<&str>, is_protected: bool, options: Option<&[String]>) {
         let router = self.try_add_auth_middleware_layer(router, is_protected);
 
-        self.route(path, router, method);
+        self.route(path, router, method, options);
     }
 }
