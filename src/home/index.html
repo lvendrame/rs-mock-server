@@ -11,8 +11,145 @@
         <header>
             <pre id="logo"></pre>
         </header>
-        <div>
+        <div class="container">
             <nav id="routes"></nav>
+            <div id="content">content</div>
         </div>
+
+        <template id="api-request-sender-template">
+            <style>
+                :host {
+                    --shell-bg: rgb(16, 3, 33);
+                    --shell-text: rgb(184, 184, 184);
+                    --shell-accent: #00ff9c; /* A vibrant terminal green */
+                    --shell-border: rgb(50, 40, 70);
+                    --shell-text-dark: rgb(100, 100, 100);
+
+                    display: block;
+                    border: 1px solid var(--shell-border);
+                    padding: 16px;
+                    margin-bottom: 16px;
+                    background-color: var(--shell-bg);
+                    color: var(--shell-text);
+                }
+
+                /* Blinking cursor animation */
+                @keyframes blink {
+                    50% {
+                        opacity: 0;
+                    }
+                }
+
+                .row {
+                    margin-bottom: 12px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 12px;
+                }
+
+                .method {
+                    font-weight: bold;
+                    padding: 2px 8px;
+                    background-color: var(--shell-border);
+                    color: var(--shell-accent);
+                }
+
+                .route {
+                    font-family: "Fira Code", monospace;
+                    color: #9e9eff; /* A soft blue for paths */
+                }
+
+                input[type="text"],
+                textarea {
+                    background-color: var(--shell-bg);
+                    color: var(--shell-text);
+                    border: none;
+                    border-bottom: 1px solid var(--shell-border);
+                    font-family: inherit;
+                    padding: 6px 2px;
+                    caret-color: var(
+                        --shell-accent
+                    ); /* Blinking input cursor color */
+                }
+
+                input[type="text"]:focus,
+                textarea:focus {
+                    outline: none;
+                    border-bottom: 1px solid var(--shell-accent);
+                }
+
+                textarea {
+                    width: 100%;
+                    min-height: 120px;
+                    resize: vertical;
+                    line-height: 1.5;
+                }
+
+                input[type="file"] {
+                    color: var(--shell-text-dark);
+                }
+
+                button {
+                    padding: 6px 12px;
+                    border: 1px solid var(--shell-accent);
+                    background-color: transparent;
+                    color: var(--shell-accent);
+                    cursor: pointer;
+                    font-weight: bold;
+                    transition: background-color 0.2s, color 0.2s;
+                }
+
+                button:hover,
+                button:focus {
+                    background-color: var(--shell-accent);
+                    color: var(--shell-bg);
+                }
+
+                .results {
+                    margin-top: 16px;
+                    padding: 12px;
+                    background-color: rgba(0, 0, 0, 0.2);
+                    border: 1px solid var(--shell-border);
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                    font-family: "Fira Code", monospace;
+                    min-height: 50px;
+                }
+
+                /* Add a blinking cursor to the results area for flair */
+                .results::after {
+                    content: "_";
+                    opacity: 1;
+                    animation: blink 1s infinite;
+                }
+
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+
+                th,
+                td {
+                    border: 1px solid var(--shell-border);
+                    text-align: left;
+                    padding: 8px;
+                }
+
+                th {
+                    color: var(--shell-text-dark);
+                }
+            </style>
+
+            <div id="main-container">
+                <div id="first-row" class="row"></div>
+
+                <div id="conditional-content" class="row"></div>
+
+                <div id="results-container">
+                    <div id="results" class="results"></div>
+                </div>
+            </div>
+        </template>
     </body>
 </html>

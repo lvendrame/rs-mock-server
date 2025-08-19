@@ -29,9 +29,15 @@ header {
     padding-bottom: 6px;
 }
 
-nav {
+.container {
     font-size: small;
+    display: flex;
     margin: 8px;
+    height: 100%;
+}
+
+nav > ul {
+    margin-top: 0;
 }
 
 nav ul {
@@ -73,4 +79,13 @@ nav ul > li.collapsible > ul {
 nav ul > li.collapsible.expanded > ul {
     max-height: 90dvh; /* Adjust if you have very long lists */
     opacity: 1;
+}
+
+#routes {
+    width: 18rem;
+    overflow: auto;
+}
+
+#content {
+    width: 100%;
 }
