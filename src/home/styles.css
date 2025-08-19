@@ -1,0 +1,76 @@
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap");
+
+html {
+    font-size: 16px;
+}
+
+html,
+body,
+header,
+pre {
+    margin: 0;
+    padding: 0;
+}
+
+* {
+    font-family: "Fira Code", monospace;
+    box-sizing: border-box;
+    background-color: rgb(16, 3, 33);
+    color: rgb(184, 184, 184);
+}
+
+header {
+    display: flex;
+    font-family: "Fira Code", monospace;
+    font-size: xx-small;
+    justify-content: center;
+    align-items: center;
+    border-bottom: 1px dashed rgba(184, 184, 184, 0.453);
+    padding-bottom: 6px;
+}
+
+nav {
+    font-size: small;
+    margin: 8px;
+}
+
+nav ul {
+    list-style-type: none;
+    padding: 0;
+    padding-left: 2px;
+    margin-left: 6px;
+}
+
+nav ul > li {
+    padding: 4px 8px;
+}
+
+nav ul > li.collapsible > a::before {
+    /* Set the icon to a right-pointing triangle */
+    content: "▶";
+    display: inline-block; /* Allows the transform to work */
+    margin-right: 6px;
+    font-size: 0.8em; /* Optional: Adjusts the triangle size */
+
+    /* Add a smooth rotation effect */
+    transition: transform 0.2s ease-in-out;
+}
+
+nav ul > li.collapsible.expanded > a::before {
+    transform: rotate(90deg);
+}
+
+nav ul > li.collapsible > ul {
+    /* Hide the content and set initial state for animation */
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+
+    /* Define the smooth transitions for both properties */
+    transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in;
+}
+
+nav ul > li.collapsible.expanded > ul {
+    max-height: 90dvh; /* Adjust if you have very long lists */
+    opacity: 1;
+}
