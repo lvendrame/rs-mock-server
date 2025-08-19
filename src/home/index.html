@@ -117,11 +117,26 @@
                     min-height: 50px;
                 }
 
+                /* Style for images in results */
+                .results img {
+                    max-width: 100%;
+                    height: auto;
+                    border: 1px solid var(--shell-border);
+                    border-radius: 4px;
+                    display: block;
+                    margin: 8px 0;
+                }
+
                 /* Add a blinking cursor to the results area for flair */
                 .results::after {
                     content: "_";
                     opacity: 1;
                     animation: blink 1s infinite;
+                }
+
+                /* Hide cursor when showing images */
+                .results:has(img)::after {
+                    display: none;
                 }
 
                 table {

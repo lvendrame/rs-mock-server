@@ -33,7 +33,10 @@ function createRouteTree(routes) {
         });
 
         current.routeConfigs = current.routeConfigs || { methods: [] };
-        current.routeConfigs.methods.push(route.method);
+        current.routeConfigs.methods.push({
+            method: route.method,
+            options: route.options || [],
+        });
     });
 
     return root;
@@ -55,14 +58,15 @@ function buildNavList(navList, leaf, path, param, ulParent) {
         })
         .forEach((key) => {
             if (key === "routeConfigs") {
-                leaf.routeConfigs.methods.forEach((method) => {
+                leaf.routeConfigs.methods.forEach((methodInfo) => {
                     const item = document.createElement("li", {
                         is: "route-item",
                     });
-                    item.route = method;
+                    item.route = methodInfo.method;
                     item.path = path;
-                    item.method = method;
+                    item.method = methodInfo.method;
                     item.param = param;
+                    item.options = methodInfo.options;
                     ul.appendChild(item);
                 });
                 return;
@@ -82,38 +86,12 @@ function buildNavList(navList, leaf, path, param, ulParent) {
 
             ul.appendChild(item);
 
-            if (
-                (Object.keys(current).length > 0 && current.routeConfigs) ||
-                (Object.keys(current).length === 1 && !current.routeConfigs)
-            ) {
+            if (Object.keys(current).length > 0) {
                 buildNavList(item, current, newPath);
             }
         });
     navList.appendChild(ul);
 }
-
-const mock_routes = [
-    {
-        route: "/api/products",
-        method: "GET",
-    },
-    {
-        route: "/api/products/:id",
-        method: "GET",
-    },
-    {
-        route: "/api/products",
-        method: "POST",
-    },
-    {
-        route: "/api/products/:id",
-        method: "PUT",
-    },
-    {
-        route: "/api/products/:id",
-        method: "DELETE",
-    },
-];
 
 class RouteItem extends HTMLLIElement {
     constructor() {
@@ -122,6 +100,7 @@ class RouteItem extends HTMLLIElement {
         this._path = "";
         this._method = "";
         this._param = "";
+        this._options = [];
     }
 
     connectedCallback() {
@@ -164,6 +143,15 @@ class RouteItem extends HTMLLIElement {
         return this._param;
     }
 
+    set options(value) {
+        this._options = value || [];
+        this.render();
+    }
+
+    get options() {
+        return this._options;
+    }
+
     onLinkClick(event) {
         event.preventDefault();
         if (this.method) {
@@ -187,6 +175,13 @@ class RouteItem extends HTMLLIElement {
                 apiRequestSender.setAttribute("param", this.param);
             }
 
+            if (this.options && this.options.length > 0) {
+                apiRequestSender.setAttribute(
+                    "options",
+                    this.options.join(",")
+                );
+            }
+
             // 4. Append the new component to the content div
             contentDiv.appendChild(apiRequestSender);
         } else {
@@ -201,7 +196,6 @@ class RouteItem extends HTMLLIElement {
 
         if (!this.method) {
             this.classList.add("collapsible");
-            this.classList.add("expanded");
         }
 
         // Find a direct child 'a' tag, if one already exists
@@ -234,7 +228,7 @@ class ApiRequestSender extends HTMLElement {
     }
 
     static get observedAttributes() {
-        return ["method", "route", "param"];
+        return ["method", "route", "param", "options"];
     }
 
     attributeChangedCallback() {
@@ -249,8 +243,12 @@ class ApiRequestSender extends HTMLElement {
         const method = this.getAttribute("method")?.toUpperCase() || "GET";
         const route = this.getAttribute("route") || "/";
         const param = this.getAttribute("param");
-        const isDownload = route.endsWith("/download");
-        const isUpload = method === "POST" && route.endsWith("/upload");
+        const optionsAttr = this.getAttribute("options");
+        const options = optionsAttr
+            ? optionsAttr.split(",").map((opt) => opt.trim())
+            : [];
+        const isDownload = options.includes("download");
+        const isUpload = options.includes("upload");
 
         // === Render First Row ===
         const firstRow = this.shadowRoot.getElementById("first-row");
@@ -356,7 +354,11 @@ class ApiRequestSender extends HTMLElement {
         const method = this.getAttribute("method")?.toUpperCase() || "GET";
         let route = this.getAttribute("route") || "/";
         const param = this.getAttribute("param");
-        const isDownload = route.endsWith("/download");
+        const optionsAttr = this.getAttribute("options");
+        const options = optionsAttr
+            ? optionsAttr.split(",").map((opt) => opt.trim())
+            : [];
+        const isDownload = options.includes("download");
 
         const resultsDiv = this.shadowRoot.getElementById("results");
         resultsDiv.textContent = "Loading...";
@@ -383,7 +385,7 @@ class ApiRequestSender extends HTMLElement {
         }
 
         // 2. Prepare Fetch Options
-        const options = { method };
+        const fetchOptions = { method };
 
         if (["POST", "PUT", "PATCH"].includes(method)) {
             const fileInput = this.shadowRoot.getElementById("file-input");
@@ -393,10 +395,10 @@ class ApiRequestSender extends HTMLElement {
                     this.shadowRoot.getElementById("body-input").value;
                 formData.append("file", fileInput.files[0]);
                 formData.append("jsonData", bodyContent); // Also send JSON data if present
-                options.body = formData;
+                fetchOptions.body = formData;
             } else {
-                options.headers = { "Content-Type": "application/json" };
-                options.body =
+                fetchOptions.headers = { "Content-Type": "application/json" };
+                fetchOptions.body =
                     this.shadowRoot.getElementById("body-input")?.value || "{}";
             }
         }
@@ -404,10 +406,13 @@ class ApiRequestSender extends HTMLElement {
         // 3. Execute Fetch
         try {
             // For demo, we'll use a placeholder API
-            const mockUrl = `https://jsonplaceholder.typicode.com/posts/1`; // Using a mock API endpoint
-            console.log("Requesting:", method, route, options);
+            const mockUrl = `http://localhost:4520${route}`; // Using a mock API endpoint
+            console.log("Requesting:", method, route, fetchOptions);
 
-            const response = await fetch(mockUrl, { mode: "cors" }); // Using mock URL for demo
+            const response = await fetch(mockUrl, {
+                mode: "cors",
+                ...fetchOptions,
+            }); // Using mock URL for demo
 
             if (isDownload) {
                 const filenameInput =
@@ -426,11 +431,339 @@ class ApiRequestSender extends HTMLElement {
                 return;
             }
 
-            const data = await response.json();
-            resultsDiv.textContent = JSON.stringify(data, null, 2);
+            const contentType = response.headers.get("content-type");
+
+            // Check if response is an image
+            if (contentType && contentType.startsWith("image/")) {
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                resultsDiv.innerHTML = `<img src="${imageUrl}" alt="Response image" style="max-width: 100%; height: auto;" />`;
+                return;
+            }
+
+            // Check if response is JSON
+            if (contentType && contentType.includes("application/json")) {
+                const data = await response.json();
+                resultsDiv.textContent = JSON.stringify(data, null, 2);
+            } else {
+                // For other content types, display as text
+                const text = await response.text();
+                resultsDiv.textContent = text;
+            }
         } catch (error) {
             resultsDiv.textContent = `Error: ${error.message}`;
         }
     }
 }
 customElements.define("api-request-sender", ApiRequestSender);
+
+const mock_routes = [
+    {
+        route: "/auth/users",
+        method: "GET",
+    },
+    {
+        route: "/auth/users",
+        method: "POST",
+    },
+    {
+        route: "/auth/users/:username",
+        method: "GET",
+    },
+    {
+        route: "/auth/users/:username",
+        method: "PUT",
+    },
+    {
+        route: "/auth/users/:username",
+        method: "PATCH",
+    },
+    {
+        route: "/auth/users/:username",
+        method: "DELETE",
+    },
+    {
+        route: "/auth/login",
+        method: "POST",
+    },
+    {
+        route: "/auth/logout",
+        method: "POST",
+    },
+    {
+        route: "/account/login",
+        method: "POST",
+    },
+    {
+        route: "/account/logout",
+        method: "POST",
+    },
+    {
+        route: "/api/auth/activate",
+        method: "POST",
+    },
+    {
+        route: "/api/auth/change-password",
+        method: "POST",
+    },
+    {
+        route: "/api/auth/forget-password",
+        method: "POST",
+    },
+    {
+        route: "/api/auth/login/auth",
+        method: "GET",
+    },
+    {
+        route: "/api/auth/login",
+        method: "POST",
+    },
+    {
+        route: "/api/auth/register",
+        method: "POST",
+    },
+    {
+        route: "/api/exercises",
+        method: "GET",
+    },
+    {
+        route: "/api/exercises",
+        method: "POST",
+    },
+    {
+        route: "/api/workout/:id",
+        method: "DELETE",
+    },
+    {
+        route: "/api/workout",
+        method: "GET",
+    },
+    {
+        route: "/api/workout/:id",
+        method: "GET",
+    },
+    {
+        route: "/api/workout/list",
+        method: "GET",
+    },
+    {
+        route: "/api/workout",
+        method: "POST",
+    },
+    {
+        route: "/api/workout",
+        method: "PUT",
+    },
+    {
+        route: "/jgd-examples/array-object-root",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/customers-orders",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/entities-blog-system",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/ranged-array-object-root",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/root-address-fr-fr",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/root-ecommerce",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/root-user",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/single-object-root",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/user-post-entities",
+        method: "GET",
+    },
+    {
+        route: "/users",
+        method: "PUT",
+    },
+    {
+        route: "/users",
+        method: "GET",
+    },
+    {
+        route: "/users/2",
+        method: "GET",
+    },
+    {
+        route: "/users/3",
+        method: "GET",
+    },
+    {
+        route: "/users/4",
+        method: "GET",
+    },
+    {
+        route: "/users/5",
+        method: "GET",
+    },
+    {
+        route: "/users/:id",
+        method: "GET",
+    },
+    {
+        route: "/users/luis",
+        method: "GET",
+    },
+    {
+        route: "/users/images",
+        method: "GET",
+    },
+    {
+        route: "/users/images/:id",
+        method: "GET",
+    },
+    {
+        route: "/users/images/other/animal-eye-staring-close",
+        method: "GET",
+    },
+    {
+        route: "/users/images/other/animal-portrait-close-up",
+        method: "GET",
+    },
+    {
+        route: "/users",
+        method: "POST",
+    },
+    {
+        route: "/cities",
+        method: "GET",
+    },
+    {
+        route: "/cities",
+        method: "POST",
+    },
+    {
+        route: "/cities/:id",
+        method: "GET",
+    },
+    {
+        route: "/cities/:id",
+        method: "PUT",
+    },
+    {
+        route: "/cities/:id",
+        method: "PATCH",
+    },
+    {
+        route: "/cities/:id",
+        method: "DELETE",
+    },
+    {
+        route: "/companies",
+        method: "GET",
+    },
+    {
+        route: "/companies",
+        method: "POST",
+    },
+    {
+        route: "/companies/:id",
+        method: "GET",
+    },
+    {
+        route: "/companies/:id",
+        method: "PUT",
+    },
+    {
+        route: "/companies/:id",
+        method: "PATCH",
+    },
+    {
+        route: "/companies/:id",
+        method: "DELETE",
+    },
+    {
+        route: "/jgd-examples/ecommerce",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/ecommerce",
+        method: "POST",
+    },
+    {
+        route: "/jgd-examples/ecommerce/:id",
+        method: "GET",
+    },
+    {
+        route: "/jgd-examples/ecommerce/:id",
+        method: "PUT",
+    },
+    {
+        route: "/jgd-examples/ecommerce/:id",
+        method: "PATCH",
+    },
+    {
+        route: "/jgd-examples/ecommerce/:id",
+        method: "DELETE",
+    },
+    {
+        route: "/products",
+        method: "GET",
+    },
+    {
+        route: "/products",
+        method: "POST",
+    },
+    {
+        route: "/products/:_id",
+        method: "GET",
+    },
+    {
+        route: "/products/:_id",
+        method: "PUT",
+    },
+    {
+        route: "/products/:_id",
+        method: "PATCH",
+    },
+    {
+        route: "/products/:_id",
+        method: "DELETE",
+    },
+    {
+        route: "/upload",
+        method: "POST",
+        options: ["upload"],
+    },
+    {
+        route: "/upload/:file_name",
+        method: "GET",
+        options: ["download"],
+    },
+    {
+        route: "/upload",
+        method: "GET",
+    },
+    {
+        route: "/docs",
+        method: "POST",
+        options: ["upload"],
+    },
+    {
+        route: "/docs/:file_name",
+        method: "GET",
+        options: ["download"],
+    },
+    {
+        route: "/docs",
+        method: "GET",
+    },
+];

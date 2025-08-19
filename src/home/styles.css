@@ -83,9 +83,12 @@ nav ul > li.collapsible.expanded > ul {
 
 #routes {
     width: 18rem;
+    height: calc(100dvh - 167px);
     overflow: auto;
 }
 
 #content {
     width: 100%;
+    height: calc(100dvh - 167px);
+    overflow: auto;
 }
