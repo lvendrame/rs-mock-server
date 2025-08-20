@@ -17,7 +17,9 @@ It works by scanning a directory and mapping its structure directly to API route
 -   🖼️ **Static File Serving**: Automatically serves any file (like images, CSS, or JS) with its correct `Content-Type` if the filename doesn't match a method pattern.
 -   📊 **JGD Support**: Generate dynamic JSON responses using JGD (JSON Generation Definition) files with the [JGD-rs library](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs) for realistic test data.
 -   🌐 **Public Directory Serving**: Serve a directory of static files (e.g., a frontend build) from a root public folder, or map a folder like public-assets to a custom /assets route.
--   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
+-   � **Hot Reload**: Automatically restarts the server when files are added, modified, or deleted in the mock directory.
+-   🌐 **Web Interface**: Access the root URL to get an interactive web interface for testing all your endpoints directly in the browser.
+-   �🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
 
 ---
@@ -495,6 +497,35 @@ All uploaded files are saved in the detected folder with their original filename
 
 ---
 
+## Web Interface & Hot Reload
+
+### Interactive Web Interface
+
+When you start the server and navigate to the root URL (e.g., `http://localhost:4520`), you'll access an interactive web interface that allows you to:
+
+-   **Browse all available endpoints** organized by route structure
+-   **Test API calls directly** in the browser with a built-in request sender
+-   **View responses** with proper formatting for JSON, images, and other content types
+-   **Handle file uploads and downloads** through the web interface
+-   **Set custom headers and query parameters** for comprehensive testing
+
+The web interface automatically detects all your routes and provides an intuitive way to test your mock API without external tools like Postman or curl.
+
+### Hot Reload
+
+The server includes built-in **hot reload functionality** that automatically monitors your mock directory for changes:
+
+-   **File modifications**: Editing existing mock files triggers an automatic restart
+-   **New files**: Adding new files or folders immediately creates new routes
+-   **File deletions**: Removing files automatically removes the corresponding routes
+-   **Smart debouncing**: Multiple rapid changes (like copying folders) are batched into a single restart to prevent excessive reloading
+
+This means you can modify your mock responses, add new endpoints, or restructure your API without manually restarting the server. The hot reload feature makes development and testing incredibly smooth and efficient.
+
+**Note**: Upload folders (containing `{upload}` in the name) are excluded from hot reload monitoring to prevent restarts when files are uploaded during testing.
+
+---
+
 ## Installation
 
 ### With Cargo
@@ -541,6 +572,20 @@ rs-mock-server
 ```sh
 rs-mock-server --port 8080 --folder ./my-api-mocks
 ```
+
+### Web Interface
+
+Once the server is running, open your browser and navigate to `http://localhost:4520` (or your custom port) to access the interactive web interface:
+
+![RS-Mock-Server Web Interface](images/home.png)
+
+The web interface provides a comprehensive testing environment where you can:
+
+-   Browse and test all your API endpoints
+-   Send requests with custom parameters and body content
+-   View responses with proper formatting for different content types
+-   Upload and download files directly through the browser
+-   Test authentication flows and protected routes
 
 ### Command-Line Options
 
@@ -650,9 +695,6 @@ Running `rs-mock-server` in the same directory will create the following endpoin
 -   Temporary upload folders (`{temp}`) automatically clean up all files when the server stops.
 -   JGD files (`.jgd`) generate dynamic JSON responses using the JGD-rs library for realistic test data.
 -   You can interact with all REST endpoints using any HTTP client, and data will persist until the server is restarted.
--   Temporary upload folders (`{temp}`) automatically clean up all files when the server stops.
--   JGD files (`.jgd`) generate dynamic JSON responses using the JGD-rs library for realistic test data.
--   You can interact with all endpoints using any HTTP client, and data will persist until the server is restarted.
 
 ---
 

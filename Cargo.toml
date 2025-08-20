@@ -10,7 +10,14 @@ readme = "README.md"
 keywords = ["mock", "server", "api", "http", "axum"]
 categories = ["command-line-utilities", "development-tools::testing", "web-programming::http-server"]
 exclude = [
+    ".github/*",
+    "images/*",
     "mocks/*",
+    "scripts/*",
+    ".editorconfig",
+    ".gitignore",
+    "Makefile",
+    "README.md",
 ]
 
 [dependencies]
