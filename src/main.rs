@@ -30,6 +30,10 @@ struct Args {
     /// Directory to load mock files from
     #[arg(short, long, default_value = "mocks")]
     folder: String,
+
+    /// Allow to watch the home folder
+    #[arg(short, long, default_value_t = false)]
+    dev: bool,
 }
 
 enum SessionResult {
@@ -63,15 +67,20 @@ async fn run_app_session(args: &Args) -> SessionResult {
     tracing::info!("RS-MOCK-SERVER started. Watching for file changes in '{}'...", &args.folder);
 
     let (tx, mut rx) = mpsc::channel(1);
-    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-        if let Ok(event) = res {
-            if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
-                let _ = tx.blocking_send(());
+    let mut watcher = notify::recommended_watcher(
+        move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
+                    let _ = tx.blocking_send(());
+                }
             }
         }
-    }).unwrap();
+    ).unwrap();
 
     watcher.watch(Path::new(&args.folder), RecursiveMode::Recursive).unwrap();
+    if args.dev {
+        watcher.watch(Path::new("src/home"), RecursiveMode::Recursive).unwrap();
+    }
 
     let result = tokio::select! {
         _ = main_logic => {
@@ -104,16 +113,8 @@ async fn main() {
 
     let args = Args::parse();
 
-    loop {
-        match run_app_session(&args).await {
-            SessionResult::Restart => {
-                // Small delay before restarting
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                continue; // Continue to the next loop iteration
-            },
-            SessionResult::Shutdown => {
-                break; // Break the loop to exit main
-            }
-        }
+    while let SessionResult::Restart = run_app_session(&args).await {
+        // Small delay before restarting
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
