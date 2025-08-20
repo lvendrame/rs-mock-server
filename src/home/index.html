@@ -101,8 +101,20 @@
                     line-height: 1.5;
                 }
 
-                input[type="file"] {
-                    color: var(--shell-text-dark);
+                input[type="file"]::file-selector-button {
+                    padding: 6px 12px;
+                    border: 1px solid var(--shell-accent);
+                    background-color: transparent;
+                    color: var(--shell-accent);
+                    cursor: pointer;
+                    font-weight: bold;
+                    transition: background-color 0.2s, color 0.2s;
+                    margin-right: 8px;
+                }
+
+                input[type="file"]::file-selector-button:hover {
+                    background-color: var(--shell-accent);
+                    color: var(--shell-bg);
                 }
 
                 button {

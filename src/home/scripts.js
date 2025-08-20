@@ -48,12 +48,18 @@ function createRouteNavBar(navElement, routes) {
     buildNavList(navElement, routeTree, "");
 }
 
+const REGEX_PARAM = /^{(.+)}$/;
+
+function isArg(key) {
+    return REGEX_PARAM.test(key);
+}
+
 function buildNavList(navList, leaf, path, param, ulParent) {
     const ul = ulParent ?? document.createElement("ul");
     Object.keys(leaf)
         .sort((a, b) => {
-            if (a.startsWith(":")) return 1;
-            if (b.startsWith(":")) return -1;
+            if (isArg(a)) return 1;
+            if (isArg(b)) return -1;
             return 0;
         })
         .forEach((key) => {
@@ -73,7 +79,7 @@ function buildNavList(navList, leaf, path, param, ulParent) {
             }
             const current = leaf[key];
 
-            if (key.startsWith(":")) {
+            if (isArg(key)) {
                 buildNavList(navList, current, path, key, ul);
                 return;
             }
@@ -270,13 +276,8 @@ class ApiRequestSender extends HTMLElement {
             conditionalHTML += `
                 <div class="file-upload-wrapper">
                     <input type="file" id="file-input" />
-                    <span id="file-name">No file selected</span>
                 </div>
             `;
-        }
-
-        if (isDownload && method === "GET") {
-            conditionalHTML += `<input type="text" id="filename-input" placeholder="filename.txt" />`;
         }
 
         switch (method) {
@@ -320,18 +321,6 @@ class ApiRequestSender extends HTMLElement {
         const addQueryBtn = this.shadowRoot.getElementById("add-query-btn");
         if (addQueryBtn) {
             addQueryBtn.onclick = () => this._addQueryParamRow();
-        }
-
-        const fileInput = this.shadowRoot.getElementById("file-input");
-        if (fileInput) {
-            fileInput.onchange = (e) => {
-                const fileNameSpan =
-                    this.shadowRoot.getElementById("file-name");
-                fileNameSpan.textContent =
-                    e.target.files.length > 0
-                        ? e.target.files[0].name
-                        : "No file selected";
-            };
         }
     }
 
@@ -391,7 +380,6 @@ class ApiRequestSender extends HTMLElement {
                 const bodyContent =
                     this.shadowRoot.getElementById("body-input").value;
                 formData.append("file", fileInput.files[0]);
-                formData.append("jsonData", bodyContent); // Also send JSON data if present
                 fetchOptions.body = formData;
             } else {
                 fetchOptions.headers = { "Content-Type": "application/json" };
@@ -403,16 +391,16 @@ class ApiRequestSender extends HTMLElement {
         // 3. Execute Fetch
         try {
             // const mockUrl = `http://localhost:4520${route}`; //for dev
-            const mockUrl = `http://localhost:4520${route}`;
+            const mockUrl = `${route}`;
 
             const response = await fetch(mockUrl, {
-                // mode: "cors", //for dev
+                // mode: "cors",
                 ...fetchOptions,
             });
 
             if (isDownload) {
                 const filenameInput =
-                    this.shadowRoot.getElementById("filename-input");
+                    this.shadowRoot.getElementById("param-input");
                 const filename = filenameInput.value || "download.json";
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);

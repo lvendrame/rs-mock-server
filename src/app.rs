@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ffi::OsString, io::Write};
+use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex}};
 
 use axum::{
     middleware, response::IntoResponse, routing::{get, MethodRouter}, Router
@@ -20,7 +20,7 @@ pub struct App {
     pub port: u16,
     pub root_path: String,
     pub router: RefCell<Router>,
-    pub pages: Pages,
+    pub pages: Arc<Mutex<Pages>>,
     pub auth_collection: Option<ProtectedMemCollection>,
     uploads_configurations: Vec<UploadConfiguration>,
 }
@@ -30,7 +30,7 @@ impl Default for App {
         let port = 3000;
         let root_path = String::from("/");
         let router = RefCell::new(Router::new());
-        let pages = Pages::new();
+        let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let auth_collection = None;
         App { port, root_path, router, pages, uploads_configurations, auth_collection }
@@ -40,11 +40,11 @@ impl Default for App {
 impl App {
 
     pub fn new(port: u16, root_path: String) -> Self {
-        let routes = RefCell::new(Router::new());
-        let pages = Pages::new();
+        let router = RefCell::new(Router::new());
+        let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let auth_collection = None;
-        App { port, root_path, router: routes, pages, uploads_configurations, auth_collection }
+        App { port, root_path, router, pages, uploads_configurations, auth_collection }
     }
 
     pub fn push_uploads_config(&mut self, uploads_path: String, clean_uploads: bool) {
@@ -68,7 +68,7 @@ impl App {
         self.replace_router(new_router);
 
         if let Some(method) = method {
-            self.pages.push_link(method.to_string(), path.to_string(), options.unwrap_or(&Vec::<String>::new()));
+            self.pages.lock().unwrap().push_link(method.to_string(), path.to_string(), options.unwrap_or(&Vec::<String>::new()));
         }
     }
 
@@ -90,14 +90,17 @@ impl App {
             .make_routes(self);
     }
 
-    fn build_index_routes(&mut self) {
-        let index = self.pages.render_index();
+    fn build_home_route(&mut self) {
+        let pages = Arc::clone(&self.pages);
 
         self
-            .route("/", get(|| async {
-                let body = index;
+            .route("/", get(|| async move {
+                let body = pages.lock().unwrap().render_index();
                 let mut headers = HeaderMap::new();
                 headers.insert(CONTENT_TYPE, HeaderValue::from_str("text/html").unwrap());
+                headers.insert("Cache-Control", HeaderValue::from_str("no-cache, no-store, must-revalidate").unwrap());
+                headers.insert("Pragma", HeaderValue::from_str("no-cache").unwrap());
+                headers.insert("Expires", HeaderValue::from_str("0").unwrap());
 
                 (headers, body).into_response()
             }), None, None);
@@ -184,18 +187,24 @@ impl App {
 
     pub async fn initialize(&mut self) {
         self.build_dyn_routes();
-        self.build_index_routes();
+        self.build_home_route();
         self.build_fallback();
         self.build_middlewares();
         self.start_server().await;
     }
 
-    pub fn finish(&self) {
+    pub fn finish(&mut self) {
         println!("\n");
 
         for upload_config in self.uploads_configurations.iter() {
             upload_config.clean_upload_folder();
         }
+
+        self.router = RefCell::new(Router::new());
+        self.pages = Arc::new(Mutex::new(Pages::new()));
+        self.uploads_configurations = vec![];
+        self.auth_collection = None;
+
         println!("\n👋👋👋👋👋 Goodbye! 👋👋👋👋👋👋");
     }
 }

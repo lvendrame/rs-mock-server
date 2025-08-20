@@ -2,7 +2,7 @@ use clap::Parser;
 use notify::{RecursiveMode, Watcher};
 use tokio::sync::Mutex;
 use std::{path::Path, sync::Arc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::{signal, sync::mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -30,15 +30,15 @@ struct Args {
     /// Directory to load mock files from
     #[arg(short, long, default_value = "mocks")]
     folder: String,
-
-    /// Allow to watch the home folder
-    #[arg(short, long, default_value_t = false)]
-    dev: bool,
 }
 
 enum SessionResult {
     Restart,
     Shutdown,
+}
+
+fn is_upload_folder(folder: &str) -> bool {
+    folder.contains("{upload}")
 }
 
 async fn run_app_session(args: &Args) -> SessionResult {
@@ -59,7 +59,7 @@ async fn run_app_session(args: &Args) -> SessionResult {
         let app_ref = Arc::clone(&app_arc);
         async move {
             token_clone.cancelled().await;
-            let app = app_ref.lock().await;
+            let mut app = app_ref.lock().await;
             app.finish();
         }
     });
@@ -67,20 +67,34 @@ async fn run_app_session(args: &Args) -> SessionResult {
     tracing::info!("RS-MOCK-SERVER started. Watching for file changes in '{}'...", &args.folder);
 
     let (tx, mut rx) = mpsc::channel(1);
+    let last_send_time = Arc::new(Mutex::new(Instant::now() - Duration::from_millis(1000)));
+    let debounce_duration = Duration::from_millis(300);
+
     let mut watcher = notify::recommended_watcher(
         move |res: Result<notify::Event, notify::Error>| {
             if let Ok(event) = res {
                 if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
-                    let _ = tx.blocking_send(());
+                    for path in &event.paths {
+                        if is_upload_folder(path.to_str().unwrap()) {
+                            return;
+                        }
+                    }
+                    println!("event {:?}", event.paths.iter().map(|f|f.to_str().unwrap_or("")).collect::<Vec<&str>>().join("|"));
+
+                    // Simple debouncing - only send if enough time has passed since last send
+                    let now = std::time::Instant::now();
+                    let mut last_time = last_send_time.blocking_lock();
+
+                    if now.duration_since(*last_time) >= debounce_duration {
+                        *last_time = now;
+                        let _ = tx.blocking_send(());
+                    }
                 }
             }
         }
     ).unwrap();
 
     watcher.watch(Path::new(&args.folder), RecursiveMode::Recursive).unwrap();
-    if args.dev {
-        watcher.watch(Path::new("src/home"), RecursiveMode::Recursive).unwrap();
-    }
 
     let result = tokio::select! {
         _ = main_logic => {
