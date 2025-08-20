@@ -17,9 +17,9 @@ It works by scanning a directory and mapping its structure directly to API route
 -   🖼️ **Static File Serving**: Automatically serves any file (like images, CSS, or JS) with its correct `Content-Type` if the filename doesn't match a method pattern.
 -   📊 **JGD Support**: Generate dynamic JSON responses using JGD (JSON Generation Definition) files with the [JGD-rs library](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs) for realistic test data.
 -   🌐 **Public Directory Serving**: Serve a directory of static files (e.g., a frontend build) from a root public folder, or map a folder like public-assets to a custom /assets route.
--   � **Hot Reload**: Automatically restarts the server when files are added, modified, or deleted in the mock directory.
+-   🔄 **Hot Reload**: Automatically restarts the server when files are added, modified, or deleted in the mock directory.
 -   🌐 **Web Interface**: Access the root URL to get an interactive web interface for testing all your endpoints directly in the browser.
--   �🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
+-   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
 
 ---
