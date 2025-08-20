@@ -352,7 +352,7 @@ class ApiRequestSender extends HTMLElement {
         // 1. Construct URL
         if (param) {
             const paramInput = this.shadowRoot.getElementById("param-input");
-            route = route.replace(param, paramInput.value || "");
+            route = `${route}/${paramInput.value || ""}`;
         }
 
         if (method === "GET") {
