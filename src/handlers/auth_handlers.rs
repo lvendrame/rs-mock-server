@@ -97,7 +97,7 @@ fn generate_token(item: Value, auth_collection: &ProtectedMemCollection) -> Resp
         if let Some(obj) = user_data.as_object_mut() {
             obj.insert(TOKEN_FIELD.to_string(), Value::String(token.clone())); // add token
         }
-        let mut auth_collection = auth_collection.lock().unwrap();
+        let mut auth_collection = auth_collection.write().unwrap();
         auth_collection.add(user_data);
     }
 
@@ -138,7 +138,7 @@ pub fn create_login_route(
     let create_router = post(move |Json(payload): Json<Value>| {
         async move {
             if let Some((username, password)) = try_get_auth_info(payload) {
-                let user_collection = user_collection.lock().unwrap();
+                let user_collection = user_collection.read().unwrap();
 
                 return match user_collection.get(&username) {
                     Some(item) => if check_password(&item, password) {
@@ -169,7 +169,7 @@ pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) 
     let users_collection = build_rest_routes(app, &users_routes, file_path, USERNAME_FIELD, IdType::None, true);
     println!("✔️ Built REST routes for {}", users_routes);
 
-    if users_collection.lock().unwrap().count() == 0 {
+    if users_collection.read().unwrap().count() == 0 {
         app.auth_collection = None;
         return eprintln!("⚠️ Authentication routes were not created")
     }
@@ -265,7 +265,7 @@ pub fn make_auth_middleware(
 
             // Check if token exists in auth_collection (for token revocation/blacklisting)
             {
-                let auth_collection = auth_collection.lock().unwrap();
+                let auth_collection = auth_collection.read().unwrap();
                 if !auth_collection.exists(&token) {
                     return Err(StatusCode::UNAUTHORIZED);
                 }
@@ -296,7 +296,7 @@ pub fn create_logout_route(
 
             // Remove token from auth collection (logout/revoke)
             {
-                let mut auth_collection = auth_collection.lock().unwrap();
+                let mut auth_collection = auth_collection.write().unwrap();
                 auth_collection.delete(&token);
             }
 

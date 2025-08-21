@@ -1,9 +1,9 @@
-use std::{collections::HashMap, ffi::OsString, fs, sync::{Arc, Mutex}};
+use std::{collections::HashMap, ffi::OsString, fs, sync::{Arc, RwLock}};
 use serde_json::Value;
 
 use crate::id_manager::{IdManager, IdType, IdValue};
 
-pub type ProtectedMemCollection = Arc<Mutex<InMemoryCollection>>;
+pub type ProtectedMemCollection = Arc<RwLock<InMemoryCollection>>;
 
 pub struct InMemoryCollection {
     db: HashMap<String, Value>,
@@ -25,7 +25,7 @@ impl InMemoryCollection {
     }
 
     pub fn into_protected(self) -> ProtectedMemCollection {
-        Arc::new(Mutex::new(self))
+        Arc::new(RwLock::new(self))
     }
 
     pub fn get_all(&self) -> Vec<Value> {
@@ -265,7 +265,7 @@ mod tests {
         let collection = create_test_collection();
         let protected = collection.into_protected();
 
-        let guard = protected.lock().unwrap();
+        let guard = protected.read().unwrap();
         assert_eq!(guard.count(), 0);
         assert_eq!(guard.name, Some("test_collection".to_string()));
     }

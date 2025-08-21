@@ -73,22 +73,23 @@ async fn run_app_session(args: &Args) -> SessionResult {
     let mut watcher = notify::recommended_watcher(
         move |res: Result<notify::Event, notify::Error>| {
             if let Ok(event) = res {
-                if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
-                    for path in &event.paths {
-                        if is_upload_folder(path.to_str().unwrap()) {
+                for path in &event.paths {
+                    if is_upload_folder(path.to_str().unwrap()) {
+                        // For upload folders, only allow modify events for folders, skip all file events
+                        if !path.is_dir() {
                             return;
                         }
                     }
-                    println!("event {:?}", event.paths.iter().map(|f|f.to_str().unwrap_or("")).collect::<Vec<&str>>().join("|"));
+                }
+                println!("event {:?}", event.paths.iter().map(|f|f.to_str().unwrap_or("")).collect::<Vec<&str>>().join("|"));
 
-                    // Simple debouncing - only send if enough time has passed since last send
-                    let now = std::time::Instant::now();
-                    let mut last_time = last_send_time.blocking_lock();
+                // Simple debouncing - only send if enough time has passed since last send
+                let now = std::time::Instant::now();
+                let mut last_time = last_send_time.blocking_lock();
 
-                    if now.duration_since(*last_time) >= debounce_duration {
-                        *last_time = now;
-                        let _ = tx.blocking_send(());
-                    }
+                if now.duration_since(*last_time) >= debounce_duration {
+                    *last_time = now;
+                    let _ = tx.blocking_send(());
                 }
             }
         }

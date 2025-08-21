@@ -15,7 +15,7 @@ pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection
     let list_collection = Arc::clone(collection);
     let list_router = get(move || {
         async move {
-            let list_collection = list_collection.lock().unwrap();
+            let list_collection = list_collection.read().unwrap();
             let items = list_collection.get_all();
             Json(items).into_response()
         }
@@ -29,7 +29,7 @@ pub fn create_insert(app: &mut App, route: &str, is_protected: bool, collection:
     let create_collection = Arc::clone(collection);
     let create_router = post(move |Json(payload): Json<Value>| {
         async move {
-            let mut create_collection = create_collection.lock().unwrap();
+            let mut create_collection = create_collection.write().unwrap();
             match create_collection.add(payload) {
                 Some(item) => (StatusCode::CREATED, Json(item)).into_response(),
                 None => StatusCode::BAD_REQUEST.into_response(),
@@ -45,7 +45,7 @@ pub fn create_get_item(app: &mut App, id_route: &str, is_protected: bool, collec
     let get_collection = Arc::clone(collection);
     let get_router = get(move |AxumPath(id): AxumPath<String>| {
         async move {
-            let get_collection = get_collection.lock().unwrap();
+            let get_collection = get_collection.read().unwrap();
             match get_collection.get(&id) {
                 Some(item) => Json(item).into_response(),
                 None => StatusCode::NOT_FOUND.into_response(),
@@ -61,7 +61,7 @@ pub fn create_full_update(app: &mut App, id_route: &str, is_protected: bool, col
     let update_collection = Arc::clone(collection);
     let put_router = put(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
         async move {
-            let mut update_collection = update_collection.lock().unwrap();
+            let mut update_collection = update_collection.write().unwrap();
             match update_collection.update(&id, payload) {
                 Some(item) => Json(item).into_response(),
                 None => StatusCode::NOT_FOUND.into_response(),
@@ -77,7 +77,7 @@ pub fn create_partial_update(app: &mut App, id_route: &str, is_protected: bool, 
     let patch_collection = Arc::clone(collection);
     let patch_router = patch(move |AxumPath(id): AxumPath<String>, Json(payload): Json<Value>| {
         async move {
-            let mut patch_collection = patch_collection.lock().unwrap();
+            let mut patch_collection = patch_collection.write().unwrap();
             match patch_collection.update_partial(&id, payload) {
                 Some(item) => Json(item).into_response(),
                 None => StatusCode::NOT_FOUND.into_response(),
@@ -93,7 +93,7 @@ pub fn create_delete(app: &mut App, id_route: &str, is_protected: bool, collecti
     let delete_collection = Arc::clone(collection);
     let delete_router = delete(move |AxumPath(id): AxumPath<String>| {
         async move {
-            let mut delete_collection = delete_collection.lock().unwrap();
+            let mut delete_collection = delete_collection.write().unwrap();
             match delete_collection.delete(&id) {
                 Some(item) => Json(item).into_response(),
                 None => StatusCode::NOT_FOUND.into_response(),
