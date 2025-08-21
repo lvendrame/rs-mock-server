@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsString, fs, sync::{Arc, RwLock}};
 use serde_json::Value;
 
-use crate::id_manager::{IdManager, IdType, IdValue};
+use crate::{criteria::Criteria, id_manager::{IdManager, IdType, IdValue}};
 
 pub type ProtectedMemCollection = Arc<RwLock<InMemoryCollection>>;
 
@@ -42,6 +42,16 @@ impl InMemoryCollection {
 
     pub fn get(&self, id: &str) -> Option<Value> {
         self.db.get(id).cloned()
+    }
+
+    pub fn get_from_criteria(&self, criteria: Criteria) -> Vec<Value> {
+        self.db.values().filter(|&item| {
+                match item {
+                    Value::Object(map) => criteria.compare_item(map),
+                    _ => false
+                }
+            }).cloned()
+            .collect::<Vec<Value>>()
     }
 
     pub fn exists(&self, id: &str) -> bool {
@@ -239,6 +249,7 @@ impl InMemoryCollection {
 mod tests {
     use super::*;
     use serde_json::json;
+    use crate::criteria::Comparer;
 
     fn create_test_collection() -> InMemoryCollection {
         InMemoryCollection::new(IdType::Int, "id".to_string(), Some("test_collection".to_string()))
@@ -1031,5 +1042,441 @@ mod tests {
         let item1 = collection.get("1").unwrap();
         assert_eq!(item1.get("customId").unwrap(), 1);
         assert_eq!(item1.get("name").unwrap(), "Item 1");
+    }
+
+    // Tests for get_from_criteria method
+    #[test]
+    fn test_get_from_criteria_equal() {
+        let mut collection = create_test_collection();
+
+        // Add test data
+        collection.add(json!({"name": "Alice", "age": 25, "city": "New York"}));
+        collection.add(json!({"name": "Bob", "age": 30, "city": "Boston"}));
+        collection.add(json!({"name": "Alice", "age": 28, "city": "Seattle"}));
+        collection.add(json!({"name": "Charlie", "age": 25, "city": "New York"}));
+
+        // Test equal comparison for string
+        let criteria = Criteria::try_new(
+            "name".to_string(),
+            Comparer::Equal,
+            Some(json!("Alice"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2);
+
+        for result in &results {
+            assert_eq!(result.get("name").unwrap(), "Alice");
+        }
+
+        // Test equal comparison for number
+        let criteria = Criteria::try_new(
+            "age".to_string(),
+            Comparer::Equal,
+            Some(json!(25))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2);
+
+        for result in &results {
+            assert_eq!(result.get("age").unwrap(), 25);
+        }
+    }
+
+    #[test]
+    fn test_get_from_criteria_different() {
+        let mut collection = create_test_collection();
+
+        // Add test data
+        collection.add(json!({"name": "Alice", "age": 25, "active": true}));
+        collection.add(json!({"name": "Bob", "age": 30, "active": false}));
+        collection.add(json!({"name": "Charlie", "age": 25, "active": true}));
+
+        // Test different comparison for string
+        let criteria = Criteria::try_new(
+            "name".to_string(),
+            Comparer::Different,
+            Some(json!("Alice"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2);
+
+        for result in &results {
+            assert_ne!(result.get("name").unwrap(), "Alice");
+        }
+
+        // Test different comparison for boolean
+        let criteria = Criteria::try_new(
+            "active".to_string(),
+            Comparer::Different,
+            Some(json!(true))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].get("name").unwrap(), "Bob");
+    }
+
+    #[test]
+    fn test_get_from_criteria_numeric_comparisons() {
+        let mut collection = create_test_collection();
+
+        // Add test data with different ages and scores
+        collection.add(json!({"name": "Alice", "age": 25, "score": 85.5}));
+        collection.add(json!({"name": "Bob", "age": 30, "score": 92.0}));
+        collection.add(json!({"name": "Charlie", "age": 35, "score": 78.5}));
+        collection.add(json!({"name": "David", "age": 20, "score": 95.0}));
+
+        // Test greater than
+        let criteria = Criteria::try_new(
+            "age".to_string(),
+            Comparer::GreaterThan,
+            Some(json!(25))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Bob (30) and Charlie (35)
+
+        let ages: Vec<i64> = results.iter()
+            .map(|r| r.get("age").unwrap().as_i64().unwrap())
+            .collect();
+        assert!(ages.contains(&30));
+        assert!(ages.contains(&35));
+
+        // Test greater than or equal
+        let criteria = Criteria::try_new(
+            "age".to_string(),
+            Comparer::GreaterThanOrEqual,
+            Some(json!(30))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Bob (30) and Charlie (35)
+
+        // Test less than
+        let criteria = Criteria::try_new(
+            "score".to_string(),
+            Comparer::LessThan,
+            Some(json!(90.0))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Alice (85.5) and Charlie (78.5)
+
+        // Test less than or equal
+        let criteria = Criteria::try_new(
+            "score".to_string(),
+            Comparer::LessThanOrEqual,
+            Some(json!(85.5))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Alice (85.5) and Charlie (78.5)
+    }
+
+    #[test]
+    fn test_get_from_criteria_like_patterns() {
+        let mut collection = create_test_collection();
+
+        // Add test data with email addresses
+        collection.add(json!({"name": "Alice", "email": "alice@gmail.com"}));
+        collection.add(json!({"name": "Bob", "email": "bob@company.com"}));
+        collection.add(json!({"name": "Charlie", "email": "charlie@gmail.com"}));
+        collection.add(json!({"name": "David", "email": "david@yahoo.com"}));
+
+        // Test LIKE with % wildcard
+        let criteria = Criteria::try_new(
+            "email".to_string(),
+            Comparer::Like,
+            Some(json!("%@gmail.com"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Alice and Charlie
+
+        let names: Vec<&str> = results.iter()
+            .map(|r| r.get("name").unwrap().as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"Alice"));
+        assert!(names.contains(&"Charlie"));
+
+        // Test LIKE with _ wildcard
+        let criteria = Criteria::try_new(
+            "name".to_string(),
+            Comparer::Like,
+            Some(json!("B_b"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].get("name").unwrap(), "Bob");
+
+        // Test complex pattern
+        let criteria = Criteria::try_new(
+            "email".to_string(),
+            Comparer::Like,
+            Some(json!("%@%.com"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 4); // All emails end with .com
+    }
+
+    #[test]
+    fn test_get_from_criteria_null_checks() {
+        let mut collection = create_test_collection();
+
+        // Add test data with some null values
+        collection.add(json!({"name": "Alice", "phone": "123-456-7890", "notes": null}));
+        collection.add(json!({"name": "Bob", "phone": null, "notes": "Important client"}));
+        collection.add(json!({"name": "Charlie", "phone": "987-654-3210", "notes": null}));
+
+        // Test IS NULL
+        let criteria = Criteria::try_new(
+            "phone".to_string(),
+            Comparer::IsNull,
+            None
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].get("name").unwrap(), "Bob");
+
+        // Test IS NOT NULL
+        let criteria = Criteria::try_new(
+            "phone".to_string(),
+            Comparer::IsNotNull,
+            None
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Alice and Charlie
+
+        let names: Vec<&str> = results.iter()
+            .map(|r| r.get("name").unwrap().as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"Alice"));
+        assert!(names.contains(&"Charlie"));
+
+        // Test IS NULL for notes
+        let criteria = Criteria::try_new(
+            "notes".to_string(),
+            Comparer::IsNull,
+            None
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Alice and Charlie
+    }
+
+    #[test]
+    fn test_get_from_criteria_no_matches() {
+        let mut collection = create_test_collection();
+
+        // Add test data
+        collection.add(json!({"name": "Alice", "age": 25}));
+        collection.add(json!({"name": "Bob", "age": 30}));
+
+        // Test with criteria that matches nothing
+        let criteria = Criteria::try_new(
+            "name".to_string(),
+            Comparer::Equal,
+            Some(json!("NonExistent"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert!(results.is_empty());
+
+        // Test with field that doesn't exist
+        let criteria = Criteria::try_new(
+            "salary".to_string(),
+            Comparer::GreaterThan,
+            Some(json!(50000))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_get_from_criteria_empty_collection() {
+        let collection = create_test_collection();
+
+        let criteria = Criteria::try_new(
+            "name".to_string(),
+            Comparer::Equal,
+            Some(json!("Alice"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_get_from_criteria_with_non_object_values() {
+        let mut collection = InMemoryCollection::new(
+            IdType::None,
+            "id".to_string(),
+            Some("test_collection".to_string())
+        );
+
+        // Manually insert some non-object values (this shouldn't happen in normal usage)
+        collection.db.insert("1".to_string(), json!("string_value"));
+        collection.db.insert("2".to_string(), json!(42));
+        collection.db.insert("3".to_string(), json!({"name": "Alice", "age": 25}));
+
+        let criteria = Criteria::try_new(
+            "name".to_string(),
+            Comparer::Equal,
+            Some(json!("Alice"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 1); // Only the object should match
+        assert_eq!(results[0].get("name").unwrap(), "Alice");
+    }
+
+    #[test]
+    fn test_get_from_criteria_complex_data() {
+        let mut collection = create_test_collection();
+
+        // Add complex test data
+        collection.add(json!({
+            "name": "Alice",
+            "age": 25,
+            "department": "Engineering",
+            "salary": 75000.50,
+            "active": true,
+            "skills": ["Rust", "JavaScript", "Python"],
+            "address": {
+                "city": "New York",
+                "state": "NY"
+            }
+        }));
+
+        collection.add(json!({
+            "name": "Bob",
+            "age": 30,
+            "department": "Marketing",
+            "salary": 65000.00,
+            "active": false,
+            "skills": ["Marketing", "Analytics"],
+            "address": {
+                "city": "Boston",
+                "state": "MA"
+            }
+        }));
+
+        collection.add(json!({
+            "name": "Charlie",
+            "age": 35,
+            "department": "Engineering",
+            "salary": 85000.75,
+            "active": true,
+            "skills": ["Java", "Python", "SQL"],
+            "address": {
+                "city": "Seattle",
+                "state": "WA"
+            }
+        }));
+
+        // Test filtering by department
+        let criteria = Criteria::try_new(
+            "department".to_string(),
+            Comparer::Equal,
+            Some(json!("Engineering"))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Alice and Charlie
+
+        // Test filtering by salary range
+        let criteria = Criteria::try_new(
+            "salary".to_string(),
+            Comparer::GreaterThan,
+            Some(json!(70000.0))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Alice and Charlie
+
+        // Test filtering by active status
+        let criteria = Criteria::try_new(
+            "active".to_string(),
+            Comparer::Equal,
+            Some(json!(true))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2); // Alice and Charlie
+
+        let names: Vec<&str> = results.iter()
+            .map(|r| r.get("name").unwrap().as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"Alice"));
+        assert!(names.contains(&"Charlie"));
+    }
+
+    #[test]
+    fn test_get_from_criteria_edge_cases() {
+        let mut collection = create_test_collection();
+
+        // Add data with edge case values
+        collection.add(json!({"name": "", "score": 0, "flag": false}));
+        collection.add(json!({"name": " ", "score": 0.0, "flag": true}));
+        collection.add(json!({"name": "Test", "score": -1, "flag": false}));
+
+        // Test empty string
+        let criteria = Criteria::try_new(
+            "name".to_string(),
+            Comparer::Equal,
+            Some(json!(""))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 1);
+
+        // Test zero values - note that JSON treats 0 and 0.0 differently
+        let criteria = Criteria::try_new(
+            "score".to_string(),
+            Comparer::Equal,
+            Some(json!(0))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 1); // Only the integer 0 should match
+
+        // Test with 0.0 specifically
+        let criteria = Criteria::try_new(
+            "score".to_string(),
+            Comparer::Equal,
+            Some(json!(0.0))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 1); // Only the float 0.0 should match
+
+        // Test false boolean
+        let criteria = Criteria::try_new(
+            "flag".to_string(),
+            Comparer::Equal,
+            Some(json!(false))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 2);
+
+        // Test negative numbers
+        let criteria = Criteria::try_new(
+            "score".to_string(),
+            Comparer::LessThan,
+            Some(json!(0))
+        ).unwrap();
+
+        let results = collection.get_from_criteria(criteria);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].get("name").unwrap(), "Test");
     }
 }

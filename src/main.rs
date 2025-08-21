@@ -17,6 +17,7 @@ pub mod app;
 pub mod link;
 pub mod pages;
 pub mod upload_configuration;
+pub mod criteria;
 
 /// rs-mock-server is a simple mock server for testing APIs.
 /// It serves static files as API responses based on their filenames and directory structure.
