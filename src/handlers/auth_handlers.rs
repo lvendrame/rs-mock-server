@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App, handlers::build_rest_routes, id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}
+    app::App, criteria::{Comparer, Criteria}, handlers::build_rest_routes, id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}
 };
 
+static ID_FIELD: &str = "id";
 static USERNAME_FIELD: &str = "username";
 static PASSWORD_FIELD: &str = "password";
 static TOKEN_FIELD: &str = "token";
@@ -47,7 +48,7 @@ fn check_password(item: &Value, password: String) -> bool {
     false
 }
 
-fn generate_token(item: Value, auth_collection: &ProtectedMemCollection) -> Response<axum::body::Body> {
+fn generate_token(item: &Value, auth_collection: &ProtectedMemCollection) -> Response<axum::body::Body> {
     // Extract username from the user data
     let username = item.get(USERNAME_FIELD)
         .and_then(|v| v.as_str())
@@ -140,8 +141,18 @@ pub fn create_login_route(
             if let Some((username, password)) = try_get_auth_info(payload) {
                 let user_collection = user_collection.read().unwrap();
 
-                return match user_collection.get(&username) {
-                    Some(item) => if check_password(&item, password) {
+                let criteria = Criteria::try_new(USERNAME_FIELD.to_string(), Comparer::Equal, Some(Value::String(username.clone())));
+                if criteria.is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+
+                let users = user_collection.get_from_criteria(criteria.unwrap());
+                if users.is_empty() {
+                    return StatusCode::UNAUTHORIZED.into_response();
+                }
+
+                return match users.first() {
+                    Some(item) => if check_password(item, password) {
                         (StatusCode::OK, generate_token(item, &auth_collection)).into_response()
                     } else {
                         StatusCode::UNAUTHORIZED.into_response()
@@ -166,7 +177,7 @@ pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) 
     app.auth_collection = Some(Arc::clone( &auth_collection));
 
     let users_routes = format!("{}/users", route_path);
-    let users_collection = build_rest_routes(app, &users_routes, file_path, USERNAME_FIELD, IdType::None, true);
+    let users_collection = build_rest_routes(app, &users_routes, file_path, ID_FIELD, IdType::None, true);
     println!("✔️ Built REST routes for {}", users_routes);
 
     if users_collection.read().unwrap().count() == 0 {

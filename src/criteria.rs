@@ -44,20 +44,79 @@ impl TryFrom<&str> for Criteria {
     type Error = String;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let parts: Vec<_> = value.split(" ").collect();
-        if parts.len() < 2 || parts.len() > 3 {
-            return Err(format!("Invalid Criteria: '{}'", value));
+        let parts: Vec<&str> = value.split_whitespace().collect();
+        if parts.len() < 2 {
+            return Err(format!("Invalid Criteria: '{}'. Must have at least field and operator", value));
         }
+
         let field = parts[0].to_string();
-        let comparer = Comparer::try_from(value)?;
-        let value = if parts.len() > 2 {
-            Some(Value::from(parts[2]))
+
+        // Handle multi-word operators like "IS NULL" and "IS NOT NULL"
+        let (comparer, value_start_index) = if parts.len() >= 3 && parts[1].to_uppercase() == "IS" {
+            if parts.len() >= 4 && parts[2].to_uppercase() == "NOT" && parts[3].to_uppercase() == "NULL" {
+                // "IS NOT NULL" case
+                let operator_str = format!("{} {} {}", parts[1], parts[2], parts[3]);
+                let comparer = Comparer::try_from(operator_str.as_str())?;
+                (comparer, 4)
+            } else if parts.len() >= 3 && parts[2].to_uppercase() == "NULL" {
+                // "IS NULL" case
+                let operator_str = format!("{} {}", parts[1], parts[2]);
+                let comparer = Comparer::try_from(operator_str.as_str())?;
+                (comparer, 3)
+            } else {
+                return Err(format!("Invalid operator starting with 'IS' in: '{}'", value));
+            }
+        } else {
+            // Single-word operators
+            let comparer = Comparer::try_from(parts[1])?;
+            (comparer, 2)
+        };
+
+        // Parse value if present
+        let criteria_value = if parts.len() > value_start_index {
+            // Join remaining parts for multi-word values
+            let value_str = parts[value_start_index..].join(" ");
+            Some(parse_value(&value_str))
         } else {
             None
         };
 
-        Criteria::try_new(field, comparer, value)
+        Criteria::try_new(field, comparer, criteria_value)
     }
+}
+
+fn parse_value(value_str: &str) -> Value {
+    // Try to parse as different types in order of specificity
+
+    // Check if it's a quoted string (single or double quotes)
+    if (value_str.starts_with('"') && value_str.ends_with('"') && value_str.len() >= 2) ||
+       (value_str.starts_with('\'') && value_str.ends_with('\'') && value_str.len() >= 2) {
+        // Remove the quotes and return as string
+        let unquoted = &value_str[1..value_str.len()-1];
+        return Value::String(unquoted.to_string());
+    }
+
+    // Try boolean first
+    match value_str.to_lowercase().as_str() {
+        "true" => return Value::Bool(true),
+        "false" => return Value::Bool(false),
+        "null" => return Value::Null,
+        _ => {}
+    }
+
+    // Try to parse as number
+    if let Ok(int_val) = value_str.parse::<i64>() {
+        return Value::Number(serde_json::Number::from(int_val));
+    }
+
+    if let Ok(float_val) = value_str.parse::<f64>() {
+        if let Some(num) = serde_json::Number::from_f64(float_val) {
+            return Value::Number(num);
+        }
+    }
+
+    // Default to string for unquoted text
+    Value::String(value_str.to_string())
 }
 
 impl Criteria {
@@ -615,6 +674,236 @@ mod tests {
 
         assert!(different_criteria.compare_with(&json!(true)));
         assert!(!different_criteria.compare_with(&json!(false)));
+    }
+
+    // Tests for Criteria::try_from
+    #[test]
+    fn test_criteria_try_from_simple_equal() {
+        let criteria = Criteria::try_from("name = \"John\"").unwrap();
+        assert_eq!(criteria.field, "name");
+        assert_eq!(criteria.comparer, Comparer::Equal);
+        assert_eq!(criteria.value, json!("John"));
+    }
+
+    #[test]
+    fn test_criteria_try_from_numeric_comparisons() {
+        // Now these should work because we parse values properly
+        let criteria = Criteria::try_from("age > 25").unwrap();
+        assert_eq!(criteria.field, "age");
+        assert_eq!(criteria.comparer, Comparer::GreaterThan);
+        assert_eq!(criteria.value, json!(25));
+
+        let criteria = Criteria::try_from("score <= 100.5").unwrap();
+        assert_eq!(criteria.field, "score");
+        assert_eq!(criteria.comparer, Comparer::LessThanOrEqual);
+        assert_eq!(criteria.value, json!(100.5));
+
+        let criteria = Criteria::try_from("count >= 0").unwrap();
+        assert_eq!(criteria.field, "count");
+        assert_eq!(criteria.comparer, Comparer::GreaterThanOrEqual);
+        assert_eq!(criteria.value, json!(0));
+    }
+
+    #[test]
+    fn test_criteria_try_from_string_comparisons() {
+        let criteria = Criteria::try_from("email LIKE \"pattern\"").unwrap();
+        assert_eq!(criteria.field, "email");
+        assert_eq!(criteria.comparer, Comparer::Like);
+        assert_eq!(criteria.value, json!("pattern"));
+
+        let criteria = Criteria::try_from("status != \"active\"").unwrap();
+        assert_eq!(criteria.field, "status");
+        assert_eq!(criteria.comparer, Comparer::Different);
+        assert_eq!(criteria.value, json!("active"));
+
+        let criteria = Criteria::try_from("category <> \"old\"").unwrap();
+        assert_eq!(criteria.field, "category");
+        assert_eq!(criteria.comparer, Comparer::Different);
+        assert_eq!(criteria.value, json!("old"));
+    }
+
+    #[test]
+    fn test_criteria_try_from_null_checks() {
+        // Now these should work with multi-word operators
+        let criteria = Criteria::try_from("phone IS NULL").unwrap();
+        assert_eq!(criteria.field, "phone");
+        assert_eq!(criteria.comparer, Comparer::IsNull);
+        assert_eq!(criteria.value, json!(null));
+
+        let criteria = Criteria::try_from("email IS NOT NULL").unwrap();
+        assert_eq!(criteria.field, "email");
+        assert_eq!(criteria.comparer, Comparer::IsNotNull);
+        assert_eq!(criteria.value, json!(null));
+
+        // Test case insensitive
+        let criteria = Criteria::try_from("notes is null").unwrap();
+        assert_eq!(criteria.field, "notes");
+        assert_eq!(criteria.comparer, Comparer::IsNull);
+
+        let criteria = Criteria::try_from("description is not null").unwrap();
+        assert_eq!(criteria.field, "description");
+        assert_eq!(criteria.comparer, Comparer::IsNotNull);
+    }
+
+    #[test]
+    fn test_criteria_try_from_two_parts_only() {
+        // Test cases with only field and operator (no value) - for null checks
+        let criteria = Criteria::try_from("field IS NULL").unwrap();
+        assert_eq!(criteria.comparer, Comparer::IsNull);
+
+        // Other operators should fail validation when no value is provided
+        let result = Criteria::try_from("field =");
+        assert!(result.is_err()); // No value for = operator
+
+        let result = Criteria::try_from("field >");
+        assert!(result.is_err()); // No value for > operator
+    }
+
+    #[test]
+    fn test_criteria_try_from_invalid_formats() {
+        // Too few parts
+        assert!(Criteria::try_from("name").is_err());
+        assert!(Criteria::try_from("").is_err());
+
+        // The new implementation allows multiple parts for multi-word values
+        // so "name = value extra" is now valid and would be parsed as "value extra"
+        let criteria = Criteria::try_from("name = \"value extra\"").unwrap();
+        assert_eq!(criteria.value, json!("value extra"));
+
+        // Invalid operator
+        assert!(Criteria::try_from("name == \"value\"").is_err());
+        assert!(Criteria::try_from("age === 25").is_err());
+        assert!(Criteria::try_from("field INVALID \"value\"").is_err());
+    }
+
+
+
+    #[test]
+    fn test_criteria_try_from_different_operators() {
+        // These should now work with proper value parsing
+        let criteria = Criteria::try_from("score < 50").unwrap();
+        assert_eq!(criteria.comparer, Comparer::LessThan);
+        assert_eq!(criteria.value, json!(50));
+
+        let criteria = Criteria::try_from("level >= 5").unwrap();
+        assert_eq!(criteria.comparer, Comparer::GreaterThanOrEqual);
+        assert_eq!(criteria.value, json!(5));
+
+        let criteria = Criteria::try_from("name like \"pattern\"").unwrap();
+        assert_eq!(criteria.comparer, Comparer::Like);
+        assert_eq!(criteria.value, json!("pattern"));
+    }
+
+    #[test]
+    fn test_criteria_try_from_case_sensitivity() {
+        // Test that LIKE operator is case insensitive in Comparer::try_from
+        let criteria1 = Criteria::try_from("name LIKE pattern").unwrap();
+        let criteria2 = Criteria::try_from("name like pattern").unwrap();
+        assert_eq!(criteria1.comparer, criteria2.comparer);
+    }
+
+    #[test]
+    fn test_criteria_try_from_validation_failures() {
+        // These should fail due to validation in try_new, not parsing
+        let result = Criteria::try_from("field INVALID \"value\"");
+        assert!(result.is_err()); // Invalid operator
+
+        // Arrays and objects should fail validation for most operators
+        // But our parser doesn't handle complex JSON, so these will be strings
+    }
+
+    #[test]
+    fn test_criteria_try_from_boolean_and_null_values() {
+        // Test parsing of boolean values
+        let criteria = Criteria::try_from("active = true").unwrap();
+        assert_eq!(criteria.field, "active");
+        assert_eq!(criteria.comparer, Comparer::Equal);
+        assert_eq!(criteria.value, json!(true));
+
+        let criteria = Criteria::try_from("disabled != false").unwrap();
+        assert_eq!(criteria.field, "disabled");
+        assert_eq!(criteria.comparer, Comparer::Different);
+        assert_eq!(criteria.value, json!(false));
+
+        // Test parsing of null values - but note that null is not allowed for Equal operator due to validation
+        let result = Criteria::try_from("value = null");
+        assert!(result.is_err()); // Null not allowed for Equal operator
+
+        // Null should work with Different operator
+        let result = Criteria::try_from("value != null");
+        assert!(result.is_err()); // Null not allowed for Different operator either
+
+        // The only place null values work is with IS NULL/IS NOT NULL which don't take values
+    }
+
+    #[test]
+    fn test_criteria_try_from_multi_word_values() {
+        // Test values with spaces
+        let criteria = Criteria::try_from("name = \"John Doe\"").unwrap();
+        assert_eq!(criteria.field, "name");
+        assert_eq!(criteria.comparer, Comparer::Equal);
+        assert_eq!(criteria.value, json!("John Doe"));
+
+        let criteria = Criteria::try_from("description LIKE \"hello world\"").unwrap();
+        assert_eq!(criteria.field, "description");
+        assert_eq!(criteria.comparer, Comparer::Like);
+        assert_eq!(criteria.value, json!("hello world"));
+    }
+
+    #[test]
+    fn test_criteria_try_from_edge_cases() {
+        // Single character field name
+        let criteria = Criteria::try_from("x = 5").unwrap();
+        assert_eq!(criteria.field, "x");
+        assert_eq!(criteria.value, json!(5)); // Now parsed as number
+
+        // Single character value
+        let criteria = Criteria::try_from("grade = \"A\"").unwrap();
+        assert_eq!(criteria.value, json!("A"));
+
+        // Negative numbers
+        let criteria = Criteria::try_from("temperature < -10").unwrap();
+        assert_eq!(criteria.value, json!(-10));
+
+        // Float numbers
+        let criteria = Criteria::try_from("price >= 99.99").unwrap();
+        assert_eq!(criteria.value, json!(99.99));
+
+        // Scientific notation
+        let criteria = Criteria::try_from("value > 1e6").unwrap();
+        assert_eq!(criteria.value, json!(1000000.0));
+
+        // Test whitespace handling
+        let criteria = Criteria::try_from("  name   =   \"John\"  ").unwrap();
+        assert_eq!(criteria.field, "name");
+        assert_eq!(criteria.value, json!("John"));
+    }
+
+    #[test]
+    fn test_parse_value_helper() {
+        // Test the parse_value function directly
+        assert_eq!(parse_value("true"), json!(true));
+        assert_eq!(parse_value("TRUE"), json!(true));
+        assert_eq!(parse_value("false"), json!(false));
+        assert_eq!(parse_value("FALSE"), json!(false));
+        assert_eq!(parse_value("null"), json!(null));
+        assert_eq!(parse_value("NULL"), json!(null));
+
+        assert_eq!(parse_value("42"), json!(42));
+        assert_eq!(parse_value("-17"), json!(-17));
+        assert_eq!(parse_value("3.14"), json!(std::f32::consts::PI));
+        assert_eq!(parse_value("1e6"), json!(1000000.0));
+
+        // Test quoted strings
+        assert_eq!(parse_value("\"hello\""), json!("hello"));
+        assert_eq!(parse_value("'world'"), json!("world"));
+        assert_eq!(parse_value("\"123abc\""), json!("123abc"));
+        assert_eq!(parse_value("\"\""), json!(""));
+
+        // Test unquoted strings (treated as literals)
+        assert_eq!(parse_value("hello"), json!("hello"));
+        assert_eq!(parse_value("123abc"), json!("123abc"));
+        assert_eq!(parse_value(""), json!(""));
     }
 }
 
