@@ -891,7 +891,7 @@ mod tests {
 
         assert_eq!(parse_value("42"), json!(42));
         assert_eq!(parse_value("-17"), json!(-17));
-        assert_eq!(parse_value("3.14"), json!(std::f32::consts::PI));
+        assert_eq!(parse_value("3.18"), json!(3.18));
         assert_eq!(parse_value("1e6"), json!(1000000.0));
 
         // Test quoted strings
