@@ -8,7 +8,11 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App, criteria::{Comparer, Criteria}, handlers::build_rest_routes, id_manager::IdType, in_memory_collection::{InMemoryCollection, ProtectedMemCollection}
+    app::App,
+    memory_db::id_manager::IdType,
+    memory_db::criteria::{Comparer, Criteria},
+    memory_db::in_memory_collection::{InMemoryCollection, ProtectedMemCollection},
+    handlers::build_rest_routes
 };
 
 static ID_FIELD: &str = "id";

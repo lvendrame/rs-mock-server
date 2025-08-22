@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsString, fs, sync::{Arc, RwLock}};
 use serde_json::Value;
 
-use crate::{criteria::Criteria, id_manager::{IdManager, IdType, IdValue}};
+use crate::{memory_db::criteria::Criteria, memory_db::id_manager::{IdManager, IdType, IdValue}};
 
 pub type ProtectedMemCollection = Arc<RwLock<InMemoryCollection>>;
 
@@ -249,7 +249,7 @@ impl InMemoryCollection {
 mod tests {
     use super::*;
     use serde_json::json;
-    use crate::criteria::Comparer;
+    use crate::memory_db::criteria::Comparer;
 
     fn create_test_collection() -> InMemoryCollection {
         InMemoryCollection::new(IdType::Int, "id".to_string(), Some("test_collection".to_string()))

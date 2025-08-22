@@ -9,15 +9,13 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 use crate::app::App;
 
-pub mod in_memory_collection;
+pub mod memory_db;
 pub mod route_builder;
 pub mod handlers;
-pub mod id_manager;
 pub mod app;
 pub mod link;
 pub mod pages;
 pub mod upload_configuration;
-pub mod criteria;
 
 /// rs-mock-server is a simple mock server for testing APIs.
 /// It serves static files as API responses based on their filenames and directory structure.
