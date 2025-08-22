@@ -10,7 +10,7 @@ use chrono::{Utc, Duration};
 use crate::{
     app::App,
     memory_db::id_manager::IdType,
-    memory_db::constraint::{Comparer, Criteria},
+    memory_db::constraint::{Comparer, Constraint},
     memory_db::in_memory_collection::{InMemoryCollection, ProtectedMemCollection},
     handlers::build_rest_routes
 };
@@ -145,7 +145,7 @@ pub fn create_login_route(
             if let Some((username, password)) = try_get_auth_info(payload) {
                 let user_collection = user_collection.read().unwrap();
 
-                let criteria = Criteria::try_new(USERNAME_FIELD.to_string(), Comparer::Equal, Some(Value::String(username.clone())));
+                let criteria = Constraint::try_new(USERNAME_FIELD.to_string(), Comparer::Equal, Some(Value::String(username.clone())));
                 if criteria.is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }

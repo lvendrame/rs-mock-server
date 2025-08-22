@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsString, fs, sync::{Arc, RwLock}};
 use serde_json::Value;
 
-use crate::{memory_db::constraint::Criteria, memory_db::id_manager::{IdManager, IdType, IdValue}};
+use crate::{memory_db::constraint::Constraint, memory_db::id_manager::{IdManager, IdType, IdValue}};
 
 pub type ProtectedMemCollection = Arc<RwLock<InMemoryCollection>>;
 
@@ -44,7 +44,7 @@ impl InMemoryCollection {
         self.db.get(id).cloned()
     }
 
-    pub fn get_from_criteria(&self, criteria: Criteria) -> Vec<Value> {
+    pub fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value> {
         self.db.values().filter(|&item| {
                 match item {
                     Value::Object(map) => criteria.compare_item(map),
@@ -1056,7 +1056,7 @@ mod tests {
         collection.add(json!({"name": "Charlie", "age": 25, "city": "New York"}));
 
         // Test equal comparison for string
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("Alice"))
@@ -1070,7 +1070,7 @@ mod tests {
         }
 
         // Test equal comparison for number
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "age".to_string(),
             Comparer::Equal,
             Some(json!(25))
@@ -1094,7 +1094,7 @@ mod tests {
         collection.add(json!({"name": "Charlie", "age": 25, "active": true}));
 
         // Test different comparison for string
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Different,
             Some(json!("Alice"))
@@ -1108,7 +1108,7 @@ mod tests {
         }
 
         // Test different comparison for boolean
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "active".to_string(),
             Comparer::Different,
             Some(json!(true))
@@ -1130,7 +1130,7 @@ mod tests {
         collection.add(json!({"name": "David", "age": 20, "score": 95.0}));
 
         // Test greater than
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "age".to_string(),
             Comparer::GreaterThan,
             Some(json!(25))
@@ -1146,7 +1146,7 @@ mod tests {
         assert!(ages.contains(&35));
 
         // Test greater than or equal
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "age".to_string(),
             Comparer::GreaterThanOrEqual,
             Some(json!(30))
@@ -1156,7 +1156,7 @@ mod tests {
         assert_eq!(results.len(), 2); // Bob (30) and Charlie (35)
 
         // Test less than
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "score".to_string(),
             Comparer::LessThan,
             Some(json!(90.0))
@@ -1166,7 +1166,7 @@ mod tests {
         assert_eq!(results.len(), 2); // Alice (85.5) and Charlie (78.5)
 
         // Test less than or equal
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "score".to_string(),
             Comparer::LessThanOrEqual,
             Some(json!(85.5))
@@ -1187,7 +1187,7 @@ mod tests {
         collection.add(json!({"name": "David", "email": "david@yahoo.com"}));
 
         // Test LIKE with % wildcard
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "email".to_string(),
             Comparer::Like,
             Some(json!("%@gmail.com"))
@@ -1203,7 +1203,7 @@ mod tests {
         assert!(names.contains(&"Charlie"));
 
         // Test LIKE with _ wildcard
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Like,
             Some(json!("B_b"))
@@ -1214,7 +1214,7 @@ mod tests {
         assert_eq!(results[0].get("name").unwrap(), "Bob");
 
         // Test complex pattern
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "email".to_string(),
             Comparer::Like,
             Some(json!("%@%.com"))
@@ -1234,7 +1234,7 @@ mod tests {
         collection.add(json!({"name": "Charlie", "phone": "987-654-3210", "notes": null}));
 
         // Test IS NULL
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "phone".to_string(),
             Comparer::IsNull,
             None
@@ -1245,7 +1245,7 @@ mod tests {
         assert_eq!(results[0].get("name").unwrap(), "Bob");
 
         // Test IS NOT NULL
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "phone".to_string(),
             Comparer::IsNotNull,
             None
@@ -1261,7 +1261,7 @@ mod tests {
         assert!(names.contains(&"Charlie"));
 
         // Test IS NULL for notes
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "notes".to_string(),
             Comparer::IsNull,
             None
@@ -1280,7 +1280,7 @@ mod tests {
         collection.add(json!({"name": "Bob", "age": 30}));
 
         // Test with criteria that matches nothing
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("NonExistent"))
@@ -1290,7 +1290,7 @@ mod tests {
         assert!(results.is_empty());
 
         // Test with field that doesn't exist
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "salary".to_string(),
             Comparer::GreaterThan,
             Some(json!(50000))
@@ -1304,7 +1304,7 @@ mod tests {
     fn test_get_from_criteria_empty_collection() {
         let collection = create_test_collection();
 
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("Alice"))
@@ -1327,7 +1327,7 @@ mod tests {
         collection.db.insert("2".to_string(), json!(42));
         collection.db.insert("3".to_string(), json!({"name": "Alice", "age": 25}));
 
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("Alice"))
@@ -1383,7 +1383,7 @@ mod tests {
         }));
 
         // Test filtering by department
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "department".to_string(),
             Comparer::Equal,
             Some(json!("Engineering"))
@@ -1393,7 +1393,7 @@ mod tests {
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         // Test filtering by salary range
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "salary".to_string(),
             Comparer::GreaterThan,
             Some(json!(70000.0))
@@ -1403,7 +1403,7 @@ mod tests {
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         // Test filtering by active status
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "active".to_string(),
             Comparer::Equal,
             Some(json!(true))
@@ -1429,7 +1429,7 @@ mod tests {
         collection.add(json!({"name": "Test", "score": -1, "flag": false}));
 
         // Test empty string
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!(""))
@@ -1439,7 +1439,7 @@ mod tests {
         assert_eq!(results.len(), 1);
 
         // Test zero values - note that JSON treats 0 and 0.0 differently
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "score".to_string(),
             Comparer::Equal,
             Some(json!(0))
@@ -1449,7 +1449,7 @@ mod tests {
         assert_eq!(results.len(), 1); // Only the integer 0 should match
 
         // Test with 0.0 specifically
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "score".to_string(),
             Comparer::Equal,
             Some(json!(0.0))
@@ -1459,7 +1459,7 @@ mod tests {
         assert_eq!(results.len(), 1); // Only the float 0.0 should match
 
         // Test false boolean
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "flag".to_string(),
             Comparer::Equal,
             Some(json!(false))
@@ -1469,7 +1469,7 @@ mod tests {
         assert_eq!(results.len(), 2);
 
         // Test negative numbers
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "score".to_string(),
             Comparer::LessThan,
             Some(json!(0))

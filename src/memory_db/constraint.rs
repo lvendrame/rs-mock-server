@@ -34,13 +34,13 @@ impl TryFrom<&str> for Comparer {
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct Criteria {
+pub struct Constraint {
     pub field: String,
     pub comparer: Comparer,
     pub value: Value
 }
 
-impl TryFrom<&str> for Criteria {
+impl TryFrom<&str> for Constraint {
     type Error = String;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -81,7 +81,7 @@ impl TryFrom<&str> for Criteria {
             None
         };
 
-        Criteria::try_new(field, comparer, criteria_value)
+        Constraint::try_new(field, comparer, criteria_value)
     }
 }
 
@@ -119,7 +119,7 @@ fn parse_value(value_str: &str) -> Value {
     Value::String(value_str.to_string())
 }
 
-impl Criteria {
+impl Constraint {
 
     pub fn try_new(field: String, comparer: Comparer, value: Option<Value>) -> Result<Self, String> {
         let is_valid = match comparer {
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_valid_equal() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("John")),
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_valid_different() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "age".to_string(),
             Comparer::Different,
             Some(json!(25)),
@@ -302,14 +302,14 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_valid_numeric_comparisons() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "score".to_string(),
             Comparer::GreaterThan,
             Some(json!(100)),
         );
         assert!(criteria.is_ok());
 
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "score".to_string(),
             Comparer::LessThanOrEqual,
             Some(json!(50.5)),
@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_valid_like() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "email".to_string(),
             Comparer::Like,
             Some(json!("%@gmail.com")),
@@ -329,14 +329,14 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_valid_null_checks() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "optional_field".to_string(),
             Comparer::IsNull,
             None,
         );
         assert!(criteria.is_ok());
 
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "required_field".to_string(),
             Comparer::IsNotNull,
             None,
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_invalid_equal_with_array() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "tags".to_string(),
             Comparer::Equal,
             Some(json!(["tag1", "tag2"])),
@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_invalid_greater_than_with_string() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::GreaterThan,
             Some(json!("John")),
@@ -366,7 +366,7 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_invalid_like_with_number() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "age".to_string(),
             Comparer::Like,
             Some(json!(25)),
@@ -376,14 +376,14 @@ mod tests {
 
     #[test]
     fn test_criteria_try_new_invalid_null_checks_with_value() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "field".to_string(),
             Comparer::IsNull,
             Some(json!("value")),
         );
         assert!(criteria.is_err());
 
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "field".to_string(),
             Comparer::IsNotNull,
             Some(json!("value")),
@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_criteria_compare_with_equal() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("John")),
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_criteria_compare_with_different() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Different,
             Some(json!("John")),
@@ -419,7 +419,7 @@ mod tests {
 
     #[test]
     fn test_criteria_compare_with_numeric_comparisons() {
-        let gt_criteria = Criteria::try_new(
+        let gt_criteria = Constraint::try_new(
             "age".to_string(),
             Comparer::GreaterThan,
             Some(json!(25)),
@@ -430,7 +430,7 @@ mod tests {
         assert!(!gt_criteria.compare_with(&json!(20)));
         assert!(!gt_criteria.compare_with(&json!("25")));
 
-        let lte_criteria = Criteria::try_new(
+        let lte_criteria = Constraint::try_new(
             "score".to_string(),
             Comparer::LessThanOrEqual,
             Some(json!(100.5)),
@@ -443,7 +443,7 @@ mod tests {
 
     #[test]
     fn test_criteria_compare_with_like() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "email".to_string(),
             Comparer::Like,
             Some(json!("%@gmail.com")),
@@ -454,7 +454,7 @@ mod tests {
         assert!(!criteria.compare_with(&json!("john@yahoo.com")));
         assert!(!criteria.compare_with(&json!(123)));
 
-        let underscore_criteria = Criteria::try_new(
+        let underscore_criteria = Constraint::try_new(
             "code".to_string(),
             Comparer::Like,
             Some(json!("A_C")),
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_criteria_compare_with_null_checks() {
-        let is_null_criteria = Criteria::try_new(
+        let is_null_criteria = Constraint::try_new(
             "optional".to_string(),
             Comparer::IsNull,
             None,
@@ -478,7 +478,7 @@ mod tests {
         assert!(!is_null_criteria.compare_with(&json!("value")));
         assert!(!is_null_criteria.compare_with(&json!(0)));
 
-        let is_not_null_criteria = Criteria::try_new(
+        let is_not_null_criteria = Constraint::try_new(
             "required".to_string(),
             Comparer::IsNotNull,
             None,
@@ -492,7 +492,7 @@ mod tests {
 
     #[test]
     fn test_criteria_compare_item() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("John")),
@@ -514,13 +514,13 @@ mod tests {
 
     #[test]
     fn test_criteria_compare_item_with_complex_data() {
-        let age_criteria = Criteria::try_new(
+        let age_criteria = Constraint::try_new(
             "age".to_string(),
             Comparer::GreaterThanOrEqual,
             Some(json!(18)),
         ).unwrap();
 
-        let email_criteria = Criteria::try_new(
+        let email_criteria = Constraint::try_new(
             "email".to_string(),
             Comparer::Like,
             Some(json!("%@company.com")),
@@ -604,7 +604,7 @@ mod tests {
     #[test]
     fn test_criteria_edge_cases() {
         // Test with floating point precision
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "price".to_string(),
             Comparer::Equal,
             Some(json!(99.99)),
@@ -614,7 +614,7 @@ mod tests {
         assert!(!criteria.compare_with(&json!(99.9900001))); // Slight difference
 
         // Test with large numbers
-        let large_num_criteria = Criteria::try_new(
+        let large_num_criteria = Constraint::try_new(
             "value".to_string(),
             Comparer::LessThan,
             Some(json!(1e10)),
@@ -626,7 +626,7 @@ mod tests {
 
     #[test]
     fn test_criteria_boolean_comparisons() {
-        let criteria = Criteria::try_new(
+        let criteria = Constraint::try_new(
             "active".to_string(),
             Comparer::Equal,
             Some(json!(true)),
@@ -635,7 +635,7 @@ mod tests {
         assert!(criteria.compare_with(&json!(true)));
         assert!(!criteria.compare_with(&json!(false)));
 
-        let different_criteria = Criteria::try_new(
+        let different_criteria = Constraint::try_new(
             "disabled".to_string(),
             Comparer::Different,
             Some(json!(false)),
@@ -648,7 +648,7 @@ mod tests {
     // Tests for Criteria::try_from
     #[test]
     fn test_criteria_try_from_simple_equal() {
-        let criteria = Criteria::try_from("name = \"John\"").unwrap();
+        let criteria = Constraint::try_from("name = \"John\"").unwrap();
         assert_eq!(criteria.field, "name");
         assert_eq!(criteria.comparer, Comparer::Equal);
         assert_eq!(criteria.value, json!("John"));
@@ -657,17 +657,17 @@ mod tests {
     #[test]
     fn test_criteria_try_from_numeric_comparisons() {
         // Now these should work because we parse values properly
-        let criteria = Criteria::try_from("age > 25").unwrap();
+        let criteria = Constraint::try_from("age > 25").unwrap();
         assert_eq!(criteria.field, "age");
         assert_eq!(criteria.comparer, Comparer::GreaterThan);
         assert_eq!(criteria.value, json!(25));
 
-        let criteria = Criteria::try_from("score <= 100.5").unwrap();
+        let criteria = Constraint::try_from("score <= 100.5").unwrap();
         assert_eq!(criteria.field, "score");
         assert_eq!(criteria.comparer, Comparer::LessThanOrEqual);
         assert_eq!(criteria.value, json!(100.5));
 
-        let criteria = Criteria::try_from("count >= 0").unwrap();
+        let criteria = Constraint::try_from("count >= 0").unwrap();
         assert_eq!(criteria.field, "count");
         assert_eq!(criteria.comparer, Comparer::GreaterThanOrEqual);
         assert_eq!(criteria.value, json!(0));
@@ -675,17 +675,17 @@ mod tests {
 
     #[test]
     fn test_criteria_try_from_string_comparisons() {
-        let criteria = Criteria::try_from("email LIKE \"pattern\"").unwrap();
+        let criteria = Constraint::try_from("email LIKE \"pattern\"").unwrap();
         assert_eq!(criteria.field, "email");
         assert_eq!(criteria.comparer, Comparer::Like);
         assert_eq!(criteria.value, json!("pattern"));
 
-        let criteria = Criteria::try_from("status != \"active\"").unwrap();
+        let criteria = Constraint::try_from("status != \"active\"").unwrap();
         assert_eq!(criteria.field, "status");
         assert_eq!(criteria.comparer, Comparer::Different);
         assert_eq!(criteria.value, json!("active"));
 
-        let criteria = Criteria::try_from("category <> \"old\"").unwrap();
+        let criteria = Constraint::try_from("category <> \"old\"").unwrap();
         assert_eq!(criteria.field, "category");
         assert_eq!(criteria.comparer, Comparer::Different);
         assert_eq!(criteria.value, json!("old"));
@@ -694,22 +694,22 @@ mod tests {
     #[test]
     fn test_criteria_try_from_null_checks() {
         // Now these should work with multi-word operators
-        let criteria = Criteria::try_from("phone IS NULL").unwrap();
+        let criteria = Constraint::try_from("phone IS NULL").unwrap();
         assert_eq!(criteria.field, "phone");
         assert_eq!(criteria.comparer, Comparer::IsNull);
         assert_eq!(criteria.value, json!(null));
 
-        let criteria = Criteria::try_from("email IS NOT NULL").unwrap();
+        let criteria = Constraint::try_from("email IS NOT NULL").unwrap();
         assert_eq!(criteria.field, "email");
         assert_eq!(criteria.comparer, Comparer::IsNotNull);
         assert_eq!(criteria.value, json!(null));
 
         // Test case insensitive
-        let criteria = Criteria::try_from("notes is null").unwrap();
+        let criteria = Constraint::try_from("notes is null").unwrap();
         assert_eq!(criteria.field, "notes");
         assert_eq!(criteria.comparer, Comparer::IsNull);
 
-        let criteria = Criteria::try_from("description is not null").unwrap();
+        let criteria = Constraint::try_from("description is not null").unwrap();
         assert_eq!(criteria.field, "description");
         assert_eq!(criteria.comparer, Comparer::IsNotNull);
     }
@@ -717,32 +717,32 @@ mod tests {
     #[test]
     fn test_criteria_try_from_two_parts_only() {
         // Test cases with only field and operator (no value) - for null checks
-        let criteria = Criteria::try_from("field IS NULL").unwrap();
+        let criteria = Constraint::try_from("field IS NULL").unwrap();
         assert_eq!(criteria.comparer, Comparer::IsNull);
 
         // Other operators should fail validation when no value is provided
-        let result = Criteria::try_from("field =");
+        let result = Constraint::try_from("field =");
         assert!(result.is_err()); // No value for = operator
 
-        let result = Criteria::try_from("field >");
+        let result = Constraint::try_from("field >");
         assert!(result.is_err()); // No value for > operator
     }
 
     #[test]
     fn test_criteria_try_from_invalid_formats() {
         // Too few parts
-        assert!(Criteria::try_from("name").is_err());
-        assert!(Criteria::try_from("").is_err());
+        assert!(Constraint::try_from("name").is_err());
+        assert!(Constraint::try_from("").is_err());
 
         // The new implementation allows multiple parts for multi-word values
         // so "name = value extra" is now valid and would be parsed as "value extra"
-        let criteria = Criteria::try_from("name = \"value extra\"").unwrap();
+        let criteria = Constraint::try_from("name = \"value extra\"").unwrap();
         assert_eq!(criteria.value, json!("value extra"));
 
         // Invalid operator
-        assert!(Criteria::try_from("name == \"value\"").is_err());
-        assert!(Criteria::try_from("age === 25").is_err());
-        assert!(Criteria::try_from("field INVALID \"value\"").is_err());
+        assert!(Constraint::try_from("name == \"value\"").is_err());
+        assert!(Constraint::try_from("age === 25").is_err());
+        assert!(Constraint::try_from("field INVALID \"value\"").is_err());
     }
 
 
@@ -750,15 +750,15 @@ mod tests {
     #[test]
     fn test_criteria_try_from_different_operators() {
         // These should now work with proper value parsing
-        let criteria = Criteria::try_from("score < 50").unwrap();
+        let criteria = Constraint::try_from("score < 50").unwrap();
         assert_eq!(criteria.comparer, Comparer::LessThan);
         assert_eq!(criteria.value, json!(50));
 
-        let criteria = Criteria::try_from("level >= 5").unwrap();
+        let criteria = Constraint::try_from("level >= 5").unwrap();
         assert_eq!(criteria.comparer, Comparer::GreaterThanOrEqual);
         assert_eq!(criteria.value, json!(5));
 
-        let criteria = Criteria::try_from("name like \"pattern\"").unwrap();
+        let criteria = Constraint::try_from("name like \"pattern\"").unwrap();
         assert_eq!(criteria.comparer, Comparer::Like);
         assert_eq!(criteria.value, json!("pattern"));
     }
@@ -766,15 +766,15 @@ mod tests {
     #[test]
     fn test_criteria_try_from_case_sensitivity() {
         // Test that LIKE operator is case insensitive in Comparer::try_from
-        let criteria1 = Criteria::try_from("name LIKE pattern").unwrap();
-        let criteria2 = Criteria::try_from("name like pattern").unwrap();
+        let criteria1 = Constraint::try_from("name LIKE pattern").unwrap();
+        let criteria2 = Constraint::try_from("name like pattern").unwrap();
         assert_eq!(criteria1.comparer, criteria2.comparer);
     }
 
     #[test]
     fn test_criteria_try_from_validation_failures() {
         // These should fail due to validation in try_new, not parsing
-        let result = Criteria::try_from("field INVALID \"value\"");
+        let result = Constraint::try_from("field INVALID \"value\"");
         assert!(result.is_err()); // Invalid operator
 
         // Arrays and objects should fail validation for most operators
@@ -784,22 +784,22 @@ mod tests {
     #[test]
     fn test_criteria_try_from_boolean_and_null_values() {
         // Test parsing of boolean values
-        let criteria = Criteria::try_from("active = true").unwrap();
+        let criteria = Constraint::try_from("active = true").unwrap();
         assert_eq!(criteria.field, "active");
         assert_eq!(criteria.comparer, Comparer::Equal);
         assert_eq!(criteria.value, json!(true));
 
-        let criteria = Criteria::try_from("disabled != false").unwrap();
+        let criteria = Constraint::try_from("disabled != false").unwrap();
         assert_eq!(criteria.field, "disabled");
         assert_eq!(criteria.comparer, Comparer::Different);
         assert_eq!(criteria.value, json!(false));
 
         // Test parsing of null values - but note that null is not allowed for Equal operator due to validation
-        let result = Criteria::try_from("value = null");
+        let result = Constraint::try_from("value = null");
         assert!(result.is_err()); // Null not allowed for Equal operator
 
         // Null should work with Different operator
-        let result = Criteria::try_from("value != null");
+        let result = Constraint::try_from("value != null");
         assert!(result.is_err()); // Null not allowed for Different operator either
 
         // The only place null values work is with IS NULL/IS NOT NULL which don't take values
@@ -808,12 +808,12 @@ mod tests {
     #[test]
     fn test_criteria_try_from_multi_word_values() {
         // Test values with spaces
-        let criteria = Criteria::try_from("name = \"John Doe\"").unwrap();
+        let criteria = Constraint::try_from("name = \"John Doe\"").unwrap();
         assert_eq!(criteria.field, "name");
         assert_eq!(criteria.comparer, Comparer::Equal);
         assert_eq!(criteria.value, json!("John Doe"));
 
-        let criteria = Criteria::try_from("description LIKE \"hello world\"").unwrap();
+        let criteria = Constraint::try_from("description LIKE \"hello world\"").unwrap();
         assert_eq!(criteria.field, "description");
         assert_eq!(criteria.comparer, Comparer::Like);
         assert_eq!(criteria.value, json!("hello world"));
@@ -822,28 +822,28 @@ mod tests {
     #[test]
     fn test_criteria_try_from_edge_cases() {
         // Single character field name
-        let criteria = Criteria::try_from("x = 5").unwrap();
+        let criteria = Constraint::try_from("x = 5").unwrap();
         assert_eq!(criteria.field, "x");
         assert_eq!(criteria.value, json!(5)); // Now parsed as number
 
         // Single character value
-        let criteria = Criteria::try_from("grade = \"A\"").unwrap();
+        let criteria = Constraint::try_from("grade = \"A\"").unwrap();
         assert_eq!(criteria.value, json!("A"));
 
         // Negative numbers
-        let criteria = Criteria::try_from("temperature < -10").unwrap();
+        let criteria = Constraint::try_from("temperature < -10").unwrap();
         assert_eq!(criteria.value, json!(-10));
 
         // Float numbers
-        let criteria = Criteria::try_from("price >= 99.99").unwrap();
+        let criteria = Constraint::try_from("price >= 99.99").unwrap();
         assert_eq!(criteria.value, json!(99.99));
 
         // Scientific notation
-        let criteria = Criteria::try_from("value > 1e6").unwrap();
+        let criteria = Constraint::try_from("value > 1e6").unwrap();
         assert_eq!(criteria.value, json!(1000000.0));
 
         // Test whitespace handling
-        let criteria = Criteria::try_from("  name   =   \"John\"  ").unwrap();
+        let criteria = Constraint::try_from("  name   =   \"John\"  ").unwrap();
         assert_eq!(criteria.field, "name");
         assert_eq!(criteria.value, json!("John"));
     }
