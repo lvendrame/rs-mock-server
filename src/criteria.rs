@@ -18,16 +18,16 @@ impl TryFrom<&str> for Comparer {
     type Error = String;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
+        match value.to_uppercase().as_str() {
             "=" => Ok(Comparer::Equal),
             "!=" | "<>" => Ok(Comparer::Different),
             ">" => Ok(Comparer::GreaterThan),
             ">=" => Ok(Comparer::GreaterThanOrEqual),
             "<" => Ok(Comparer::LessThan),
             "<=" => Ok(Comparer::LessThanOrEqual),
-            "LIKE" | "like" => Ok(Comparer::Like),
-            "IS NULL" | "is null" => Ok(Comparer::IsNull),
-            "IS NOT NULL" | "is not null" => Ok(Comparer::IsNotNull),
+            "LIKE" => Ok(Comparer::Like),
+            "IS NULL" => Ok(Comparer::IsNull),
+            "IS NOT NULL" => Ok(Comparer::IsNotNull),
             _ => Err(format!("Invalid comparer operator: '{}'", value)),
         }
     }
@@ -123,8 +123,8 @@ impl Criteria {
 
     pub fn try_new(field: String, comparer: Comparer, value: Option<Value>) -> Result<Self, String> {
         let is_valid = match comparer {
-            Comparer::Equal => validate_for_equal(&value),
-            Comparer::Different => validate_for_different(&value),
+            Comparer::Equal => validate_for_equal_or_different(&value),
+            Comparer::Different => validate_for_equal_or_different(&value),
             Comparer::GreaterThan => validate_for_greater_or_less_than(&value),
             Comparer::GreaterThanOrEqual => validate_for_greater_or_less_than(&value),
             Comparer::LessThan => validate_for_greater_or_less_than(&value),
@@ -168,29 +168,13 @@ impl Criteria {
 
 }
 
-fn validate_for_equal(value: &Option<Value>) -> bool {
+fn validate_for_equal_or_different(value: &Option<Value>) -> bool {
     if let Some(value) = value {
         return match value {
-            Value::Null => false,
             Value::Bool(_) => true,
             Value::Number(_) => true,
             Value::String(_) => true,
-            Value::Array(_) => false,
-            Value::Object(_) => false,
-        };
-    }
-    false
-}
-
-fn validate_for_different(value: &Option<Value>) -> bool {
-    if let Some(value) = value {
-        return match value {
-            Value::Null => false,
-            Value::Bool(_) => true,
-            Value::Number(_) => true,
-            Value::String(_) => true,
-            Value::Array(_) => false,
-            Value::Object(_) => false,
+            _ => false,
         };
     }
     false
@@ -199,12 +183,8 @@ fn validate_for_different(value: &Option<Value>) -> bool {
 fn validate_for_greater_or_less_than(value: &Option<Value>) -> bool {
     if let Some(value) = value {
         return match value {
-            Value::Null => false,
-            Value::Bool(_) => false,
             Value::Number(_) => true,
-            Value::String(_) => false,
-            Value::Array(_) => false,
-            Value::Object(_) => false,
+            _ => false,
         };
     }
     false
@@ -213,12 +193,8 @@ fn validate_for_greater_or_less_than(value: &Option<Value>) -> bool {
 fn validate_for_like(value: &Option<Value>) -> bool {
     if let Some(value) = value {
         return match value {
-            Value::Null => false,
-            Value::Bool(_) => false,
-            Value::Number(_) => false,
             Value::String(_) => true,
-            Value::Array(_) => false,
-            Value::Object(_) => false,
+            _ => false,
         };
     }
     false
@@ -283,11 +259,13 @@ mod tests {
         assert_eq!(Comparer::try_from("<").unwrap(), Comparer::LessThan);
         assert_eq!(Comparer::try_from("<=").unwrap(), Comparer::LessThanOrEqual);
         assert_eq!(Comparer::try_from("LIKE").unwrap(), Comparer::Like);
+        assert_eq!(Comparer::try_from("Like").unwrap(), Comparer::Like);
         assert_eq!(Comparer::try_from("like").unwrap(), Comparer::Like);
         assert_eq!(Comparer::try_from("IS NULL").unwrap(), Comparer::IsNull);
         assert_eq!(Comparer::try_from("is null").unwrap(), Comparer::IsNull);
         assert_eq!(Comparer::try_from("IS NOT NULL").unwrap(), Comparer::IsNotNull);
         assert_eq!(Comparer::try_from("is not null").unwrap(), Comparer::IsNotNull);
+        assert_eq!(Comparer::try_from("is NOT Null").unwrap(), Comparer::IsNotNull);
     }
 
     #[test]
@@ -598,22 +576,13 @@ mod tests {
 
     #[test]
     fn test_validation_functions() {
-        // Test validate_for_equal
-        assert!(validate_for_equal(&Some(json!("string"))));
-        assert!(validate_for_equal(&Some(json!(123))));
-        assert!(validate_for_equal(&Some(json!(true))));
-        assert!(!validate_for_equal(&Some(json!(null))));
-        assert!(!validate_for_equal(&Some(json!([1, 2, 3]))));
-        assert!(!validate_for_equal(&Some(json!({"key": "value"}))));
-        assert!(!validate_for_equal(&None));
-
-        // Test validate_for_different
-        assert!(validate_for_different(&Some(json!("string"))));
-        assert!(validate_for_different(&Some(json!(123))));
-        assert!(validate_for_different(&Some(json!(false))));
-        assert!(!validate_for_different(&Some(json!(null))));
-        assert!(!validate_for_different(&Some(json!([1, 2, 3]))));
-        assert!(!validate_for_different(&None));
+        // Test validate_for_equal_or_different
+        assert!(validate_for_equal_or_different(&Some(json!("string"))));
+        assert!(validate_for_equal_or_different(&Some(json!(123))));
+        assert!(validate_for_equal_or_different(&Some(json!(false))));
+        assert!(!validate_for_equal_or_different(&Some(json!(null))));
+        assert!(!validate_for_equal_or_different(&Some(json!([1, 2, 3]))));
+        assert!(!validate_for_equal_or_different(&None));
 
         // Test validate_for_greater_or_less_than
         assert!(validate_for_greater_or_less_than(&Some(json!(123))));
