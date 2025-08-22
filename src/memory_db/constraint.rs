@@ -170,32 +170,21 @@ impl Constraint {
 
 fn validate_for_equal_or_different(value: &Option<Value>) -> bool {
     if let Some(value) = value {
-        return match value {
-            Value::Bool(_) => true,
-            Value::Number(_) => true,
-            Value::String(_) => true,
-            _ => false,
-        };
+        return matches!(value, Value::Bool(_) | Value::Number(_) | Value::String(_));
     }
     false
 }
 
 fn validate_for_greater_or_less_than(value: &Option<Value>) -> bool {
     if let Some(value) = value {
-        return match value {
-            Value::Number(_) => true,
-            _ => false,
-        };
+        return matches!(value, Value::Number(_));
     }
     false
 }
 
 fn validate_for_like(value: &Option<Value>) -> bool {
     if let Some(value) = value {
-        return match value {
-            Value::String(_) => true,
-            _ => false,
-        };
+        return matches!(value, Value::String(_));
     }
     false
 }
