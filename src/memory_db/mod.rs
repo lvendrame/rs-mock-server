@@ -10,8 +10,8 @@ pub use criteria_builder::*;
 pub mod id_manager;
 pub use id_manager::*;
 
-pub mod in_memory_collection;
-pub use in_memory_collection::*;
+pub mod memory_collection;
+pub use memory_collection::*;
 
 pub mod string_pointer;
 pub use string_pointer::*;

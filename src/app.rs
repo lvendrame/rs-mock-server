@@ -10,7 +10,7 @@ use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
 use crate::{handlers::make_auth_middleware,
-    memory_db::in_memory_collection::ProtectedMemCollection,
+    memory_db::memory_collection::ProtectedMemCollection,
     pages::Pages,
     route_builder::{route_manager::RouteManager, RouteGenerator, RouteRegistrator},
     upload_configuration::UploadConfiguration

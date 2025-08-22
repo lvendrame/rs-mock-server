@@ -3,16 +3,16 @@ use serde_json::Value;
 
 use crate::{memory_db::constraint::Constraint, memory_db::id_manager::{IdManager, IdType, IdValue}};
 
-pub type ProtectedMemCollection = Arc<RwLock<InMemoryCollection>>;
+pub type ProtectedMemCollection = Arc<RwLock<MemoryCollection>>;
 
-pub struct InMemoryCollection {
+pub struct MemoryCollection {
     db: HashMap<String, Value>,
     id_manager: IdManager,
     id_key: String,
     pub name: Option<String>,
 }
 
-impl InMemoryCollection {
+impl MemoryCollection {
     pub fn new(id_type: IdType, id_key: String, name: Option<String>) -> Self {
         let db: HashMap<String, Value> = HashMap::new();
         let id_manager = IdManager::new(id_type);
@@ -251,16 +251,16 @@ mod tests {
     use serde_json::json;
     use crate::memory_db::constraint::Comparer;
 
-    fn create_test_collection() -> InMemoryCollection {
-        InMemoryCollection::new(IdType::Int, "id".to_string(), Some("test_collection".to_string()))
+    fn create_test_collection() -> MemoryCollection {
+        MemoryCollection::new(IdType::Int, "id".to_string(), Some("test_collection".to_string()))
     }
 
-    fn create_uuid_collection() -> InMemoryCollection {
-        InMemoryCollection::new(IdType::Uuid, "id".to_string(), Some("uuid_collection".to_string()))
+    fn create_uuid_collection() -> MemoryCollection {
+        MemoryCollection::new(IdType::Uuid, "id".to_string(), Some("uuid_collection".to_string()))
     }
 
-    fn create_none_collection() -> InMemoryCollection {
-        InMemoryCollection::new(IdType::None, "id".to_string(), Some("none_collection".to_string()))
+    fn create_none_collection() -> MemoryCollection {
+        MemoryCollection::new(IdType::None, "id".to_string(), Some("none_collection".to_string()))
     }
 
     #[test]
@@ -671,7 +671,7 @@ mod tests {
             "description": "New field"
         });
 
-        let merged = InMemoryCollection::merge_json_values(base, update);
+        let merged = MemoryCollection::merge_json_values(base, update);
 
         assert_eq!(merged.get("name").unwrap(), "Updated");
         assert_eq!(merged.get("description").unwrap(), "New field");
@@ -688,13 +688,13 @@ mod tests {
         let base = json!("original");
         let update = json!("updated");
 
-        let merged = InMemoryCollection::merge_json_values(base, update);
+        let merged = MemoryCollection::merge_json_values(base, update);
         assert_eq!(merged, json!("updated"));
 
         let base = json!(42);
         let update = json!(100);
 
-        let merged = InMemoryCollection::merge_json_values(base, update);
+        let merged = MemoryCollection::merge_json_values(base, update);
         assert_eq!(merged, json!(100));
     }
 
@@ -715,7 +715,7 @@ mod tests {
 
     #[test]
     fn test_custom_id_key() {
-        let mut collection = InMemoryCollection::new(
+        let mut collection = MemoryCollection::new(
             IdType::Int,
             "customId".to_string(),
             Some("custom_collection".to_string())
@@ -1011,7 +1011,7 @@ mod tests {
 
     #[test]
     fn test_load_from_file_custom_id_key() {
-        let mut collection = InMemoryCollection::new(
+        let mut collection = MemoryCollection::new(
             IdType::Int,
             "customId".to_string(),
             Some("custom_collection".to_string())
@@ -1316,7 +1316,7 @@ mod tests {
 
     #[test]
     fn test_get_from_criteria_with_non_object_values() {
-        let mut collection = InMemoryCollection::new(
+        let mut collection = MemoryCollection::new(
             IdType::None,
             "id".to_string(),
             Some("test_collection".to_string())
