@@ -10,7 +10,7 @@ use chrono::{Utc, Duration};
 use crate::{
     app::App,
     memory_db::id_manager::IdType,
-    memory_db::criteria::{Comparer, Criteria},
+    memory_db::constraint::{Comparer, Criteria},
     memory_db::in_memory_collection::{InMemoryCollection, ProtectedMemCollection},
     handlers::build_rest_routes
 };
