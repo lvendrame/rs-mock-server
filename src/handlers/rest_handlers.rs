@@ -7,7 +7,7 @@ use jgd_rs::generate_jgd_from_file;
 use serde_json::Value;
 
 use crate::{
-    app::App, handlers::{is_jgd}, memory_db::id_manager::IdType, memory_db::memory_collection::{MemoryCollection, ProtectedMemCollection}, route_builder::RouteRegistrator
+    app::App, handlers::is_jgd, memory_db::{id_manager::IdType, memory_collection::{MemoryCollection, ProtectedMemCollection}, CollectionConfig}, route_builder::RouteRegistrator
 };
 
 pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
@@ -112,7 +112,7 @@ pub fn build_rest_routes(
     id_type: IdType,
     is_protected: bool,
 ) -> ProtectedMemCollection {
-    let mut in_memory_collection = MemoryCollection::new(id_type, id_key.to_string(), Some(route.to_string()));
+    let mut in_memory_collection = MemoryCollection::new(CollectionConfig::from(id_type, id_key, route));
 
     let result: Result<String, String> = if is_jgd(file_path) {
         match generate_jgd_from_file(&PathBuf::from_str(file_path.to_str().unwrap()).unwrap()) {

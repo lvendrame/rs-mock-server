@@ -27,6 +27,7 @@ impl Display for IdValue {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct IdManager {
     pub id_type: IdType,
     pub current: Option<IdValue>,

@@ -10,7 +10,7 @@ use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
 use crate::{handlers::make_auth_middleware,
-    memory_db::memory_collection::ProtectedMemCollection,
+    memory_db::{memory_collection::ProtectedMemCollection, Db},
     pages::Pages,
     route_builder::{route_manager::RouteManager, RouteGenerator, RouteRegistrator},
     upload_configuration::UploadConfiguration
@@ -23,6 +23,7 @@ pub struct App {
     pub pages: Arc<Mutex<Pages>>,
     pub auth_collection: Option<ProtectedMemCollection>,
     uploads_configurations: Vec<UploadConfiguration>,
+    pub db: Arc<Db>,
 }
 
 impl Default for App {
@@ -33,7 +34,8 @@ impl Default for App {
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let auth_collection = None;
-        App { port, root_path, router, pages, uploads_configurations, auth_collection }
+        let db = Arc::new(Db::new());
+        App { port, root_path, router, pages, uploads_configurations, auth_collection, db }
     }
 }
 
@@ -44,7 +46,8 @@ impl App {
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let auth_collection = None;
-        App { port, root_path, router, pages, uploads_configurations, auth_collection }
+        let db = Arc::new(Db::new());
+        App { port, root_path, router, pages, uploads_configurations, auth_collection, db }
     }
 
     pub fn push_uploads_config(&mut self, uploads_path: String, clean_uploads: bool) {

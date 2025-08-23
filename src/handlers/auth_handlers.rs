@@ -8,11 +8,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App,
-    memory_db::id_manager::IdType,
-    memory_db::constraint::{Comparer, Constraint},
-    memory_db::memory_collection::{MemoryCollection, ProtectedMemCollection},
-    handlers::build_rest_routes
+    app::App, handlers::build_rest_routes, memory_db::{constraint::{Comparer, Constraint}, id_manager::IdType, memory_collection::{MemoryCollection, ProtectedMemCollection}, CollectionConfig}
 };
 
 static ID_FIELD: &str = "id";
@@ -174,7 +170,7 @@ pub fn create_login_route(
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
     println!("Starting loading Auth route");
 
-    let in_memory_collection = MemoryCollection::new(IdType::None, TOKEN_FIELD.to_string(), Some("{{auth}}-tokens".to_string()));
+    let in_memory_collection = MemoryCollection::new(CollectionConfig::none(TOKEN_FIELD, "{{auth}}-tokens"));
     let auth_collection = in_memory_collection.into_protected();
 
     // The app.auth_collection should be set before to load the rest routes

@@ -1,26 +1,25 @@
 use std::{collections::HashMap, ffi::OsString, fs, sync::{Arc, RwLock}};
 use serde_json::Value;
 
-use crate::{memory_db::constraint::Constraint, memory_db::id_manager::{IdManager, IdType, IdValue}};
+use crate::memory_db::{constraint::Constraint, id_manager::{IdManager, IdType, IdValue}, CollectionConfig};
 
 pub type ProtectedMemCollection = Arc<RwLock<MemoryCollection>>;
+pub type LockedMemCollection = RwLock<MemoryCollection>;
 
 pub struct MemoryCollection {
-    db: HashMap<String, Value>,
+    collection: HashMap<String, Value>,
     id_manager: IdManager,
-    id_key: String,
-    pub name: Option<String>,
+    pub config: CollectionConfig,
 }
 
 impl MemoryCollection {
-    pub fn new(id_type: IdType, id_key: String, name: Option<String>) -> Self {
+    pub fn new(config: CollectionConfig) -> Self {
         let db: HashMap<String, Value> = HashMap::new();
-        let id_manager = IdManager::new(id_type);
+        let id_manager = IdManager::new(config.id_type);
         Self {
-            db,
+            collection: db,
             id_manager,
-            id_key,
-            name
+            config,
         }
     }
 
@@ -28,12 +27,16 @@ impl MemoryCollection {
         Arc::new(RwLock::new(self))
     }
 
+    pub fn into_locked(self) -> LockedMemCollection {
+        RwLock::new(self)
+    }
+
     pub fn get_all(&self) -> Vec<Value> {
-        self.db.values().cloned().collect::<Vec<Value>>()
+        self.collection.values().cloned().collect::<Vec<Value>>()
     }
 
     pub fn get_paginated(&self, offset: usize, limit: usize) -> Vec<Value> {
-        self.db.values()
+        self.collection.values()
             .skip(offset)
             .take(limit)
             .cloned()
@@ -41,11 +44,11 @@ impl MemoryCollection {
     }
 
     pub fn get(&self, id: &str) -> Option<Value> {
-        self.db.get(id).cloned()
+        self.collection.get(id).cloned()
     }
 
     pub fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value> {
-        self.db.values().filter(|&item| {
+        self.collection.values().filter(|&item| {
                 match item {
                     Value::Object(map) => criteria.compare_item(map),
                     _ => false
@@ -55,11 +58,11 @@ impl MemoryCollection {
     }
 
     pub fn exists(&self, id: &str) -> bool {
-        self.db.contains_key(id)
+        self.collection.contains_key(id)
     }
 
     pub fn count(&self) -> usize {
-        self.db.len()
+        self.collection.len()
     }
 
     pub fn add(&mut self, item: Value) -> Option<Value> {
@@ -74,19 +77,19 @@ impl MemoryCollection {
 
             // Add the ID to the item using the configured id_key
             if let Value::Object(ref mut map) = item {
-                map.insert(self.id_key.clone(), Value::String(id_string.clone()));
+                map.insert(self.config.id_key.clone(), Value::String(id_string.clone()));
             }
             Some(id_string)
-        } else if let Some(Value::String(id_string)) = item.get(self.id_key.clone()){
+        } else if let Some(Value::String(id_string)) = item.get(self.config.id_key.clone()){
             Some(id_string.clone())
-        } else if let Some(Value::Number(id_number)) = item.get(self.id_key.clone()){
+        } else if let Some(Value::Number(id_number)) = item.get(self.config.id_key.clone()){
             Some(id_number.to_string())
         }else {
             None
         };
 
         if let Some(id_string) = id_string {
-            self.db.insert(id_string, item.clone());
+            self.collection.insert(id_string, item.clone());
 
             return Some(item);
         }
@@ -101,7 +104,7 @@ impl MemoryCollection {
             let mut max_id = None;
             for item in items_array {
                 if let Value::Object(ref item_map) = item {
-                    let id = item_map.get(&self.id_key);
+                    let id = item_map.get(&self.config.id_key);
                     let id = match self.id_manager.id_type {
                         IdType::Uuid => match id {
                             Some(Value::String(id)) => Some(id.clone()),
@@ -121,7 +124,7 @@ impl MemoryCollection {
                             },
                             _ => None
                         },
-                        IdType::None => match item.get(self.id_key.clone()) {
+                        IdType::None => match item.get(self.config.id_key.clone()) {
                             Some(Value::String(id_string)) => Some(id_string.clone()),
                             Some(Value::Number(id_number)) => Some(id_number.to_string()),
                             _ => None
@@ -131,7 +134,7 @@ impl MemoryCollection {
                     // Extract the ID from the item using the configured id_key
                     if let Some(id) = id {
                         // Insert the item with its existing ID
-                        self.db.insert(id.clone(), item.clone());
+                        self.collection.insert(id.clone(), item.clone());
                         added_items.push(item);
                     }
                     // Skip items that don't have the required ID field
@@ -142,7 +145,7 @@ impl MemoryCollection {
             // update the id_manager with the max id for an integer id
             if let Some(value) = max_id {
                 if self.id_manager.set_current(IdValue::Int(value)).is_err() {
-                    println!("Error to set the value {} to {} collection Id", value, self.name.clone().unwrap_or("{{unknown}}".to_string()));
+                    println!("Error to set the value {} to {} collection Id", value, self.config.name.clone());
                 }
             }
         }
@@ -155,11 +158,11 @@ impl MemoryCollection {
 
         // Add the ID to the item using the configured id_key
         if let Value::Object(ref mut map) = item {
-            map.insert(self.id_key.clone(), Value::String(id.to_string()));
+            map.insert(self.config.id_key.clone(), Value::String(id.to_string()));
         }
 
-        if self.db.contains_key(id) {
-            self.db.insert(id.to_string(), item.clone());
+        if self.collection.contains_key(id) {
+            self.collection.insert(id.to_string(), item.clone());
             Some(item)
         } else {
             None
@@ -167,18 +170,18 @@ impl MemoryCollection {
     }
 
     pub fn update_partial(&mut self, id: &str, partial_item: Value) -> Option<Value> {
-        if let Some(existing_item) = self.db.get(id).cloned() {
+        if let Some(existing_item) = self.collection.get(id).cloned() {
             // Merge the partial update with the existing item
             let updated_item = Self::merge_json_values(existing_item, partial_item);
 
             // Ensure the ID is still present in the updated item
             let mut final_item = updated_item;
             if let Value::Object(ref mut map) = final_item {
-                map.insert(self.id_key.clone(), Value::String(id.to_string()));
+                map.insert(self.config.id_key.clone(), Value::String(id.to_string()));
             }
 
             // Update the item in the database
-            self.db.insert(id.to_string(), final_item.clone());
+            self.collection.insert(id.to_string(), final_item.clone());
             Some(final_item)
         } else {
             None
@@ -186,12 +189,12 @@ impl MemoryCollection {
     }
 
     pub fn delete(&mut self, id: &str) -> Option<Value> {
-        self.db.remove(id)
+        self.collection.remove(id)
     }
 
     pub fn clear(&mut self) -> usize {
-        let count = self.db.len();
-        self.db.clear();
+        let count = self.collection.len();
+        self.collection.clear();
         count
     }
 
@@ -252,23 +255,23 @@ mod tests {
     use crate::memory_db::constraint::Comparer;
 
     fn create_test_collection() -> MemoryCollection {
-        MemoryCollection::new(IdType::Int, "id".to_string(), Some("test_collection".to_string()))
+        MemoryCollection::new(CollectionConfig::int("id", "test_collection"))
     }
 
     fn create_uuid_collection() -> MemoryCollection {
-        MemoryCollection::new(IdType::Uuid, "id".to_string(), Some("uuid_collection".to_string()))
+        MemoryCollection::new(CollectionConfig::uuid("id", "uuid_collection"))
     }
 
     fn create_none_collection() -> MemoryCollection {
-        MemoryCollection::new(IdType::None, "id".to_string(), Some("none_collection".to_string()))
+        MemoryCollection::new(CollectionConfig::none("id", "none_collection"))
     }
 
     #[test]
     fn test_new_collection() {
         let collection = create_test_collection();
         assert_eq!(collection.count(), 0);
-        assert_eq!(collection.id_key, "id");
-        assert_eq!(collection.name, Some("test_collection".to_string()));
+        assert_eq!(collection.config.id_key, "id");
+        assert_eq!(collection.config.name, "test_collection");
     }
 
     #[test]
@@ -278,7 +281,7 @@ mod tests {
 
         let guard = protected.read().unwrap();
         assert_eq!(guard.count(), 0);
-        assert_eq!(guard.name, Some("test_collection".to_string()));
+        assert_eq!(guard.config.name, "test_collection");
     }
 
     #[test]
@@ -716,9 +719,7 @@ mod tests {
     #[test]
     fn test_custom_id_key() {
         let mut collection = MemoryCollection::new(
-            IdType::Int,
-            "customId".to_string(),
-            Some("custom_collection".to_string())
+            CollectionConfig::int("customId", "custom_collection")
         );
 
         let item = collection.add(json!({"name": "Test Item"})).unwrap();
@@ -1012,9 +1013,7 @@ mod tests {
     #[test]
     fn test_load_from_file_custom_id_key() {
         let mut collection = MemoryCollection::new(
-            IdType::Int,
-            "customId".to_string(),
-            Some("custom_collection".to_string())
+            CollectionConfig::int("customId", "custom_collection")
         );
 
         let temp_dir = TempDir::new().unwrap();
@@ -1317,15 +1316,13 @@ mod tests {
     #[test]
     fn test_get_from_criteria_with_non_object_values() {
         let mut collection = MemoryCollection::new(
-            IdType::None,
-            "id".to_string(),
-            Some("test_collection".to_string())
+            CollectionConfig::none("id", "test_collection")
         );
 
         // Manually insert some non-object values (this shouldn't happen in normal usage)
-        collection.db.insert("1".to_string(), json!("string_value"));
-        collection.db.insert("2".to_string(), json!(42));
-        collection.db.insert("3".to_string(), json!({"name": "Alice", "age": 25}));
+        collection.collection.insert("1".to_string(), json!("string_value"));
+        collection.collection.insert("2".to_string(), json!(42));
+        collection.collection.insert("3".to_string(), json!({"name": "Alice", "age": 25}));
 
         let criteria = Constraint::try_new(
             "name".to_string(),
