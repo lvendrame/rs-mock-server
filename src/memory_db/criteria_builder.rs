@@ -113,6 +113,193 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn test_compare_item_simple_constraint() {
+        let criteria = CriteriaBuilder::build("age > 25").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("age".to_string(), json!(30));
+        assert!(criteria.compare_item(&item));
+        item.insert("age".to_string(), json!(20));
+        assert!(!criteria.compare_item(&item));
+    }
+
+    #[test]
+    fn test_compare_item_with_different_operators() {
+        let criteria = CriteriaBuilder::build("score <= 100").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("score".to_string(), json!(100));
+        assert!(criteria.compare_item(&item));
+        item.insert("score".to_string(), json!(101));
+        assert!(!criteria.compare_item(&item));
+
+        let criteria = CriteriaBuilder::build("email LIKE \"%@gmail.com\"").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("email".to_string(), json!("user@gmail.com"));
+        assert!(criteria.compare_item(&item));
+        item.insert("email".to_string(), json!("user@yahoo.com"));
+        assert!(!criteria.compare_item(&item));
+    }
+
+    #[test]
+    fn test_compare_item_with_null_checks() {
+        let criteria = CriteriaBuilder::build("optional IS NULL").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("optional".to_string(), json!(null));
+        assert!(criteria.compare_item(&item));
+        item.insert("optional".to_string(), json!("not null"));
+        assert!(!criteria.compare_item(&item));
+
+        let criteria = CriteriaBuilder::build("required IS NOT NULL").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("required".to_string(), json!("value"));
+        assert!(criteria.compare_item(&item));
+        item.insert("required".to_string(), json!(null));
+        assert!(!criteria.compare_item(&item));
+    }
+
+    #[test]
+    fn test_compare_item_with_case_insensitive_operators() {
+        let criteria = CriteriaBuilder::build("a = 1 and b = 2").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(1));
+        item.insert("b".to_string(), json!(2));
+        assert!(criteria.compare_item(&item));
+
+        let criteria = CriteriaBuilder::build("a = 1 Or b = 2").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(0));
+        item.insert("b".to_string(), json!(2));
+        assert!(criteria.compare_item(&item));
+    }
+
+    #[test]
+    fn test_compare_item_with_boolean_values() {
+        let criteria = CriteriaBuilder::build("active = true").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("active".to_string(), json!(true));
+        assert!(criteria.compare_item(&item));
+        item.insert("active".to_string(), json!(false));
+        assert!(!criteria.compare_item(&item));
+
+        let criteria = CriteriaBuilder::build("disabled != false").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("disabled".to_string(), json!(true));
+        assert!(criteria.compare_item(&item));
+        item.insert("disabled".to_string(), json!(false));
+        assert!(!criteria.compare_item(&item));
+    }
+
+    #[test]
+    fn test_compare_item_with_numeric_values() {
+        let criteria = CriteriaBuilder::build("count = 42").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("count".to_string(), json!(42));
+        assert!(criteria.compare_item(&item));
+        item.insert("count".to_string(), json!(41));
+        assert!(!criteria.compare_item(&item));
+
+        let criteria = CriteriaBuilder::build("price >= 99.99").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("price".to_string(), json!(100.0));
+        assert!(criteria.compare_item(&item));
+        item.insert("price".to_string(), json!(99.0));
+        assert!(!criteria.compare_item(&item));
+
+        let criteria = CriteriaBuilder::build("temperature < -10").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("temperature".to_string(), json!(-11));
+        assert!(criteria.compare_item(&item));
+        item.insert("temperature".to_string(), json!(-10));
+        assert!(!criteria.compare_item(&item));
+    }
+
+    #[test]
+    fn test_compare_item_with_quoted_multi_word_values() {
+        let criteria = CriteriaBuilder::build("name = \"John Doe\"").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("name".to_string(), json!("John Doe"));
+        assert!(criteria.compare_item(&item));
+        item.insert("name".to_string(), json!("Jane Doe"));
+        assert!(!criteria.compare_item(&item));
+
+        let criteria = CriteriaBuilder::build("description LIKE \"hello world\"").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("description".to_string(), json!("hello world"));
+        assert!(criteria.compare_item(&item));
+        item.insert("description".to_string(), json!("goodbye world"));
+        assert!(!criteria.compare_item(&item));
+    }
+    #[test]
+    fn test_compare_item_simple_and() {
+        // WHERE a = 1 AND b = 2
+        let criteria = CriteriaBuilder::start("WHERE a = 1 AND b = 2").unwrap();
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(1));
+        item.insert("b".to_string(), json!(2));
+        assert!(criteria.compare_item(&item));
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(1));
+        item.insert("b".to_string(), json!(3));
+        assert!(!criteria.compare_item(&item));
+    }
+
+    #[test]
+    fn test_compare_item_and_parentheses_or() {
+        // WHERE a = 1 AND (b = 2 OR b = 3)
+        let criteria = CriteriaBuilder::start("WHERE a = 1 AND (b = 2 OR b = 3)").unwrap();
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(1));
+        item.insert("b".to_string(), json!(2));
+        assert!(criteria.compare_item(&item));
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(1));
+        item.insert("b".to_string(), json!(3));
+        assert!(criteria.compare_item(&item));
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(1));
+        item.insert("b".to_string(), json!(4));
+        assert!(!criteria.compare_item(&item));
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(2));
+        item.insert("b".to_string(), json!(2));
+        assert!(!criteria.compare_item(&item));
+    }
+
+    #[test]
+    fn test_compare_item_complex_nested() {
+        // WHERE a = 1 AND b = 2 OR c = 3
+        let criteria = CriteriaBuilder::start("WHERE a = 1 AND b = 2 OR c = 3").unwrap();
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(1));
+        item.insert("b".to_string(), json!(2));
+        item.insert("c".to_string(), json!(0));
+        assert!(criteria.compare_item(&item)); // a=1 AND b=2 matches
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(0));
+        item.insert("b".to_string(), json!(0));
+        item.insert("c".to_string(), json!(3));
+        assert!(criteria.compare_item(&item)); // c=3 matches
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(1));
+        item.insert("b".to_string(), json!(3));
+        item.insert("c".to_string(), json!(3));
+        assert!(criteria.compare_item(&item)); // c=3 matches
+
+        let mut item = serde_json::Map::new();
+        item.insert("a".to_string(), json!(0));
+        item.insert("b".to_string(), json!(0));
+        item.insert("c".to_string(), json!(0));
+        assert!(!criteria.compare_item(&item)); // No match
+    }
+
+    #[test]
     fn test_criteria_builder_new() {
         let _builder = CriteriaBuilder::new();
         // CriteriaBuilder is now just a unit struct, so nothing specific to test

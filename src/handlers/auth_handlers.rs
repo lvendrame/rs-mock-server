@@ -143,7 +143,7 @@ pub fn create_login_route(
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
-                let users = user_collection.get_from_constraint(criteria.unwrap());
+                let users = user_collection.get_from_constraint(&criteria.unwrap());
                 if users.is_empty() {
                     return StatusCode::UNAUTHORIZED.into_response();
                 }

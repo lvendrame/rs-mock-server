@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsString, fs, sync::{Arc, RwLock}};
 use serde_json::Value;
 
-use crate::memory_db::{constraint::Constraint, id_manager::{IdManager, IdType, IdValue}, CollectionConfig};
+use crate::memory_db::{constraint::Constraint, id_manager::{IdManager, IdType, IdValue}, CollectionConfig, Criteria, CriteriaBuilder};
 
 pub type MemoryCollection = Arc<RwLock<InternalMemoryCollection>>;
 
@@ -57,7 +57,11 @@ pub trait DbCollection {
 
     fn get(&self, id: &str) -> Option<Value>;
 
-    fn get_from_constraint(&self, criteria: Constraint) -> Vec<Value>;
+    fn get_from_criteria(&self, criteria: &Criteria) -> Vec<Value>;
+
+    fn get_from_where(&self, where_statement: &str) -> Vec<Value>;
+
+    fn get_from_constraint(&self, criteria: &Constraint) -> Vec<Value>;
 
     fn exists(&self, id: &str) -> bool;
 
@@ -101,7 +105,17 @@ impl DbCollection for InternalMemoryCollection {
         self.collection.get(id).cloned()
     }
 
-    fn get_from_constraint(&self, criteria: Constraint) -> Vec<Value> {
+    fn get_from_constraint(&self, constraint: &Constraint) -> Vec<Value> {
+        self.collection.values().filter(|&item| {
+                match item {
+                    Value::Object(map) => constraint.compare_item(map),
+                    _ => false
+                }
+            }).cloned()
+            .collect::<Vec<Value>>()
+    }
+
+    fn get_from_criteria(&self, criteria: &Criteria) -> Vec<Value> {
         self.collection.values().filter(|&item| {
                 match item {
                     Value::Object(map) => criteria.compare_item(map),
@@ -109,6 +123,15 @@ impl DbCollection for InternalMemoryCollection {
                 }
             }).cloned()
             .collect::<Vec<Value>>()
+    }
+
+    fn get_from_where(&self, where_statement: &str) -> Vec<Value> {
+        let criteria = CriteriaBuilder::start(where_statement);
+        if criteria.is_err() {
+            return vec![];
+        }
+
+        self.get_from_criteria(criteria.unwrap().as_ref())
     }
 
     fn exists(&self, id: &str) -> bool {
@@ -298,8 +321,16 @@ impl DbCollection for MemoryCollection {
         self.read().unwrap().get(id)
     }
 
-    fn get_from_constraint(&self, criteria: Constraint) -> Vec<Value> {
-        self.read().unwrap().get_from_constraint(criteria)
+    fn get_from_constraint(&self, constraint: &Constraint) -> Vec<Value> {
+        self.read().unwrap().get_from_constraint(constraint)
+    }
+
+    fn get_from_criteria(&self, criteria: &Criteria) -> Vec<Value> {
+        self.read().unwrap().get_from_criteria(criteria)
+    }
+
+    fn get_from_where(&self, where_statement: &str) -> Vec<Value> {
+        self.read().unwrap().get_from_where(where_statement)
     }
 
     fn exists(&self, id: &str) -> bool {
@@ -1150,13 +1181,13 @@ mod tests {
         collection.add(json!({"name": "Charlie", "age": 25, "city": "New York"}));
 
         // Test equal comparison for string
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("Alice"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2);
 
         for result in &results {
@@ -1164,13 +1195,13 @@ mod tests {
         }
 
         // Test equal comparison for number
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "age".to_string(),
             Comparer::Equal,
             Some(json!(25))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2);
 
         for result in &results {
@@ -1188,13 +1219,13 @@ mod tests {
         collection.add(json!({"name": "Charlie", "age": 25, "active": true}));
 
         // Test different comparison for string
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "name".to_string(),
             Comparer::Different,
             Some(json!("Alice"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2);
 
         for result in &results {
@@ -1202,13 +1233,13 @@ mod tests {
         }
 
         // Test different comparison for boolean
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "active".to_string(),
             Comparer::Different,
             Some(json!(true))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].get("name").unwrap(), "Bob");
     }
@@ -1224,13 +1255,13 @@ mod tests {
         collection.add(json!({"name": "David", "age": 20, "score": 95.0}));
 
         // Test greater than
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "age".to_string(),
             Comparer::GreaterThan,
             Some(json!(25))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Bob (30) and Charlie (35)
 
         let ages: Vec<i64> = results.iter()
@@ -1240,33 +1271,33 @@ mod tests {
         assert!(ages.contains(&35));
 
         // Test greater than or equal
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "age".to_string(),
             Comparer::GreaterThanOrEqual,
             Some(json!(30))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Bob (30) and Charlie (35)
 
         // Test less than
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "score".to_string(),
             Comparer::LessThan,
             Some(json!(90.0))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Alice (85.5) and Charlie (78.5)
 
         // Test less than or equal
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "score".to_string(),
             Comparer::LessThanOrEqual,
             Some(json!(85.5))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Alice (85.5) and Charlie (78.5)
     }
 
@@ -1281,13 +1312,13 @@ mod tests {
         collection.add(json!({"name": "David", "email": "david@yahoo.com"}));
 
         // Test LIKE with % wildcard
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "email".to_string(),
             Comparer::Like,
             Some(json!("%@gmail.com"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         let names: Vec<&str> = results.iter()
@@ -1297,24 +1328,24 @@ mod tests {
         assert!(names.contains(&"Charlie"));
 
         // Test LIKE with _ wildcard
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "name".to_string(),
             Comparer::Like,
             Some(json!("B_b"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].get("name").unwrap(), "Bob");
 
         // Test complex pattern
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "email".to_string(),
             Comparer::Like,
             Some(json!("%@%.com"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 4); // All emails end with .com
     }
 
@@ -1328,24 +1359,24 @@ mod tests {
         collection.add(json!({"name": "Charlie", "phone": "987-654-3210", "notes": null}));
 
         // Test IS NULL
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "phone".to_string(),
             Comparer::IsNull,
             None
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].get("name").unwrap(), "Bob");
 
         // Test IS NOT NULL
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "phone".to_string(),
             Comparer::IsNotNull,
             None
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         let names: Vec<&str> = results.iter()
@@ -1355,13 +1386,13 @@ mod tests {
         assert!(names.contains(&"Charlie"));
 
         // Test IS NULL for notes
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "notes".to_string(),
             Comparer::IsNull,
             None
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Alice and Charlie
     }
 
@@ -1374,23 +1405,23 @@ mod tests {
         collection.add(json!({"name": "Bob", "age": 30}));
 
         // Test with criteria that matches nothing
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("NonExistent"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert!(results.is_empty());
 
         // Test with field that doesn't exist
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "salary".to_string(),
             Comparer::GreaterThan,
             Some(json!(50000))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert!(results.is_empty());
     }
 
@@ -1398,13 +1429,13 @@ mod tests {
     fn test_get_from_criteria_empty_collection() {
         let collection = create_test_collection();
 
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("Alice"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert!(results.is_empty());
     }
 
@@ -1419,13 +1450,13 @@ mod tests {
         collection.collection.insert("2".to_string(), json!(42));
         collection.collection.insert("3".to_string(), json!({"name": "Alice", "age": 25}));
 
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!("Alice"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 1); // Only the object should match
         assert_eq!(results[0].get("name").unwrap(), "Alice");
     }
@@ -1475,33 +1506,33 @@ mod tests {
         }));
 
         // Test filtering by department
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "department".to_string(),
             Comparer::Equal,
             Some(json!("Engineering"))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         // Test filtering by salary range
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "salary".to_string(),
             Comparer::GreaterThan,
             Some(json!(70000.0))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         // Test filtering by active status
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "active".to_string(),
             Comparer::Equal,
             Some(json!(true))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         let names: Vec<&str> = results.iter()
@@ -1521,53 +1552,53 @@ mod tests {
         collection.add(json!({"name": "Test", "score": -1, "flag": false}));
 
         // Test empty string
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "name".to_string(),
             Comparer::Equal,
             Some(json!(""))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 1);
 
         // Test zero values - note that JSON treats 0 and 0.0 differently
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "score".to_string(),
             Comparer::Equal,
             Some(json!(0))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 1); // Only the integer 0 should match
 
         // Test with 0.0 specifically
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "score".to_string(),
             Comparer::Equal,
             Some(json!(0.0))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 1); // Only the float 0.0 should match
 
         // Test false boolean
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "flag".to_string(),
             Comparer::Equal,
             Some(json!(false))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 2);
 
         // Test negative numbers
-        let criteria = Constraint::try_new(
+        let constraint = Constraint::try_new(
             "score".to_string(),
             Comparer::LessThan,
             Some(json!(0))
         ).unwrap();
 
-        let results = collection.get_from_constraint(criteria);
+        let results = collection.get_from_constraint(&constraint);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].get("name").unwrap(), "Test");
     }
