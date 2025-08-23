@@ -3,16 +3,15 @@ use serde_json::Value;
 
 use crate::memory_db::{constraint::Constraint, id_manager::{IdManager, IdType, IdValue}, CollectionConfig};
 
-pub type ProtectedMemCollection = Arc<RwLock<MemoryCollection>>;
-pub type LockedMemCollection = RwLock<MemoryCollection>;
+pub type MemoryCollection = Arc<RwLock<InternalMemoryCollection>>;
 
-pub struct MemoryCollection {
+pub struct InternalMemoryCollection {
     collection: HashMap<String, Value>,
     id_manager: IdManager,
     pub config: CollectionConfig,
 }
 
-impl MemoryCollection {
+impl InternalMemoryCollection {
     pub fn new(config: CollectionConfig) -> Self {
         let db: HashMap<String, Value> = HashMap::new();
         let id_manager = IdManager::new(config.id_type);
@@ -23,12 +22,8 @@ impl MemoryCollection {
         }
     }
 
-    pub fn into_protected(self) -> ProtectedMemCollection {
+    pub fn into_protected(self) -> MemoryCollection {
         Arc::new(RwLock::new(self))
-    }
-
-    pub fn into_locked(self) -> LockedMemCollection {
-        RwLock::new(self)
     }
 
     fn merge_json_values(mut base: Value, update: Value) -> Value {
@@ -54,6 +49,8 @@ impl MemoryCollection {
 }
 
 pub trait DbCollection {
+    fn new_coll(config: CollectionConfig) -> Self;
+
     fn get_all(&self) -> Vec<Value>;
 
     fn get_paginated(&self, offset: usize, limit: usize) -> Vec<Value>;
@@ -83,7 +80,11 @@ pub trait DbCollection {
     fn load_from_file(&mut self, file_path: &OsString) -> Result<String, String>;
 }
 
-impl DbCollection for MemoryCollection {
+impl DbCollection for InternalMemoryCollection {
+    fn new_coll(config: CollectionConfig) -> Self {
+        Self::new(config)
+    }
+
     fn get_all(&self) -> Vec<Value> {
         self.collection.values().cloned().collect::<Vec<Value>>()
     }
@@ -280,7 +281,11 @@ impl DbCollection for MemoryCollection {
     }
 }
 
-impl DbCollection for ProtectedMemCollection {
+impl DbCollection for MemoryCollection {
+    fn new_coll(config: CollectionConfig) -> Self {
+        InternalMemoryCollection::new_coll(config).into_protected()
+    }
+
     fn get_all(&self) -> Vec<Value> {
         self.read().unwrap().get_all()
     }
@@ -344,16 +349,16 @@ mod tests {
     use serde_json::json;
     use crate::memory_db::constraint::Comparer;
 
-    fn create_test_collection() -> MemoryCollection {
-        MemoryCollection::new(CollectionConfig::int("id", "test_collection"))
+    fn create_test_collection() -> InternalMemoryCollection {
+        InternalMemoryCollection::new(CollectionConfig::int("id", "test_collection"))
     }
 
-    fn create_uuid_collection() -> MemoryCollection {
-        MemoryCollection::new(CollectionConfig::uuid("id", "uuid_collection"))
+    fn create_uuid_collection() -> InternalMemoryCollection {
+        InternalMemoryCollection::new(CollectionConfig::uuid("id", "uuid_collection"))
     }
 
-    fn create_none_collection() -> MemoryCollection {
-        MemoryCollection::new(CollectionConfig::none("id", "none_collection"))
+    fn create_none_collection() -> InternalMemoryCollection {
+        InternalMemoryCollection::new(CollectionConfig::none("id", "none_collection"))
     }
 
     #[test]
@@ -764,7 +769,7 @@ mod tests {
             "description": "New field"
         });
 
-        let merged = MemoryCollection::merge_json_values(base, update);
+        let merged = InternalMemoryCollection::merge_json_values(base, update);
 
         assert_eq!(merged.get("name").unwrap(), "Updated");
         assert_eq!(merged.get("description").unwrap(), "New field");
@@ -781,13 +786,13 @@ mod tests {
         let base = json!("original");
         let update = json!("updated");
 
-        let merged = MemoryCollection::merge_json_values(base, update);
+        let merged = InternalMemoryCollection::merge_json_values(base, update);
         assert_eq!(merged, json!("updated"));
 
         let base = json!(42);
         let update = json!(100);
 
-        let merged = MemoryCollection::merge_json_values(base, update);
+        let merged = InternalMemoryCollection::merge_json_values(base, update);
         assert_eq!(merged, json!(100));
     }
 
@@ -808,7 +813,7 @@ mod tests {
 
     #[test]
     fn test_custom_id_key() {
-        let mut collection = MemoryCollection::new(
+        let mut collection = InternalMemoryCollection::new(
             CollectionConfig::int("customId", "custom_collection")
         );
 
@@ -1102,7 +1107,7 @@ mod tests {
 
     #[test]
     fn test_load_from_file_custom_id_key() {
-        let mut collection = MemoryCollection::new(
+        let mut collection = InternalMemoryCollection::new(
             CollectionConfig::int("customId", "custom_collection")
         );
 
@@ -1405,7 +1410,7 @@ mod tests {
 
     #[test]
     fn test_get_from_criteria_with_non_object_values() {
-        let mut collection = MemoryCollection::new(
+        let mut collection = InternalMemoryCollection::new(
             CollectionConfig::none("id", "test_collection")
         );
 

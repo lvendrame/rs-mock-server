@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App, handlers::build_rest_routes, memory_db::{constraint::{Comparer, Constraint}, id_manager::IdType, memory_collection::ProtectedMemCollection, CollectionConfig, DbCollection, DbCommon}
+    app::App, handlers::build_rest_routes, memory_db::{constraint::{Comparer, Constraint}, id_manager::IdType, memory_collection::MemoryCollection, CollectionConfig, DbCollection, DbCommon}
 };
 
 static ID_FIELD: &str = "id";
@@ -48,7 +48,7 @@ fn check_password(item: &Value, password: String) -> bool {
     false
 }
 
-fn generate_token(item: &Value, auth_collection: &mut ProtectedMemCollection) -> Response<axum::body::Body> {
+fn generate_token(item: &Value, auth_collection: &mut MemoryCollection) -> Response<axum::body::Body> {
     // Extract username from the user data
     let username = item.get(USERNAME_FIELD)
         .and_then(|v| v.as_str())
@@ -127,8 +127,8 @@ fn generate_token(item: &Value, auth_collection: &mut ProtectedMemCollection) ->
 pub fn create_login_route(
     app: &mut App,
     route_path: &str,
-    users_collection: &ProtectedMemCollection,
-    auth_collection: &ProtectedMemCollection,
+    users_collection: &MemoryCollection,
+    auth_collection: &MemoryCollection,
 ) {
     let login_route = format!("{}/login", route_path);
 
@@ -252,7 +252,7 @@ type AuthMiddlewareReturn = Pin<Box<dyn std::future::Future<Output = Result<Resp
 
 // For when you need access to the auth collection (token revocation)
 pub fn make_auth_middleware(
-    auth_collection: &ProtectedMemCollection,
+    auth_collection: &MemoryCollection,
 ) -> impl Clone + Send + Sync + 'static + Fn(Request, Next) -> AuthMiddlewareReturn {
     let auth_collection = Arc::clone(auth_collection);
     move |req: Request, next: Next| {
@@ -285,7 +285,7 @@ pub fn make_auth_middleware(
 pub fn create_logout_route(
     app: &mut App,
     route_path: &str,
-    auth_collection: &ProtectedMemCollection,
+    auth_collection: &MemoryCollection,
 ) {
     let logout_route = format!("{}/logout", route_path);
 

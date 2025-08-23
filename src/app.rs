@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex, RwLock}};
+use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex}};
 
 use axum::{
     middleware, response::IntoResponse, routing::{get, MethodRouter}, Router
@@ -10,7 +10,7 @@ use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
 use crate::{handlers::make_auth_middleware,
-    memory_db::{memory_collection::ProtectedMemCollection, Db},
+    memory_db::{memory_collection::MemoryCollection, Db, DbCommon},
     pages::Pages,
     route_builder::{route_manager::RouteManager, RouteGenerator, RouteRegistrator},
     upload_configuration::UploadConfiguration
@@ -21,9 +21,9 @@ pub struct App {
     pub root_path: String,
     pub router: RefCell<Router>,
     pub pages: Arc<Mutex<Pages>>,
-    pub auth_collection: Option<ProtectedMemCollection>,
+    pub auth_collection: Option<MemoryCollection>,
     uploads_configurations: Vec<UploadConfiguration>,
-    pub db: Arc<RwLock<Db>>,
+    pub db: Db,
 }
 
 impl Default for App {
@@ -34,7 +34,7 @@ impl Default for App {
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let auth_collection = None;
-        let db = Db::new().into_protected();
+        let db = Db::new_db();
         App { port, root_path, router, pages, uploads_configurations, auth_collection, db }
     }
 }
@@ -46,7 +46,7 @@ impl App {
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let auth_collection = None;
-        let db = Db::new().into_protected();
+        let db = Db::new_db();
         App { port, root_path, router, pages, uploads_configurations, auth_collection, db }
     }
 

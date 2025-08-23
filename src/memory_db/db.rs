@@ -1,41 +1,43 @@
 use std::{collections::HashMap, sync::{Arc, RwLock}};
 
-use crate::memory_db::{CollectionConfig, MemoryCollection, ProtectedMemCollection};
+use crate::memory_db::{CollectionConfig, DbCollection, MemoryCollection};
 
-pub type DbProtected = Arc<RwLock<Db>>;
+pub type Db = Arc<RwLock<InternalDb>>;
 
 #[derive(Default)]
-pub struct Db {
-    collections: HashMap<String, ProtectedMemCollection>,
+pub struct InternalDb {
+    collections: HashMap<String, MemoryCollection>,
 }
 
-impl Db {
-    pub fn new() -> Self {
-        Self::default()
-    }
+impl InternalDb {
 
-    pub fn into_protected(self) -> DbProtected {
+    pub fn into_protected(self) -> Db {
         Arc::new(RwLock::new(self))
     }
 }
 
 pub trait DbCommon {
-    fn create(&mut self, config: CollectionConfig) -> ProtectedMemCollection;
-    fn get(&self, col_name: &str) -> Option<ProtectedMemCollection>;
+    fn new_db() -> Self;
+    fn create(&mut self, config: CollectionConfig) -> MemoryCollection;
+    fn get(&self, col_name: &str) -> Option<MemoryCollection>;
     fn list_collections(&self) -> Vec<String>;
 }
 
-impl DbCommon for Db {
+impl DbCommon for InternalDb {
 
-    fn create(&mut self, config: CollectionConfig) -> ProtectedMemCollection {
+    fn new_db() -> Self {
+        Self::default()
+    }
+
+    fn create(&mut self, config: CollectionConfig) -> MemoryCollection {
         let coll_name = config.name.clone();
-        let collection = MemoryCollection::new(config).into_protected();
+        let collection = MemoryCollection::new_coll(config);
         self.collections.insert(coll_name, Arc::clone(&collection));
 
         collection
     }
 
-    fn get(&self, col_name: &str) -> Option<ProtectedMemCollection> {
+    fn get(&self, col_name: &str) -> Option<MemoryCollection> {
         self.collections.get(col_name).map(Arc::clone)
     }
 
@@ -45,12 +47,17 @@ impl DbCommon for Db {
 
 }
 
-impl DbCommon for DbProtected {
-    fn create(&mut self, config: CollectionConfig) -> ProtectedMemCollection {
+impl DbCommon for Db {
+
+    fn new_db() -> Self {
+        InternalDb::new_db().into_protected()
+    }
+
+    fn create(&mut self, config: CollectionConfig) -> MemoryCollection {
         self.write().unwrap().create(config)
     }
 
-    fn get(&self, col_name: &str) -> Option<ProtectedMemCollection> {
+    fn get(&self, col_name: &str) -> Option<MemoryCollection> {
         self.read().unwrap().get(col_name)
     }
 
