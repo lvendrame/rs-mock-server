@@ -60,7 +60,7 @@ pub trait DbCollection {
 
     fn get(&self, id: &str) -> Option<Value>;
 
-    fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value>;
+    fn get_from_constraint(&self, criteria: Constraint) -> Vec<Value>;
 
     fn exists(&self, id: &str) -> bool;
 
@@ -100,7 +100,7 @@ impl DbCollection for MemoryCollection {
         self.collection.get(id).cloned()
     }
 
-    fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value> {
+    fn get_from_constraint(&self, criteria: Constraint) -> Vec<Value> {
         self.collection.values().filter(|&item| {
                 match item {
                     Value::Object(map) => criteria.compare_item(map),
@@ -293,8 +293,8 @@ impl DbCollection for ProtectedMemCollection {
         self.read().unwrap().get(id)
     }
 
-    fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value> {
-        self.read().unwrap().get_from_criteria(criteria)
+    fn get_from_constraint(&self, criteria: Constraint) -> Vec<Value> {
+        self.read().unwrap().get_from_constraint(criteria)
     }
 
     fn exists(&self, id: &str) -> bool {
@@ -1151,7 +1151,7 @@ mod tests {
             Some(json!("Alice"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2);
 
         for result in &results {
@@ -1165,7 +1165,7 @@ mod tests {
             Some(json!(25))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2);
 
         for result in &results {
@@ -1189,7 +1189,7 @@ mod tests {
             Some(json!("Alice"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2);
 
         for result in &results {
@@ -1203,7 +1203,7 @@ mod tests {
             Some(json!(true))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].get("name").unwrap(), "Bob");
     }
@@ -1225,7 +1225,7 @@ mod tests {
             Some(json!(25))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Bob (30) and Charlie (35)
 
         let ages: Vec<i64> = results.iter()
@@ -1241,7 +1241,7 @@ mod tests {
             Some(json!(30))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Bob (30) and Charlie (35)
 
         // Test less than
@@ -1251,7 +1251,7 @@ mod tests {
             Some(json!(90.0))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Alice (85.5) and Charlie (78.5)
 
         // Test less than or equal
@@ -1261,7 +1261,7 @@ mod tests {
             Some(json!(85.5))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Alice (85.5) and Charlie (78.5)
     }
 
@@ -1282,7 +1282,7 @@ mod tests {
             Some(json!("%@gmail.com"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         let names: Vec<&str> = results.iter()
@@ -1298,7 +1298,7 @@ mod tests {
             Some(json!("B_b"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].get("name").unwrap(), "Bob");
 
@@ -1309,7 +1309,7 @@ mod tests {
             Some(json!("%@%.com"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 4); // All emails end with .com
     }
 
@@ -1329,7 +1329,7 @@ mod tests {
             None
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].get("name").unwrap(), "Bob");
 
@@ -1340,7 +1340,7 @@ mod tests {
             None
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         let names: Vec<&str> = results.iter()
@@ -1356,7 +1356,7 @@ mod tests {
             None
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Alice and Charlie
     }
 
@@ -1375,7 +1375,7 @@ mod tests {
             Some(json!("NonExistent"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert!(results.is_empty());
 
         // Test with field that doesn't exist
@@ -1385,7 +1385,7 @@ mod tests {
             Some(json!(50000))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert!(results.is_empty());
     }
 
@@ -1399,7 +1399,7 @@ mod tests {
             Some(json!("Alice"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert!(results.is_empty());
     }
 
@@ -1420,7 +1420,7 @@ mod tests {
             Some(json!("Alice"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 1); // Only the object should match
         assert_eq!(results[0].get("name").unwrap(), "Alice");
     }
@@ -1476,7 +1476,7 @@ mod tests {
             Some(json!("Engineering"))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         // Test filtering by salary range
@@ -1486,7 +1486,7 @@ mod tests {
             Some(json!(70000.0))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         // Test filtering by active status
@@ -1496,7 +1496,7 @@ mod tests {
             Some(json!(true))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2); // Alice and Charlie
 
         let names: Vec<&str> = results.iter()
@@ -1522,7 +1522,7 @@ mod tests {
             Some(json!(""))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 1);
 
         // Test zero values - note that JSON treats 0 and 0.0 differently
@@ -1532,7 +1532,7 @@ mod tests {
             Some(json!(0))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 1); // Only the integer 0 should match
 
         // Test with 0.0 specifically
@@ -1542,7 +1542,7 @@ mod tests {
             Some(json!(0.0))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 1); // Only the float 0.0 should match
 
         // Test false boolean
@@ -1552,7 +1552,7 @@ mod tests {
             Some(json!(false))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 2);
 
         // Test negative numbers
@@ -1562,7 +1562,7 @@ mod tests {
             Some(json!(0))
         ).unwrap();
 
-        let results = collection.get_from_criteria(criteria);
+        let results = collection.get_from_constraint(criteria);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].get("name").unwrap(), "Test");
     }

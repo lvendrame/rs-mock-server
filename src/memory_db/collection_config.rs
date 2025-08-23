@@ -7,13 +7,19 @@ pub struct CollectionConfig {
     pub name: String,
 }
 
-impl CollectionConfig {
-    pub fn new() -> Self {
+impl Default for CollectionConfig {
+    fn default() -> Self {
         Self {
             id_type: IdType::Uuid,
             id_key: "id".to_string(),
             name: "{unknown}".to_string(),
         }
+    }
+}
+
+impl CollectionConfig {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn from(id_type: IdType, id_key: &str, name: &str) -> Self {

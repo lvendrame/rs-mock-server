@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App, handlers::build_rest_routes, memory_db::{constraint::{Comparer, Constraint}, id_manager::IdType, memory_collection::ProtectedMemCollection, CollectionConfig, DbCollection, DbProtectedExt}
+    app::App, handlers::build_rest_routes, memory_db::{constraint::{Comparer, Constraint}, id_manager::IdType, memory_collection::ProtectedMemCollection, CollectionConfig, DbCollection, DbCommon}
 };
 
 static ID_FIELD: &str = "id";
@@ -48,7 +48,7 @@ fn check_password(item: &Value, password: String) -> bool {
     false
 }
 
-fn generate_token(item: &Value, auth_collection: &ProtectedMemCollection) -> Response<axum::body::Body> {
+fn generate_token(item: &Value, auth_collection: &mut ProtectedMemCollection) -> Response<axum::body::Body> {
     // Extract username from the user data
     let username = item.get(USERNAME_FIELD)
         .and_then(|v| v.as_str())
@@ -98,7 +98,6 @@ fn generate_token(item: &Value, auth_collection: &ProtectedMemCollection) -> Res
         if let Some(obj) = user_data.as_object_mut() {
             obj.insert(TOKEN_FIELD.to_string(), Value::String(token.clone())); // add token
         }
-        let mut auth_collection = auth_collection.write().unwrap();
         auth_collection.add(user_data);
     }
 
@@ -135,25 +134,23 @@ pub fn create_login_route(
 
     // POST /resource/login - auth
     let user_collection = Arc::clone(users_collection);
-    let auth_collection = Arc::clone(auth_collection);
+    let mut auth_collection = Arc::clone(auth_collection);
     let create_router = post(move |Json(payload): Json<Value>| {
         async move {
             if let Some((username, password)) = try_get_auth_info(payload) {
-                let user_collection = user_collection.read().unwrap();
-
                 let criteria = Constraint::try_new(USERNAME_FIELD.to_string(), Comparer::Equal, Some(Value::String(username.clone())));
                 if criteria.is_err() {
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
 
-                let users = user_collection.get_from_criteria(criteria.unwrap());
+                let users = user_collection.get_from_constraint(criteria.unwrap());
                 if users.is_empty() {
                     return StatusCode::UNAUTHORIZED.into_response();
                 }
 
                 return match users.first() {
                     Some(item) => if check_password(item, password) {
-                        (StatusCode::OK, generate_token(item, &auth_collection)).into_response()
+                        (StatusCode::OK, generate_token(item, &mut auth_collection)).into_response()
                     } else {
                         StatusCode::UNAUTHORIZED.into_response()
                     },
@@ -274,11 +271,8 @@ pub fn make_auth_middleware(
             };
 
             // Check if token exists in auth_collection (for token revocation/blacklisting)
-            {
-                let auth_collection = auth_collection.read().unwrap();
-                if !auth_collection.exists(&token) {
-                    return Err(StatusCode::UNAUTHORIZED);
-                }
+            if !auth_collection.exists(&token) {
+                return Err(StatusCode::UNAUTHORIZED);
             }
 
             // Token is valid, continue with the request

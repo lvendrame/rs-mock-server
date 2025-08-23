@@ -7,7 +7,7 @@ use jgd_rs::generate_jgd_from_file;
 use serde_json::Value;
 
 use crate::{
-    app::App, handlers::is_jgd, memory_db::{id_manager::IdType, memory_collection::ProtectedMemCollection, CollectionConfig, DbCollection, DbProtectedExt}, route_builder::RouteRegistrator
+    app::App, handlers::is_jgd, memory_db::{id_manager::IdType, memory_collection::ProtectedMemCollection, CollectionConfig, DbCollection, DbCommon}, route_builder::RouteRegistrator
 };
 
 pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection: &ProtectedMemCollection) {
@@ -15,7 +15,6 @@ pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection
     let list_collection = Arc::clone(collection);
     let list_router = get(move || {
         async move {
-            let list_collection = list_collection.read().unwrap();
             let items = list_collection.get_all();
             Json(items).into_response()
         }
@@ -119,7 +118,7 @@ pub fn build_rest_routes(
             Err(error) => Err(format!("Error to generate JGD Json for file {}. Details: {}", file_path.to_string_lossy(), error)),
         }
     } else {
-        collection.write().unwrap().load_from_file(file_path)
+        collection.load_from_file(file_path)
     };
 
     // load_initial_data(file_path, &collection);
