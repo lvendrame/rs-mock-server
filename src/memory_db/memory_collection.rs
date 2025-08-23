@@ -31,11 +31,64 @@ impl MemoryCollection {
         RwLock::new(self)
     }
 
-    pub fn get_all(&self) -> Vec<Value> {
+    fn merge_json_values(mut base: Value, update: Value) -> Value {
+        match (&mut base, update) {
+            (Value::Object(base_map), Value::Object(update_map)) => {
+                // Merge object fields
+                for (key, value) in update_map {
+                    if base_map.contains_key(&key) {
+                        // Recursively merge nested objects
+                        let existing_value = base_map.get(&key).unwrap().clone();
+                        base_map.insert(key, Self::merge_json_values(existing_value, value));
+                    } else {
+                        // Add new field
+                        base_map.insert(key, value);
+                    }
+                }
+                base
+            }
+            // For non-object values, replace entirely
+            (_, update_value) => update_value,
+        }
+    }
+}
+
+pub trait DbCollection {
+    fn get_all(&self) -> Vec<Value>;
+
+    fn get_paginated(&self, offset: usize, limit: usize) -> Vec<Value>;
+
+    fn get(&self, id: &str) -> Option<Value>;
+
+    fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value>;
+
+    fn exists(&self, id: &str) -> bool;
+
+    fn count(&self) -> usize;
+
+    fn add(&mut self, item: Value) -> Option<Value>;
+
+    fn add_batch(&mut self, items: Value) -> Vec<Value>;
+
+    fn update(&mut self, id: &str, item: Value) -> Option<Value>;
+
+    fn update_partial(&mut self, id: &str, partial_item: Value) -> Option<Value>;
+
+    fn delete(&mut self, id: &str) -> Option<Value>;
+
+    fn clear(&mut self) -> usize;
+
+    fn load_from_json(&mut self, json_value: Value) -> Result<Vec<Value>, String>;
+
+    fn load_from_file(&mut self, file_path: &OsString) -> Result<String, String>;
+}
+
+impl DbCollection for MemoryCollection {
+    fn get_all(&self) -> Vec<Value> {
         self.collection.values().cloned().collect::<Vec<Value>>()
     }
 
-    pub fn get_paginated(&self, offset: usize, limit: usize) -> Vec<Value> {
+    fn get_paginated(&self, offset: usize, limit: usize) -> Vec<Value> {
         self.collection.values()
             .skip(offset)
             .take(limit)
@@ -43,11 +96,11 @@ impl MemoryCollection {
             .collect::<Vec<Value>>()
     }
 
-    pub fn get(&self, id: &str) -> Option<Value> {
+    fn get(&self, id: &str) -> Option<Value> {
         self.collection.get(id).cloned()
     }
 
-    pub fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value> {
+    fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value> {
         self.collection.values().filter(|&item| {
                 match item {
                     Value::Object(map) => criteria.compare_item(map),
@@ -57,15 +110,15 @@ impl MemoryCollection {
             .collect::<Vec<Value>>()
     }
 
-    pub fn exists(&self, id: &str) -> bool {
+    fn exists(&self, id: &str) -> bool {
         self.collection.contains_key(id)
     }
 
-    pub fn count(&self) -> usize {
+    fn count(&self) -> usize {
         self.collection.len()
     }
 
-    pub fn add(&mut self, item: Value) -> Option<Value> {
+    fn add(&mut self, item: Value) -> Option<Value> {
         let next_id = {
             self.id_manager.next()
         };
@@ -97,7 +150,7 @@ impl MemoryCollection {
         None
     }
 
-    pub fn add_batch(&mut self, items: Value) -> Vec<Value> {
+    fn add_batch(&mut self, items: Value) -> Vec<Value> {
         let mut added_items = Vec::new();
 
         if let Value::Array(items_array) = items {
@@ -153,7 +206,7 @@ impl MemoryCollection {
         added_items
     }
 
-    pub fn update(&mut self, id: &str, item: Value) -> Option<Value> {
+    fn update(&mut self, id: &str, item: Value) -> Option<Value> {
         let mut item = item;
 
         // Add the ID to the item using the configured id_key
@@ -169,7 +222,7 @@ impl MemoryCollection {
         }
     }
 
-    pub fn update_partial(&mut self, id: &str, partial_item: Value) -> Option<Value> {
+    fn update_partial(&mut self, id: &str, partial_item: Value) -> Option<Value> {
         if let Some(existing_item) = self.collection.get(id).cloned() {
             // Merge the partial update with the existing item
             let updated_item = Self::merge_json_values(existing_item, partial_item);
@@ -188,38 +241,17 @@ impl MemoryCollection {
         }
     }
 
-    pub fn delete(&mut self, id: &str) -> Option<Value> {
+    fn delete(&mut self, id: &str) -> Option<Value> {
         self.collection.remove(id)
     }
 
-    pub fn clear(&mut self) -> usize {
+    fn clear(&mut self) -> usize {
         let count = self.collection.len();
         self.collection.clear();
         count
     }
 
-    fn merge_json_values(mut base: Value, update: Value) -> Value {
-        match (&mut base, update) {
-            (Value::Object(base_map), Value::Object(update_map)) => {
-                // Merge object fields
-                for (key, value) in update_map {
-                    if base_map.contains_key(&key) {
-                        // Recursively merge nested objects
-                        let existing_value = base_map.get(&key).unwrap().clone();
-                        base_map.insert(key, Self::merge_json_values(existing_value, value));
-                    } else {
-                        // Add new field
-                        base_map.insert(key, value);
-                    }
-                }
-                base
-            }
-            // For non-object values, replace entirely
-            (_, update_value) => update_value,
-        }
-    }
-
-    pub fn load_from_json(&mut self, json_value: Value) -> Result<Vec<Value>, String> {
+    fn load_from_json(&mut self, json_value: Value) -> Result<Vec<Value>, String> {
         // Guard: Check if it's a JSON Array
         let Value::Array(_) = json_value else {
             return Err("⚠️ Informed JSON does not contain a JSON array in the root, skipping initial data load".to_string());
@@ -230,7 +262,7 @@ impl MemoryCollection {
         Ok(added_items)
     }
 
-    pub fn load_from_file(&mut self, file_path: &OsString) -> Result<String, String> {
+    fn load_from_file(&mut self, file_path: &OsString) -> Result<String, String> {
         let file_path_lossy = file_path.to_string_lossy();
 
         // Guard: Try to read the file content
@@ -245,6 +277,64 @@ impl MemoryCollection {
             Ok(added_items) => Ok(format!("✔️ Loaded {} initial items from {}", added_items.len(), file_path_lossy)),
             Err(error) => Err(format!("Error to process the file {}. Details: {}", file_path_lossy, error)),
         }
+    }
+}
+
+impl DbCollection for ProtectedMemCollection {
+    fn get_all(&self) -> Vec<Value> {
+        self.read().unwrap().get_all()
+    }
+
+    fn get_paginated(&self, offset: usize, limit: usize) -> Vec<Value> {
+        self.read().unwrap().get_paginated(offset, limit)
+    }
+
+    fn get(&self, id: &str) -> Option<Value> {
+        self.read().unwrap().get(id)
+    }
+
+    fn get_from_criteria(&self, criteria: Constraint) -> Vec<Value> {
+        self.read().unwrap().get_from_criteria(criteria)
+    }
+
+    fn exists(&self, id: &str) -> bool {
+        self.read().unwrap().exists(id)
+    }
+
+    fn count(&self) -> usize {
+        self.read().unwrap().count()
+    }
+
+    fn add(&mut self, item: Value) -> Option<Value> {
+        self.write().unwrap().add(item)
+    }
+
+    fn add_batch(&mut self, items: Value) -> Vec<Value> {
+        self.write().unwrap().add_batch(items)
+    }
+
+    fn update(&mut self, id: &str, item: Value) -> Option<Value> {
+        self.write().unwrap().update(id, item)
+    }
+
+    fn update_partial(&mut self, id: &str, partial_item: Value) -> Option<Value> {
+        self.write().unwrap().update_partial(id, partial_item)
+    }
+
+    fn delete(&mut self, id: &str) -> Option<Value> {
+        self.write().unwrap().delete(id)
+    }
+
+    fn clear(&mut self) -> usize {
+        self.write().unwrap().clear()
+    }
+
+    fn load_from_json(&mut self, json_value: Value) -> Result<Vec<Value>, String> {
+        self.write().unwrap().load_from_json(json_value)
+    }
+
+    fn load_from_file(&mut self, file_path: &OsString) -> Result<String, String> {
+        self.write().unwrap().load_from_file(file_path)
     }
 }
 

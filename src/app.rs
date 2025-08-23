@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex}};
+use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex, RwLock}};
 
 use axum::{
     middleware, response::IntoResponse, routing::{get, MethodRouter}, Router
@@ -23,7 +23,7 @@ pub struct App {
     pub pages: Arc<Mutex<Pages>>,
     pub auth_collection: Option<ProtectedMemCollection>,
     uploads_configurations: Vec<UploadConfiguration>,
-    pub db: Arc<Db>,
+    pub db: Arc<RwLock<Db>>,
 }
 
 impl Default for App {
@@ -34,7 +34,7 @@ impl Default for App {
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let auth_collection = None;
-        let db = Arc::new(Db::new());
+        let db = Db::new().into_protected();
         App { port, root_path, router, pages, uploads_configurations, auth_collection, db }
     }
 }
@@ -46,7 +46,7 @@ impl App {
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let auth_collection = None;
-        let db = Arc::new(Db::new());
+        let db = Db::new().into_protected();
         App { port, root_path, router, pages, uploads_configurations, auth_collection, db }
     }
 

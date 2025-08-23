@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App, handlers::build_rest_routes, memory_db::{constraint::{Comparer, Constraint}, id_manager::IdType, memory_collection::{MemoryCollection, ProtectedMemCollection}, CollectionConfig}
+    app::App, handlers::build_rest_routes, memory_db::{constraint::{Comparer, Constraint}, id_manager::IdType, memory_collection::ProtectedMemCollection, CollectionConfig, DbCollection, DbProtectedExt}
 };
 
 static ID_FIELD: &str = "id";
@@ -170,8 +170,7 @@ pub fn create_login_route(
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
     println!("Starting loading Auth route");
 
-    let in_memory_collection = MemoryCollection::new(CollectionConfig::none(TOKEN_FIELD, "{{auth}}-tokens"));
-    let auth_collection = in_memory_collection.into_protected();
+    let auth_collection = app.db.create(CollectionConfig::none(TOKEN_FIELD, "{{auth}}-tokens"));
 
     // The app.auth_collection should be set before to load the rest routes
     app.auth_collection = Some(Arc::clone( &auth_collection));
@@ -180,7 +179,7 @@ pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) 
     let users_collection = build_rest_routes(app, &users_routes, file_path, ID_FIELD, IdType::None, true);
     println!("✔️ Built REST routes for {}", users_routes);
 
-    if users_collection.read().unwrap().count() == 0 {
+    if users_collection.count() == 0 {
         app.auth_collection = None;
         return eprintln!("⚠️ Authentication routes were not created")
     }
@@ -296,7 +295,7 @@ pub fn create_logout_route(
 ) {
     let logout_route = format!("{}/logout", route_path);
 
-    let auth_collection = Arc::clone(auth_collection);
+    let mut auth_collection = Arc::clone(auth_collection);
     let logout_router = post(move |req: Request| {
         async move {
             // Extract token from request
@@ -306,10 +305,7 @@ pub fn create_logout_route(
             };
 
             // Remove token from auth collection (logout/revoke)
-            {
-                let mut auth_collection = auth_collection.write().unwrap();
-                auth_collection.delete(&token);
-            }
+            auth_collection.delete(&token);
 
             Json(serde_json::json!({
                 "message": "Successfully logged out"
