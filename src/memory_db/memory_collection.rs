@@ -380,6 +380,67 @@ mod tests {
     use serde_json::json;
     use crate::memory_db::constraint::Comparer;
 
+    #[test]
+    fn test_get_from_criteria_and_or_parentheses() {
+        let mut collection = create_test_collection();
+        collection.add(json!({"name": "Alice", "age": 25, "city": "NY"}));
+        collection.add(json!({"name": "Bob", "age": 30, "city": "Boston"}));
+        collection.add(json!({"name": "Charlie", "age": 25, "city": "Boston"}));
+        collection.add(json!({"name": "David", "age": 35, "city": "NY"}));
+
+        // WHERE age = 25 AND city = "NY"
+        let criteria = crate::memory_db::CriteriaBuilder::build("age = 25 AND city = \"NY\"").unwrap();
+        let results = collection.get_from_criteria(criteria.as_ref());
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].get("name").unwrap(), "Alice");
+
+        // WHERE age = 25 OR city = "Boston"
+        let criteria = crate::memory_db::CriteriaBuilder::build("age = 25 OR city = \"Boston\"").unwrap();
+        let results = collection.get_from_criteria(criteria.as_ref());
+        assert_eq!(results.len(), 3);
+        let names: Vec<&str> = results.iter().map(|r| r.get("name").unwrap().as_str().unwrap()).collect();
+        assert!(names.contains(&"Alice"));
+        assert!(names.contains(&"Bob"));
+        assert!(names.contains(&"Charlie"));
+
+        // WHERE age = 25 AND (city = "NY" OR city = "Boston")
+        let criteria = crate::memory_db::CriteriaBuilder::build("age = 25 AND (city = \"NY\" OR city = \"Boston\")").unwrap();
+        let results = collection.get_from_criteria(criteria.as_ref());
+        assert_eq!(results.len(), 2);
+        let names: Vec<&str> = results.iter().map(|r| r.get("name").unwrap().as_str().unwrap()).collect();
+        assert!(names.contains(&"Alice"));
+        assert!(names.contains(&"Charlie"));
+    }
+
+    #[test]
+    fn test_get_from_where_and_or_parentheses() {
+        let mut collection = create_test_collection();
+        collection.add(json!({"name": "Alice", "age": 25, "city": "NY"}));
+        collection.add(json!({"name": "Bob", "age": 30, "city": "Boston"}));
+        collection.add(json!({"name": "Charlie", "age": 25, "city": "Boston"}));
+        collection.add(json!({"name": "David", "age": 35, "city": "NY"}));
+
+        // WHERE age = 25 AND city = "NY"
+        let results = collection.get_from_where("WHERE age = 25 AND city = \"NY\"");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].get("name").unwrap(), "Alice");
+
+        // WHERE age = 25 OR city = "Boston"
+        let results = collection.get_from_where("WHERE age = 25 OR city = \"Boston\"");
+        assert_eq!(results.len(), 3);
+        let names: Vec<&str> = results.iter().map(|r| r.get("name").unwrap().as_str().unwrap()).collect();
+        assert!(names.contains(&"Alice"));
+        assert!(names.contains(&"Bob"));
+        assert!(names.contains(&"Charlie"));
+
+        // WHERE age = 25 AND (city = "NY" OR city = "Boston")
+        let results = collection.get_from_where("WHERE age = 25 AND (city = \"NY\" OR city = \"Boston\")");
+        assert_eq!(results.len(), 2);
+        let names: Vec<&str> = results.iter().map(|r| r.get("name").unwrap().as_str().unwrap()).collect();
+        assert!(names.contains(&"Alice"));
+        assert!(names.contains(&"Charlie"));
+    }
+
     fn create_test_collection() -> InternalMemoryCollection {
         InternalMemoryCollection::new(CollectionConfig::int("id", "test_collection"))
     }
