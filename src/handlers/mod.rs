@@ -10,5 +10,8 @@ pub use upload_handlers::*;
 pub mod auth_handlers;
 pub use auth_handlers::*;
 
+pub mod collections_handlers;
+pub use collections_handlers::*;
+
 pub mod utils;
 pub use utils::*;

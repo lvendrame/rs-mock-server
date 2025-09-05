@@ -10,11 +10,13 @@ use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
-use crate::{handlers::{make_auth_middleware, AUTH_COLLECTION},
+use crate::{handlers::{create_collections_routes, make_auth_middleware, AUTH_COLLECTION},
     pages::Pages,
     route_builder::{route_manager::RouteManager, RouteGenerator, RouteRegistrator},
     upload_configuration::UploadConfiguration
 };
+
+pub const MOCK_SERVER_ROUTE: &str = "/mock-server";
 
 pub struct App {
     pub port: u16,
@@ -149,6 +151,10 @@ impl App {
         self.replace_router(new_router);
     }
 
+    pub fn build_collections_route(&mut self) {
+        create_collections_routes(self);
+    }
+
     pub fn show_greetings() {
         let banner = r"
                                   ___     ___
@@ -188,6 +194,7 @@ impl App {
     pub async fn initialize(&mut self) {
         self.build_dyn_routes();
         self.build_home_route();
+        self.build_collections_route();
         self.build_fallback();
         self.build_middlewares();
         self.start_server().await;
