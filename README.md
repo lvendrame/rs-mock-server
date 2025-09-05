@@ -110,14 +110,14 @@ The following table shows how different filename patterns are mapped to routes, 
 
 ### 📚 Feature Guides
 
--   **[Basic Routing](docs/basic-routing.md)** - Learn filename patterns and route creation
--   **[REST APIs](docs/rest-apis.md)** - Build full CRUD APIs with persistence
--   **[Authentication](docs/authentication.md)** - JWT-based auth with route protection
--   **[File Uploads](docs/file-uploads.md)** - Handle file uploads and downloads
--   **[Static Files](docs/static-files.md)** - Serve assets with automatic Content-Type
--   **[JGD Files](docs/jgd-files.md)** - Generate dynamic JSON with realistic data
--   **[Web Interface](docs/web-interface.md)** - Interactive testing and management
--   **[Hot Reload](docs/hot-reload.md)** - Development workflow and file monitoring
+-   **[Basic Routing](docs/01-basic-routing.md)** - Learn filename patterns and route creation
+-   **[REST APIs](docs/02-rest-apis.md)** - Build full CRUD APIs with persistence
+-   **[Authentication](docs/03-authentication.md)** - JWT-based auth with route protection
+-   **[File Uploads](docs/04-file-uploads.md)** - Handle file uploads and downloads
+-   **[Static Files](docs/05-static-files.md)** - Serve assets with automatic Content-Type
+-   **[JGD Files](docs/06-jgd-files.md)** - Generate dynamic JSON with realistic data
+-   **[Web Interface](docs/07-web-interface.md)** - Interactive testing and management
+-   **[Hot Reload](docs/08-hot-reload.md)** - Development workflow and file monitoring
 
 ### 🚀 Quick Examples
 
