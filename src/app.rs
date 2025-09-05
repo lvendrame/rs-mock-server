@@ -203,7 +203,7 @@ impl App {
         self.router = RefCell::new(Router::new());
         self.pages = Arc::new(Mutex::new(Pages::new()));
         self.uploads_configurations = vec![];
-        //self.db.internal_db.write().unwrap().;
+        self.db.clear();
 
         println!("\n👋👋👋👋👋 Goodbye! 👋👋👋👋👋👋");
     }

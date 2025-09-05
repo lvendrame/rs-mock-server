@@ -467,9 +467,9 @@ dependencies = [
 
 [[package]]
 name = "fosk"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac36aa24b5682f23720a8d5b9534e32c2fe4c21bcbcd096a63ad0eb9b3702d78"
+checksum = "8695a0c4fbbb224074a64d17fe7de285d9ccccd354f27fe99d93cb2e62bcf617"
 dependencies = [
  "chrono",
  "indexmap",
@@ -1178,7 +1178,7 @@ dependencies = [
 
 [[package]]
 name = "rs-mock-server"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "axum",
  "chrono",

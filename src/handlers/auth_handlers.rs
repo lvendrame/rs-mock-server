@@ -1,7 +1,7 @@
 use std::{ffi::OsString, pin::Pin, sync::Arc};
 
 use axum::{body::Body, extract::Request, middleware::Next, response::{IntoResponse, Response}, routing::post, Json};
-use fosk::{Config as DbConfig, DbCollection, IdType};
+use fosk::{DbConfig, DbCollection, IdType};
 use http::{StatusCode, HeaderValue};
 use serde_json::{json, Value};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};

@@ -3,7 +3,7 @@ use std::{ffi::OsString, path::PathBuf, str::FromStr, sync::Arc};
 use axum::{
     extract::{Json, Path as AxumPath}, http::StatusCode, response::IntoResponse, routing::{delete, get, patch, post, put}
 };
-use fosk::{DbCollection, IdType, Config as DbConfig};
+use fosk::{DbCollection, IdType, DbConfig};
 use jgd_rs::generate_jgd_from_file;
 use serde_json::Value;
 
