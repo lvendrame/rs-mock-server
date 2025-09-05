@@ -106,8 +106,9 @@ pub fn build_rest_routes(
     id_key: &str,
     id_type: IdType,
     is_protected: bool,
+    collection_name: Option<&str>
 ) -> Arc<DbCollection> {
-    let collection_name = route.split('/').next_back().unwrap();
+    let collection_name = collection_name.unwrap_or(route.split('/').next_back().unwrap()) ;
     let collection = app.db.create_with_config(collection_name, DbConfig::from(id_type, id_key));
 
     let result: Result<String, String> = if is_jgd(file_path) {

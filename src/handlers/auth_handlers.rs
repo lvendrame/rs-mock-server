@@ -19,8 +19,9 @@ static TOKEN_FIELD: &str = "token";
 static AUTH_TOKEN_FIELD: &str = "auth_token";
 static JWT_SECRET: &str = "1!2@3#4$5%6â7&8*9(0)-_=+±§";
 
-pub static AUTH_COLLECTION: &str = "{{auth}}-tokens";
-pub static USER_COLLECTION: &str = "users";
+pub static USER_PATH: &str = "users";
+pub static USER_COLLECTION: &str = "internal_auth_users";
+pub static AUTH_COLLECTION: &str = "internal_auth_tokens";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -180,8 +181,17 @@ pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) 
     // !the Auth collection should be created before the rest endpoints
     app.db.create_with_config(AUTH_COLLECTION, DbConfig::none(TOKEN_FIELD));
 
-    let users_routes = format!("{}/{}", route_path, USER_COLLECTION);
-    let users_collection = build_rest_routes(app, &users_routes, file_path, ID_FIELD, IdType::None, true);
+    let users_routes = format!("{}/{}", route_path, USER_PATH);
+    let users_collection = build_rest_routes(
+        app,
+        &users_routes,
+        file_path,
+        ID_FIELD,
+        IdType::None,
+        true,
+        Some(USER_COLLECTION)
+    );
+
     println!("✔️ Built REST routes for {}", users_routes);
 
     if users_collection.count() == 0 {

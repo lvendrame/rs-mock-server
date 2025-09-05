@@ -4,7 +4,7 @@ use fosk::IdType;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{app::App, handlers::{build_rest_routes}, route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}};
+use crate::{app::App, handlers::build_rest_routes, route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}};
 
 static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\$)?rest(\{(.+)\})?$").unwrap()
@@ -80,7 +80,14 @@ impl RouteRest {
 
 impl RouteGenerator for RouteRest {
     fn make_routes(&self, app: &mut App) {
-        build_rest_routes(app, &self.route, &self.path,  &self.id_key, self.id_type, self.is_protected);
+        build_rest_routes(app,
+            &self.route,
+            &self.path,
+             &self.id_key,
+            self.id_type,
+            self.is_protected,
+            None
+        );
     }
 }
 
