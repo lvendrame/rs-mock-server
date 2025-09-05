@@ -113,15 +113,15 @@ The authentication system also creates a full REST API for user management:
 
 -   **GET** `/{folder}/users` - List all users (protected)
 -   **POST** `/{folder}/users` - Create new user (protected)
--   **GET** `/{folder}/users/{username}` - Get user by username (protected)
--   **PUT** `/{folder}/users/{username}` - Update user (protected)
--   **PATCH** `/{folder}/users/{username}` - Partially update user (protected)
--   **DELETE** `/{folder}/users/{username}` - Delete user (protected)
+-   **GET** `/{folder}/users/{id}` - Get user by id (protected)
+-   **PUT** `/{folder}/users/{id}` - Update user (protected)
+-   **PATCH** `/{folder}/users/{id}` - Partially update user (protected)
+-   **DELETE** `/{folder}/users/{id}` - Delete user (protected)
 
 **Configuration:**
 
 -   **IdType**: None
--   **IdKey**: `username`
+-   **IdKey**: `id`
 -   **Protected**: All REST endpoints require authentication token
 
 ## Route Protection
