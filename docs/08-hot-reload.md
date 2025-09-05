@@ -55,7 +55,7 @@ Hot reload is always enabled and cannot be disabled or configured.
 
 ## Next Steps
 
--   Learn about [Web Interface](web-interface.md) for visual development
--   Explore [Basic Routing](basic-routing.md) for organizing files efficiently
--   Try [REST APIs](rest-apis.md) for comprehensive API development
--   See [JGD Files](jgd-files.md) for dynamic data generation
+-   Learn about [Web Interface](07-web-interface.md) for visual development
+-   Explore [Basic Routing](01-basic-routing.md) for organizing files efficiently
+-   Try [REST APIs](02-rest-apis.md) for comprehensive API development
+-   See [JGD Files](06-jgd-files.md) for dynamic data generation

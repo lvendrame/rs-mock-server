@@ -80,7 +80,7 @@ The web interface works seamlessly with hot reload:
 
 ## Next Steps
 
--   Learn about [Authentication](authentication.md) for testing protected endpoints
--   Explore [File Uploads](file-uploads.md) for testing file upload functionality
--   Try [REST APIs](rest-apis.md) for testing CRUD operations
--   See [Basic Routing](basic-routing.md) for creating endpoints to test
+-   Learn about [Authentication](03-authentication.md) for testing protected endpoints
+-   Explore [File Uploads](04-file-uploads.md) for testing file upload functionality
+-   Try [REST APIs](02-rest-apis.md) for testing CRUD operations
+-   See [Basic Routing](01-basic-routing.md) for creating endpoints to test

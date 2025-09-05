@@ -372,7 +372,7 @@ mocks/
 
 ## Next Steps
 
--   Learn about [Authentication](authentication.md) to protect upload endpoints
--   Explore [Static File Serving](static-files.md) for serving uploaded assets
--   Try the [Web Interface](web-interface.md) for interactive file management
--   See [Basic Routing](basic-routing.md) for organizing upload endpoints
+-   Learn about [Authentication](03-authentication.md) to protect upload endpoints
+-   Explore [Static File Serving](05-static-files.md) for serving uploaded assets
+-   Try the [Web Interface](07-web-interface.md) for interactive file management
+-   See [Basic Routing](01-basic-routing.md) for organizing upload endpoints

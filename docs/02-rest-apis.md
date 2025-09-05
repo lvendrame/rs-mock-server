@@ -315,6 +315,6 @@ REST APIs work seamlessly with other rs-mock-server features:
 
 ## Next Steps
 
--   Learn about [JWT Authentication](authentication.md) to protect your REST APIs
--   Explore [JGD Files](jgd-files.md) for generating realistic test data
--   See [Static File Serving](static-files.md) for serving assets alongside APIs
+-   Learn about [JWT Authentication](03-authentication.md) to protect your REST APIs
+-   Explore [JGD Files](06-jgd-files.md) for generating realistic test data
+-   See [Static File Serving](05-static-files.md) for serving assets alongside APIs

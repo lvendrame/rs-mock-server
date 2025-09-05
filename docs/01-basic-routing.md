@@ -176,7 +176,7 @@ rs-mock-server automatically sets the `Content-Type` header based on the file ex
 
 ## Next Steps
 
--   Learn about [In-Memory REST APIs](rest-apis.md) for full CRUD functionality
--   Explore [JWT Authentication](authentication.md) for protected routes
--   Discover [File Uploads](file-uploads.md) for handling file operations
--   Try [JGD Files](jgd-files.md) for dynamic data generation
+-   Learn about [In-Memory REST APIs](02-rest-apis.md) for full CRUD functionality
+-   Explore [JWT Authentication](03-authentication.md) for protected routes
+-   Discover [File Uploads](04-file-uploads.md) for handling file operations
+-   Try [JGD Files](06-jgd-files.md) for dynamic data generation

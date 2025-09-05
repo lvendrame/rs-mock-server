@@ -457,7 +457,7 @@ For complete JGD documentation and API reference, see:
 
 ## Next Steps
 
--   Learn about [REST APIs](rest-apis.md) to combine with dynamic generation
--   Explore [Authentication](authentication.md) to protect JGD endpoints
--   Try [Basic Routing](basic-routing.md) for organizing JGD files
--   See [Static Files](static-files.md) for serving static assets alongside dynamic data
+-   Learn about [REST APIs](02-rest-apis.md) to combine with dynamic generation
+-   Explore [Authentication](03-authentication.md) to protect JGD endpoints
+-   Try [Basic Routing](01-basic-routing.md) for organizing JGD files
+-   See [Static Files](05-static-files.md) for serving static assets alongside dynamic data

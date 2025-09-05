@@ -393,7 +393,7 @@ mocks/
 
 ## Next Steps
 
--   Learn about [Route Protection](basic-routing.md#route-priority) strategies
--   Explore [File Uploads](file-uploads.md) with authentication
--   See [REST APIs](rest-apis.md) for protected CRUD operations
--   Try the [Web Interface](web-interface.md) for interactive authentication testing
+-   Learn about [Route Protection](01-basic-routing.md#route-priority) strategies
+-   Explore [File Uploads](04-file-uploads.md) with authentication
+-   See [REST APIs](02-rest-apis.md) for protected CRUD operations
+-   Try the [Web Interface](07-web-interface.md) for interactive authentication testing

@@ -177,6 +177,8 @@ pub fn create_login_route(
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
     println!("Starting loading Auth route");
 
+    // !the Auth collection should be created before the rest endpoints
+    app.db.create_with_config(AUTH_COLLECTION, DbConfig::none(TOKEN_FIELD));
 
     let users_routes = format!("{}/{}", route_path, USER_COLLECTION);
     let users_collection = build_rest_routes(app, &users_routes, file_path, ID_FIELD, IdType::None, true);
@@ -186,7 +188,6 @@ pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) 
         return eprintln!("⚠️ Authentication routes were not created")
     }
 
-    app.db.create_with_config(AUTH_COLLECTION, DbConfig::none(TOKEN_FIELD));
     create_login_route(app, route_path);
     create_logout_route(app, route_path);
 
