@@ -9,7 +9,6 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 use crate::app::App;
 
-pub mod memory_db;
 pub mod route_builder;
 pub mod handlers;
 pub mod app;

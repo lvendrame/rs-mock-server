@@ -1,9 +1,10 @@
 use std::{ffi::OsString};
 
+use fosk::IdType;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{app::App, handlers::{build_rest_routes}, memory_db::id_manager::IdType, route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}};
+use crate::{app::App, handlers::{build_rest_routes}, route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}};
 
 static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\$)?rest(\{(.+)\})?$").unwrap()

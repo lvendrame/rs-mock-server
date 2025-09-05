@@ -1,14 +1,15 @@
 use std::{ffi::OsString, pin::Pin, sync::Arc};
 
 use axum::{body::Body, extract::Request, middleware::Next, response::{IntoResponse, Response}, routing::post, Json};
+use fosk::{Config as DbConfig, DbCollection, IdType};
 use http::{StatusCode, HeaderValue};
-use serde_json::Value;
+use serde_json::{json, Value};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App, handlers::build_rest_routes, memory_db::{constraint::{Comparer, Constraint}, id_manager::IdType, memory_collection::MemoryCollection, CollectionConfig, DbCollection, DbCommon}
+    app::App, handlers::build_rest_routes
 };
 
 static ID_FIELD: &str = "id";
@@ -17,6 +18,9 @@ static PASSWORD_FIELD: &str = "password";
 static TOKEN_FIELD: &str = "token";
 static AUTH_TOKEN_FIELD: &str = "auth_token";
 static JWT_SECRET: &str = "1!2@3#4$5%6â7&8*9(0)-_=+±§";
+
+pub static AUTH_COLLECTION: &str = "{{auth}}-tokens";
+pub static USER_COLLECTION: &str = "users";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -48,7 +52,7 @@ fn check_password(item: &Value, password: String) -> bool {
     false
 }
 
-fn generate_token(item: &Value, auth_collection: &mut MemoryCollection) -> Response<axum::body::Body> {
+fn generate_token(auth_collection: Arc<DbCollection>, item: &Value) -> Response<axum::body::Body> {
     // Extract username from the user data
     let username = item.get(USERNAME_FIELD)
         .and_then(|v| v.as_str())
@@ -98,6 +102,7 @@ fn generate_token(item: &Value, auth_collection: &mut MemoryCollection) -> Respo
         if let Some(obj) = user_data.as_object_mut() {
             obj.insert(TOKEN_FIELD.to_string(), Value::String(token.clone())); // add token
         }
+
         auth_collection.add(user_data);
     }
 
@@ -126,31 +131,36 @@ fn generate_token(item: &Value, auth_collection: &mut MemoryCollection) -> Respo
 
 pub fn create_login_route(
     app: &mut App,
-    route_path: &str,
-    users_collection: &MemoryCollection,
-    auth_collection: &MemoryCollection,
+    route_path: &str
 ) {
     let login_route = format!("{}/login", route_path);
 
     // POST /resource/login - auth
-    let user_collection = Arc::clone(users_collection);
-    let mut auth_collection = Arc::clone(auth_collection);
+    let db = app.db.clone();
+
     let create_router = post(move |Json(payload): Json<Value>| {
         async move {
             if let Some((username, password)) = try_get_auth_info(payload) {
-                let criteria = Constraint::try_new(USERNAME_FIELD.to_string(), Comparer::Equal, Some(Value::String(username.clone())));
-                if criteria.is_err() {
-                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+
+                let sql = format!(r#"
+                    SELECT * FROM {USER_COLLECTION}
+                    WHERE {USERNAME_FIELD} = ? AND {PASSWORD_FIELD} = ?
+                "#);
+
+                let users = db.query_with_args(&sql, json!([username, password]));
+                if users.is_err() {
+                    return StatusCode::UNAUTHORIZED.into_response();
                 }
 
-                let users = user_collection.get_from_constraint(&criteria.unwrap());
+                let users = users.unwrap();
                 if users.is_empty() {
                     return StatusCode::UNAUTHORIZED.into_response();
                 }
 
                 return match users.first() {
                     Some(item) => if check_password(item, password) {
-                        (StatusCode::OK, generate_token(item, &mut auth_collection)).into_response()
+                        let auth_collection = db.get(AUTH_COLLECTION).unwrap();
+                        (StatusCode::OK, generate_token(auth_collection, item)).into_response()
                     } else {
                         StatusCode::UNAUTHORIZED.into_response()
                     },
@@ -167,22 +177,18 @@ pub fn create_login_route(
 pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
     println!("Starting loading Auth route");
 
-    let auth_collection = app.db.create(CollectionConfig::none(TOKEN_FIELD, "{{auth}}-tokens"));
 
-    // The app.auth_collection should be set before to load the rest routes
-    app.auth_collection = Some(Arc::clone( &auth_collection));
-
-    let users_routes = format!("{}/users", route_path);
+    let users_routes = format!("{}/{}", route_path, USER_COLLECTION);
     let users_collection = build_rest_routes(app, &users_routes, file_path, ID_FIELD, IdType::None, true);
     println!("✔️ Built REST routes for {}", users_routes);
 
     if users_collection.count() == 0 {
-        app.auth_collection = None;
         return eprintln!("⚠️ Authentication routes were not created")
     }
 
-    create_login_route(app, route_path, &users_collection, &auth_collection);
-    create_logout_route(app, route_path, &auth_collection);
+    app.db.create_with_config(AUTH_COLLECTION, DbConfig::none(TOKEN_FIELD));
+    create_login_route(app, route_path);
+    create_logout_route(app, route_path);
 
 }
 
@@ -252,7 +258,7 @@ type AuthMiddlewareReturn = Pin<Box<dyn std::future::Future<Output = Result<Resp
 
 // For when you need access to the auth collection (token revocation)
 pub fn make_auth_middleware(
-    auth_collection: &MemoryCollection,
+    auth_collection: &Arc<DbCollection>,
 ) -> impl Clone + Send + Sync + 'static + Fn(Request, Next) -> AuthMiddlewareReturn {
     let auth_collection = Arc::clone(auth_collection);
     move |req: Request, next: Next| {
@@ -284,12 +290,11 @@ pub fn make_auth_middleware(
 
 pub fn create_logout_route(
     app: &mut App,
-    route_path: &str,
-    auth_collection: &MemoryCollection,
+    route_path: &str
 ) {
     let logout_route = format!("{}/logout", route_path);
 
-    let mut auth_collection = Arc::clone(auth_collection);
+    let auth_collection = app.db.get(AUTH_COLLECTION).unwrap();
     let logout_router = post(move |req: Request| {
         async move {
             // Extract token from request

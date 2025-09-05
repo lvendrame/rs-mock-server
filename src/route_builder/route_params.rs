@@ -12,7 +12,7 @@ pub struct RouteParams {
 }
 
 impl RouteParams {
-    pub fn new(parent_route: &str, entry: &DirEntry, is_protected: bool) -> Self {
+    pub fn new(parent_route: &str, entry: &DirEntry, mut is_protected: bool) -> Self {
         let parent_route = parent_route.to_string();
         let file_name = entry.file_name().to_string_lossy().to_string();
         let file_stem = file_name.split('.').next().unwrap_or("").to_string();
@@ -20,6 +20,7 @@ impl RouteParams {
         let is_dir = entry.file_type().unwrap().is_dir();
 
         let full_route = if is_dir {
+            is_protected = is_protected || file_name.starts_with("$");
             let end_point = file_name.replace("$", "");
             format!("{}/{}", parent_route, end_point)
         } else {
@@ -144,7 +145,7 @@ mod tests {
         assert_eq!(params.full_route, "/api/admin"); // $ is stripped from route
         assert_eq!(params.file_name, "$admin");
         assert_eq!(params.file_stem, "$admin");
-        assert!(!params.is_protected);
+        assert!(params.is_protected);
         assert!(params.is_dir);
     }
 

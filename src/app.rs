@@ -3,14 +3,14 @@ use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex}};
 use axum::{
     middleware, response::IntoResponse, routing::{get, MethodRouter}, Router
 };
+use fosk::Db;
 use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode};
 use terminal_link::Link;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
-use crate::{handlers::make_auth_middleware,
-    memory_db::{memory_collection::MemoryCollection, Db, DbCommon},
+use crate::{handlers::{make_auth_middleware, AUTH_COLLECTION},
     pages::Pages,
     route_builder::{route_manager::RouteManager, RouteGenerator, RouteRegistrator},
     upload_configuration::UploadConfiguration
@@ -21,9 +21,8 @@ pub struct App {
     pub root_path: String,
     pub router: RefCell<Router>,
     pub pages: Arc<Mutex<Pages>>,
-    pub auth_collection: Option<MemoryCollection>,
     uploads_configurations: Vec<UploadConfiguration>,
-    pub db: Db,
+    pub db: Arc<Db>,
 }
 
 impl Default for App {
@@ -33,9 +32,8 @@ impl Default for App {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
-        let auth_collection = None;
-        let db = Db::new_db();
-        App { port, root_path, router, pages, uploads_configurations, auth_collection, db }
+        let db = Arc::new( Db::new_db());
+        App { port, root_path, router, pages, uploads_configurations, db }
     }
 }
 
@@ -45,9 +43,8 @@ impl App {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
-        let auth_collection = None;
-        let db = Db::new_db();
-        App { port, root_path, router, pages, uploads_configurations, auth_collection, db }
+        let db = Arc::new( Db::new_db());
+        App { port, root_path, router, pages, uploads_configurations, db }
     }
 
     pub fn push_uploads_config(&mut self, uploads_path: String, clean_uploads: bool) {
@@ -80,7 +77,7 @@ impl App {
             return router;
         }
 
-        if let Some(auth_collection) = &self.auth_collection {
+        if let Some(auth_collection) = &self.db.get(AUTH_COLLECTION) {
             return router.layer(
                 middleware::from_fn(make_auth_middleware(auth_collection))
             )
@@ -206,7 +203,7 @@ impl App {
         self.router = RefCell::new(Router::new());
         self.pages = Arc::new(Mutex::new(Pages::new()));
         self.uploads_configurations = vec![];
-        self.auth_collection = None;
+        //self.db.internal_db.write().unwrap().;
 
         println!("\n👋👋👋👋👋 Goodbye! 👋👋👋👋👋👋");
     }
