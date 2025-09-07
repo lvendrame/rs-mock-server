@@ -47,6 +47,48 @@ For a `rest.json` or `rest.jgd` file in `./mocks/api/products/`, the following e
 | **PATCH**  | `/api/products/{id}` | Partially update a product (merges fields)     |
 | **DELETE** | `/api/products/{id}` | Delete a product by ID                         |
 
+## Collections and In-Memory Database
+
+Each REST API is backed by an internal collection named after the last path segment of its route. For example, a REST file at `mocks/api/users/rest.json` creates:
+
+-   **Route**: `GET /api/users` (and other CRUD routes)
+-   **Collection Name**: `users`
+
+### Listing Collections
+
+-   **GET** `/mock-server/collections`
+    Returns a JSON object mapping collection names to their schema definitions.
+
+Example response:
+
+```json
+{
+    "users": {
+        "id": { "type": "UUID", "nullable": false },
+        "name": { "type": "String", "nullable": false }
+        // ...
+    },
+    "products": {
+        // ...
+    }
+}
+```
+
+### Collection Schema
+
+-   **GET** `/mock-server/collections/{collection-name}`
+    Returns the schema definition for the specified collection.
+
+Example response:
+
+```json
+{
+    "id": { "type": "UUID", "nullable": false },
+    "name": { "type": "String", "nullable": false }
+    // ...
+}
+```
+
 ## Initial Data Format
 
 ### JSON Files
@@ -312,6 +354,7 @@ REST APIs work seamlessly with other rs-mock-server features:
 -   **JGD Files**: Generate realistic initial data
 -   **Hot Reload**: Changes to REST files restart the server
 -   **Web Interface**: Test all CRUD operations in the browser
+-   **SQL Routes**: Execute `.sql` files as GET endpoints against in-memory database
 
 ## Next Steps
 

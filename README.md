@@ -74,6 +74,7 @@ echo '[{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]' > mocks/api/users/
 -   🌐 **Web Interface**: Access the root URL to get an interactive web interface for testing all your endpoints directly in the browser.
 -   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
+-   🗄️ **SQL Routes**: Use `.sql` files to create GET endpoints that execute SQL queries against the in-memory database and return results as JSON.
 
 ---
 
@@ -118,6 +119,7 @@ The following table shows how different filename patterns are mapped to routes, 
 -   **[JGD Files](docs/06-jgd-files.md)** - Generate dynamic JSON with realistic data
 -   **[Web Interface](docs/07-web-interface.md)** - Interactive testing and management
 -   **[Hot Reload](docs/08-hot-reload.md)** - Development workflow and file monitoring
+-   **[SQL Routes](docs/09-sql-routes.md)** - Execute `.sql` files as GET endpoints against in-memory database
 
 ### 🚀 Quick Examples
 
