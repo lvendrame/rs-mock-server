@@ -467,9 +467,9 @@ dependencies = [
 
 [[package]]
 name = "fosk"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8695a0c4fbbb224074a64d17fe7de285d9ccccd354f27fe99d93cb2e62bcf617"
+checksum = "379acd7fc6aff91b38780bf2143a0ebe1c61f02b37e7a02e6edf2c1e180ce233"
 dependencies = [
  "chrono",
  "indexmap",
