@@ -395,6 +395,16 @@ const mock_routes = [
         options: [],
     },
     {
+        method: "POST",
+        route: "/mock-server/collections",
+        options: ["upload"],
+    },
+    {
+        method: "GET",
+        route: "/mock-server/collections/download",
+        options: ["download"],
+    },
+    {
         method: "GET",
         route: "/mock-server/collections/{name}",
         options: [],
@@ -405,18 +415,8 @@ const mock_routes = [
         options: ["upload"],
     },
     {
-        method: "POST",
-        route: "/mock-server/collections",
-        options: ["upload"],
-    },
-    {
         method: "GET",
         route: "/mock-server/collections/{name}/download",
-        options: ["download"],
-    },
-    {
-        method: "GET",
-        route: "/mock-server/collections/download",
         options: ["download"],
     },
 ];

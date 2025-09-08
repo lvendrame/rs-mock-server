@@ -120,7 +120,7 @@ fn create_collection_load_from_file(
 
         StatusCode::BAD_REQUEST.into_response()
     });
-    app.route(&collection_route, create_router, Some("GET"), Some(&["upload".to_string()]));
+    app.route(&collection_route, create_router, Some("POST"), Some(&["upload".to_string()]));
 }
 
 fn create_db_load_from_file(
@@ -156,7 +156,7 @@ fn create_db_load_from_file(
 
         StatusCode::BAD_REQUEST.into_response()
     });
-    app.route(&collection_route, create_router, Some("GET"), Some(&["upload".to_string()]));
+    app.route(&collection_route, create_router, Some("POST"), Some(&["upload".to_string()]));
 }
 
 fn create_collection_download(

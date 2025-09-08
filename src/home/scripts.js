@@ -33,14 +33,15 @@ function createRouteTree(routes) {
 
         let params = [];
 
-        parts.forEach((part) => {
+        parts.forEach((part, index) => {
             if (!current[part]) {
                 current[part] = {};
             }
-            if (isArg(part)) {
+
+            current = current[part];
+            if (isArg(part) && index < parts.length - 1) {
                 params.push(part);
             }
-            current = current[part];
         });
 
         current.routeConfigs = current.routeConfigs || { methods: [] };
@@ -83,6 +84,7 @@ function buildNavList(navList, leaf, path, param, ulParent) {
                     item.path = path;
                     item.method = methodInfo.method;
                     item.param = param;
+                    item.params = methodInfo.params;
                     item.options = methodInfo.options;
                     ul.appendChild(item);
                 });
@@ -107,7 +109,8 @@ function buildNavList(navList, leaf, path, param, ulParent) {
             }
 
             if (Object.keys(current).length > 0) {
-                buildNavList(el, current, newPath);
+                let param = isArg(key) ? key : undefined;
+                buildNavList(el, current, newPath, param);
             }
         });
     navList.appendChild(ul);
@@ -120,6 +123,7 @@ class RouteItem extends HTMLLIElement {
         this._path = "";
         this._method = "";
         this._param = "";
+        this._params = [];
         this._options = [];
     }
 
@@ -163,6 +167,15 @@ class RouteItem extends HTMLLIElement {
         return this._param;
     }
 
+    set params(value) {
+        this._params = value;
+        this.render();
+    }
+
+    get params() {
+        return this._params;
+    }
+
     set options(value) {
         this._options = value || [];
         this.render();
@@ -190,6 +203,10 @@ class RouteItem extends HTMLLIElement {
 
             if (this.param) {
                 apiRequestSender.setAttribute("param", this.param);
+            }
+
+            if (this.params && this.params.length > 0) {
+                apiRequestSender.setAttribute("params", this.params.join(","));
             }
 
             if (this.options && this.options.length > 0) {
@@ -260,6 +277,10 @@ class ApiRequestSender extends HTMLElement {
         const method = this.getAttribute("method")?.toUpperCase() || "GET";
         const route = this.getAttribute("route") || "/";
         const param = this.getAttribute("param");
+        const params = (this.getAttribute("params") || "")
+            .split(",")
+            .map((p) => p.trim())
+            .filter((p) => p);
         const optionsAttr = this.getAttribute("options");
         const options = optionsAttr
             ? optionsAttr.split(",").map((opt) => opt.trim())
@@ -277,6 +298,9 @@ class ApiRequestSender extends HTMLElement {
                     ? `<input type="text" id="param-input" placeholder="${param}" />`
                     : ""
             }
+            ${params.map((param, index) => {
+                return `<input type="text" id="param-input-${index}" placeholder="${param}" />`;
+            })}
             <button id="send-btn">Send</button>
         `;
 
@@ -354,6 +378,10 @@ class ApiRequestSender extends HTMLElement {
         const method = this.getAttribute("method")?.toUpperCase() || "GET";
         let route = this.getAttribute("route") || "/";
         const param = this.getAttribute("param");
+        const params = (this.getAttribute("params") || "")
+            .split(",")
+            .map((p) => p.trim())
+            .filter((p) => p);
         const optionsAttr = this.getAttribute("options");
         const options = optionsAttr
             ? optionsAttr.split(",").map((opt) => opt.trim())
@@ -368,6 +396,13 @@ class ApiRequestSender extends HTMLElement {
             const paramInput = this.shadowRoot.getElementById("param-input");
             route = `${route}/${paramInput.value || ""}`;
         }
+
+        params.forEach((param, index) => {
+            const paramInput = this.shadowRoot.getElementById(
+                `param-input-${index}`
+            );
+            route = route.replace(param, paramInput.value || "unknown");
+        });
 
         if (method === "GET") {
             const table = this.shadowRoot.getElementById("query-params-table");
@@ -413,9 +448,25 @@ class ApiRequestSender extends HTMLElement {
             });
 
             if (isDownload) {
+                let filename = "";
                 const filenameInput =
                     this.shadowRoot.getElementById("param-input");
-                const filename = filenameInput.value || "download.json";
+
+                if (filenameInput) {
+                    filenameInput.value || "download.json";
+                } else if (params.length > 0) {
+                    filename =
+                        params
+                            .map((_, index) => {
+                                return this.shadowRoot.getElementById(
+                                    `param-input-${index}`
+                                ).value;
+                            })
+                            .join("_") + ".json";
+                } else {
+                    filename = "download.json";
+                }
+
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement("a");
