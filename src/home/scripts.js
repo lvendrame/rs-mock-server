@@ -18,6 +18,12 @@ window.addEventListener("DOMContentLoaded", () => {
     createRouteNavBar(navElement, mock_routes);
 });
 
+const REGEX_PARAM = /^{(.+)}$/;
+
+function isArg(key) {
+    return REGEX_PARAM.test(key);
+}
+
 function createRouteTree(routes) {
     const root = {};
 
@@ -25,9 +31,14 @@ function createRouteTree(routes) {
         const parts = route.route.split("/").filter(Boolean);
         let current = root;
 
+        let params = [];
+
         parts.forEach((part) => {
             if (!current[part]) {
                 current[part] = {};
+            }
+            if (isArg(part)) {
+                params.push(part);
             }
             current = current[part];
         });
@@ -36,6 +47,7 @@ function createRouteTree(routes) {
         current.routeConfigs.methods.push({
             method: route.method,
             options: route.options || [],
+            params,
         });
     });
 
@@ -44,14 +56,13 @@ function createRouteTree(routes) {
 
 function createRouteNavBar(navElement, routes) {
     const routeTree = createRouteTree(routes);
-    // Build the navigation bar using the routeTree
     buildNavList(navElement, routeTree, "");
 }
 
-const REGEX_PARAM = /^{(.+)}$/;
-
-function isArg(key) {
-    return REGEX_PARAM.test(key);
+function isEndArgKey(leaf, key) {
+    return (
+        isArg(key) && leaf && Object.keys(leaf).length == 1 && leaf.routeConfigs
+    );
 }
 
 function buildNavList(navList, leaf, path, param, ulParent) {
@@ -77,23 +88,26 @@ function buildNavList(navList, leaf, path, param, ulParent) {
                 });
                 return;
             }
+
             const current = leaf[key];
 
-            if (isArg(key)) {
+            let el = navList;
+            let newPath = path;
+            if (isEndArgKey(current, key)) {
                 buildNavList(navList, current, path, key, ul);
                 return;
+            } else {
+                newPath = `${path}/${key}`;
+
+                el = document.createElement("li", { is: "route-item" });
+                el.route = key;
+                el.path = newPath;
+
+                ul.appendChild(el);
             }
 
-            const newPath = `${path}/${key}`;
-
-            const item = document.createElement("li", { is: "route-item" });
-            item.route = key;
-            item.path = newPath;
-
-            ul.appendChild(item);
-
             if (Object.keys(current).length > 0) {
-                buildNavList(item, current, newPath);
+                buildNavList(el, current, newPath);
             }
         });
     navList.appendChild(ul);
