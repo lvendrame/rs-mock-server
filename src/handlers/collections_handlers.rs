@@ -109,7 +109,7 @@ fn create_collection_load_from_file(
                 None => db.create(&name),
             };
 
-            let response = collection.load_from_json(json);
+            let response = collection.load_from_json(json, false);
 
             if let Err(err) = response {
                 return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response()
@@ -145,7 +145,7 @@ fn create_db_load_from_file(
                 return StatusCode::BAD_REQUEST.into_response();
             };
 
-            let response = db.load_from_json(json);
+            let response = db.load_from_json(json, false);
 
             if let Err(err) = response {
                 return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response()

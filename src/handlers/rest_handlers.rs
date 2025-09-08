@@ -114,7 +114,7 @@ pub fn build_rest_routes(
     let result: Result<String, String> = if is_jgd(file_path) {
         match generate_jgd_from_file(&PathBuf::from_str(file_path.to_str().unwrap()).unwrap()) {
             Ok(jgd_json) => {
-                let value = collection.load_from_json(jgd_json);
+                let value = collection.load_from_json(jgd_json, false);
                 value
                     .map(|items| format!("✔️ Generated {} initial items from {}", items.len(), file_path.to_string_lossy()))
             },

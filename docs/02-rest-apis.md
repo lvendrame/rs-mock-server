@@ -89,6 +89,50 @@ Example response:
 }
 ```
 
+### Managing Collections
+
+-   **POST** `/mock-server/collections`
+    Replace data for all collections by uploading a JSON file containing an object mapping collection names to arrays of records.
+    **Example payload:**
+
+    ```json
+    {
+        "companies": [
+            {
+                /* ... */
+            }
+        ],
+        "products": [
+            {
+                /* ... */
+            }
+        ]
+    }
+    ```
+
+-   **GET** `/mock-server/collections/download`
+    Download the data for all collections as a JSON object.
+
+### Managing a Single Collection
+
+-   **POST** `/mock-server/collections/{collection-name}`
+    Replace data for the specified collection by uploading a JSON array of records.
+    **Example payload:**
+
+    ```json
+    [
+        {
+            /* ... */
+        },
+        {
+            /* ... */
+        }
+    ]
+    ```
+
+-   **GET** `/mock-server/collections/{collection-name}/download`
+    Download the data for the specified collection as a JSON array.
+
 ## Initial Data Format
 
 ### JSON Files
