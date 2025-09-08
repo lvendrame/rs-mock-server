@@ -50,14 +50,6 @@ pub fn build_stream_handler(
             // Set headers
             let mut headers = HeaderMap::new();
             headers.insert(CONTENT_TYPE, HeaderValue::from_str(&mime_type).unwrap());
-            // headers.insert(
-            //     header::CONTENT_DISPOSITION,
-            //     HeaderValue::from_str(&format!(
-            //         "attachment; filename=\"{}\"",
-            //         file_path.to_string_lossy()
-            //     ))
-            //     .unwrap(),
-            // );
 
             (headers, body).into_response()
         }
