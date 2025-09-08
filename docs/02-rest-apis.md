@@ -276,26 +276,28 @@ curl http://localhost:4520/api/products
 **Response:**
 
 ```json
-[
-    {
-        "id": "550e8400-e29b-41d4-a716-446655440001",
-        "name": "Wireless Headphones",
-        "price": 199.99,
-        "category": "Electronics"
-    },
-    {
-        "id": "550e8400-e29b-41d4-a716-446655440002",
-        "name": "Coffee Mug",
-        "price": 15.99,
-        "category": "Kitchen"
-    },
-    {
-        "id": "550e8400-e29b-41d4-a716-446655440003",
-        "name": "New Product",
-        "price": 29.99,
-        "category": "Tools"
-    }
-]
+{
+    "data": [
+        {
+            "id": "550e8400-e29b-41d4-a716-446655440001",
+            "name": "Wireless Headphones",
+            "price": 199.99,
+            "category": "Electronics"
+        },
+        {
+            "id": "550e8400-e29b-41d4-a716-446655440002",
+            "name": "Coffee Mug",
+            "price": 15.99,
+            "category": "Kitchen"
+        },
+        {
+            "id": "550e8400-e29b-41d4-a716-446655440003",
+            "name": "New Product",
+            "price": 29.99,
+            "category": "Tools"
+        }
+    ]
+}
 ```
 
 ### Getting Single Item

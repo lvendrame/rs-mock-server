@@ -5,7 +5,7 @@ use axum::{
 };
 use fosk::{DbCollection, IdType, DbConfig};
 use jgd_rs::generate_jgd_from_file;
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::{
     app::App, handlers::is_jgd, route_builder::RouteRegistrator
@@ -17,7 +17,11 @@ pub fn create_get_all(app: &mut App, route: &str, is_protected: bool, collection
     let list_router = get(move || {
         async move {
             let items = list_collection.get_all();
-            Json(items).into_response()
+
+            let mut data: Map<String, Value> = Map::new();
+            data.insert("data".to_string(), Value::Array(items));
+
+            Json(data).into_response()
         }
     });
 
