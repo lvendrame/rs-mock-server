@@ -120,6 +120,7 @@ The following table shows how different filename patterns are mapped to routes, 
 -   **[Web Interface](docs/07-web-interface.md)** - Interactive testing and management
 -   **[Hot Reload](docs/08-hot-reload.md)** - Development workflow and file monitoring
 -   **[SQL Routes](docs/09-sql-routes.md)** - Execute `.sql` files as GET endpoints against in-memory database
+-   **[Configurations](docs/10-configurations.md)** - Create a `.toml` file to create specific configurations for your server and your routes
 
 ### 🚀 Quick Examples
 

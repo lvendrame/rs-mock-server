@@ -60,7 +60,8 @@ fn generate_token(auth_collection: Arc<DbCollection>, item: &Value) -> Response<
         .unwrap_or("unknown");
 
     // Extract user ID (could be from 'id' or '_id' field)
-    let user_id = item.get("id")
+    let user_id = item.get(auth_collection.get_config().id_key)
+        .or_else(|| item.get("id"))
         .or_else(|| item.get("_id"))
         .and_then(|v| v.as_str())
         .unwrap_or(username); // Fallback to username if no ID found

@@ -25,7 +25,7 @@ impl Route {
     }
 
     pub fn try_parse(route_params: &RouteParams) -> Route {
-        if route_params.file_name.starts_with(".") {
+        if route_params.file_name.starts_with(".") || route_params.file_name.ends_with(".toml") {
             return Route::None;
         }
 
