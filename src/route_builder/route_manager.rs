@@ -1,6 +1,6 @@
 use std::{fs::{self, DirEntry}};
 
-use crate::{app::App, route_builder::{Route, RouteGenerator, RouteParams}};
+use crate::{app::App, route_builder::{config::ConfigStore, Route, RouteGenerator, RouteParams}};
 
 #[derive(Debug, Default)]
 pub struct RouteManager {
@@ -27,6 +27,9 @@ impl RouteManager {
     }
 
     fn load_dir(&mut self, parent_route: &str, entries_path: &str, is_protected: bool) {
+        let configs = ConfigStore::try_from_dir(entries_path)
+            .unwrap_or_else(|err| panic!("Unable to load configs from {}. Error: {:?}", entries_path, err));
+
         let entries = fs::read_dir(entries_path).unwrap();
         for entry in entries {
             let entry = entry.unwrap();
