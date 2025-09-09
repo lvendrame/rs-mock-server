@@ -8,6 +8,7 @@ use tokio_util::sync::CancellationToken;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::app::App;
+use crate::route_builder::config::{Config, ServerConfig};
 
 pub mod route_builder;
 pub mod handlers;
@@ -16,17 +17,20 @@ pub mod link;
 pub mod pages;
 pub mod upload_configuration;
 
+const DEFAULT_PORT: u16 = 4520;
+const DEFAULT_FOLDER: &str = "mocks";
+
 /// rs-mock-server is a simple mock server for testing APIs.
 /// It serves static files as API responses based on their filenames and directory structure.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     /// Port to run the server on
-    #[arg(short, long, default_value_t = 4520)]
+    #[arg(short, long, default_value_t = DEFAULT_PORT)]
     port: u16,
 
     /// Directory to load mock files from
-    #[arg(short, long, default_value = "mocks")]
+    #[arg(short, long, default_value = DEFAULT_FOLDER)]
     folder: String,
 }
 
@@ -39,9 +43,9 @@ fn is_upload_folder(folder: &str) -> bool {
     folder.contains("{upload}")
 }
 
-async fn run_app_session(args: &Args) -> SessionResult {
+async fn run_app_session(config: Config) -> SessionResult {
     let token = CancellationToken::new();
-    let app = App::new(args.port, args.folder.clone());
+    let app = App::new(config);
     let app_arc = Arc::new(Mutex::new(app));
 
     let main_logic = {
@@ -62,7 +66,7 @@ async fn run_app_session(args: &Args) -> SessionResult {
         }
     });
 
-    tracing::info!("RS-MOCK-SERVER started. Watching for file changes in '{}'...", &args.folder);
+    tracing::info!("RS-MOCK-SERVER started. Watching for file changes in '{}'...", app_arc.lock().await.get_folder());
 
     let (tx, mut rx) = mpsc::channel(1);
     let last_send_time = Arc::new(Mutex::new(Instant::now() - Duration::from_millis(1000)));
@@ -93,7 +97,7 @@ async fn run_app_session(args: &Args) -> SessionResult {
         }
     ).unwrap();
 
-    watcher.watch(Path::new(&args.folder), RecursiveMode::Recursive).unwrap();
+    watcher.watch(Path::new(&app_arc.lock().await.get_folder()), RecursiveMode::Recursive).unwrap();
 
     let result = tokio::select! {
         _ = main_logic => {
@@ -126,7 +130,26 @@ async fn main() {
 
     let args = Args::parse();
 
-    while let SessionResult::Restart = run_app_session(&args).await {
+    let config = if let Ok(file) = std::fs::read_to_string("./rs-mock-server.toml") {
+        match Config::try_from(file.as_str()) {
+            Ok(config) => config,
+            Err(err) => {
+                println!("Error: {}", err);
+                return;
+            },
+        }
+    } else {
+        Config {
+            server: Some(ServerConfig {
+                port: Some(args.port),
+                folder: Some(args.folder),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    };
+
+    while let SessionResult::Restart = run_app_session(config.clone()).await {
         // Small delay before restarting
         tokio::time::sleep(Duration::from_millis(100)).await;
     }

@@ -10,43 +10,62 @@ use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
-use crate::{handlers::{create_collections_routes, make_auth_middleware, AUTH_COLLECTION},
-    pages::Pages,
-    route_builder::{route_manager::RouteManager, RouteGenerator, RouteRegistrator},
-    upload_configuration::UploadConfiguration
+use crate::{handlers::{create_collections_routes, make_auth_middleware, AUTH_COLLECTION}, pages::Pages, route_builder::{config::{Config, ServerConfig}, route_manager::RouteManager, RouteGenerator, RouteRegistrator}, upload_configuration::UploadConfiguration, DEFAULT_FOLDER, DEFAULT_PORT
 };
 
 pub const MOCK_SERVER_ROUTE: &str = "/mock-server";
 
 pub struct App {
-    pub port: u16,
-    pub root_path: String,
     pub router: RefCell<Router>,
     pub pages: Arc<Mutex<Pages>>,
     uploads_configurations: Vec<UploadConfiguration>,
     pub db: Arc<Db>,
+    pub server_config: Config,
 }
 
 impl Default for App {
     fn default() -> Self {
-        let port = 3000;
-        let root_path = String::from("/");
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let db = Arc::new( Db::new_db());
-        App { port, root_path, router, pages, uploads_configurations, db }
+        let server_config = Config {
+            server: Some(ServerConfig {
+                folder: Some(DEFAULT_FOLDER.into()),
+                port: Some(DEFAULT_PORT),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        App { router, pages, uploads_configurations, db, server_config }
     }
 }
 
 impl App {
 
-    pub fn new(port: u16, root_path: String) -> Self {
+    pub fn new(server_config: Config) -> Self {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let db = Arc::new( Db::new_db());
-        App { port, root_path, router, pages, uploads_configurations, db }
+        App { router, pages, uploads_configurations, db, server_config }
+    }
+
+    pub fn get_folder(&self) -> String {
+        self.server_config.server
+            .as_ref()
+            .unwrap_or(&ServerConfig::default())
+            .folder
+            .clone()
+            .unwrap_or(DEFAULT_FOLDER.to_string())
+    }
+
+    pub fn get_port(&self) -> u16 {
+        self.server_config.server
+            .as_ref()
+            .unwrap_or(&ServerConfig::default())
+            .port
+            .unwrap_or(DEFAULT_PORT)
     }
 
     pub fn push_uploads_config(&mut self, uploads_path: String, clean_uploads: bool) {
@@ -88,7 +107,8 @@ impl App {
     }
 
     fn build_dyn_routes(&mut self) {
-        RouteManager::from_dir(&self.root_path)
+        let dir = self.get_folder();
+        RouteManager::from_dir(&dir)
             .make_routes(self);
     }
 
@@ -179,12 +199,12 @@ impl App {
     }
 
     async fn start_server(&self) {
-        let address = format!("0.0.0.0:{}", self.port);
+        let address = format!("0.0.0.0:{}", self.get_port());
 
         let listener = TcpListener::bind(address.clone()).await.unwrap();
         App::show_greetings();
 
-        let link = format!("http://localhost:{}", self.port);
+        let link = format!("http://localhost:{}", self.get_port());
         let link = Link::new(&link, &link);
         println!("🚀 Listening on {}", link);
 

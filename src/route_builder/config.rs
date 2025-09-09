@@ -11,7 +11,7 @@ use toml::de::Error as DeserializeError;
 /// This configuration can be loaded from TOML and applies settings
 /// at server level, default route level, collection defaults,
 /// authentication, and upload behavior.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Server-level configuration options.
     pub server: Option<ServerConfig>,
@@ -28,7 +28,7 @@ pub struct Config {
 /// Server configuration settings such as port, static folder, and CORS.
 ///
 /// These settings apply globally to the mock server.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     /// Port number the server listens on.
     pub port: Option<u16>,
@@ -44,7 +44,7 @@ pub struct ServerConfig {
 ///
 /// Allows overriding default delay, remapping paths,
 /// and protection for individual routes.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct RouteConfig {
     /// Artificial delay (in milliseconds) before responding.
     pub delay: Option<u16>,
@@ -57,7 +57,7 @@ pub struct RouteConfig {
 /// Configuration for Fosk collections.
 ///
 /// Defines naming and identifier handling for Fosk collections.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct CollectionConfig {
     /// Name of the Fosk collection.
     pub name: Option<String>,
@@ -71,7 +71,7 @@ pub struct CollectionConfig {
 ///
 /// Includes user credentials, cookie settings, JWT secret,
 /// and routes for login, logout, and user management.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     /// Field name for usernames in auth payloads.
     pub username_field: Option<String>,
@@ -101,7 +101,7 @@ pub struct AuthConfig {
 ///
 /// Defines routes and behavior for uploading, downloading,
 /// and listing files, including temporary storage options.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct UploadConfig {
     /// Route path for handling file uploads.
     pub upload_route: Option<String>,
