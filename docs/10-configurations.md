@@ -84,7 +84,7 @@ Example `{auth}.toml`:
 ```toml
 [route]
 delay = 0                    # no artificial delay
-remap = ""                   # no path rewrite
+remap = "/accounts"          # no path rewrite
 protect = true               # always protected
 
 [auth]
@@ -105,9 +105,9 @@ id_key = "id"                # identifier field for users
 id_type = "Uuid"             # user ID generation
 
 # Routes for login/logout and user management
-login_route = "/signin"     # login endpoint path suffix
-logout_route = "/signout"   # logout endpoint path suffix
-users_route = "/users"     # users REST endpoint suffix
+login_endpoint = "/signin"     # login endpoint path suffix
+logout_endpoint = "/signout"   # logout endpoint path suffix
+users_route = "/users"         # users REST route
 ```
 
 ### Upload Routes
@@ -119,14 +119,13 @@ Example `{upload}.toml`:
 ```toml
 [route]
 delay = 0                    # no delay on upload endpoints
-remap = ""                   # no rewrite
 protect = false              # public by default
 
 [upload]
-upload_route = "/upload"             # path for upload a file
-download_route = "/download"         # path for download a file
-list_files_route = "/files"          # path to list uploads
-temporary = true                     # delete files on server shutdown
+upload_endpoint = "/upload"        # endpoint for upload a file
+download_endpoint = "/download"    # endpoint for download a file
+list_files_endpoint = "/files"     # endpoint to list uploads
+temporary = true                   # delete files on server shutdown
 ```
 
 ### REST API Routes
@@ -137,14 +136,14 @@ Example `rest.toml`:
 
 ```toml
 [route]
-delay = 200                 # extra delay for CRUD operations
-remap = ""                  # no prefix
-protect = false             # public REST API
+delay = 200            # extra delay for CRUD operations
+remap = "/v1/product"  # no prefix
+protect = false        # public REST API
 
 [collection]
-name = "products"          # collection name
-id_key = "_id"             # custom id field
-id_type = "Uuid"           # use UUIDs for new items
+name = "products"      # collection name
+id_key = "_id"         # custom id field
+id_type = "Uuid"       # use UUIDs for new items
 ```
 
 ---

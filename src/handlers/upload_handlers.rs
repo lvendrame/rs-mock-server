@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{ffi::OsStr, fs, path::Path};
 
 use axum::{
     extract::{Json, Multipart, Path as AxumPath}, http::StatusCode, response::IntoResponse, routing::{get, post}
@@ -7,10 +7,12 @@ use http::{header::{CONTENT_DISPOSITION, CONTENT_TYPE}, HeaderMap, HeaderValue};
 use mime_guess::{from_path};
 use serde_json::Value;
 
-use crate::{app::App};
+use crate::{app::App, route_builder::{RouteUpload, FILE_NAME_PARAM}};
 
-fn create_upload_route(app: &mut App, upload_path: String, route: &str) {
-    let uploads_route = route.to_string();
+fn create_upload_route(app: &mut App, upload_def: &RouteUpload) {
+    let route = upload_def.get_upload_route();
+    let download_route = upload_def.get_download_route();
+    let upload_path = upload_def.path.to_string_lossy().to_string();
 
     // POST /uploads - create new
     let uploads_router = post(async move |mut multipart: Multipart| {
@@ -35,18 +37,19 @@ fn create_upload_route(app: &mut App, upload_path: String, route: &str) {
             map.insert("status".to_string(), Value::String("success".to_string()));
             map.insert("message".to_string(), Value::String("File uploaded successfully".to_string()));
             map.insert("filename".to_string(), Value::String(file_name.clone()));
-            map.insert("filepath".to_string(), Value::String(format!("{}/{}", uploads_route, file_name) ));
+            map.insert("filepath".to_string(), Value::String(download_route.replace(FILE_NAME_PARAM, &file_name)));
             map
         });
 
         Json(response).into_response()
     });
 
-    app.route(route, uploads_router, Some("POST"), Some(&["upload".to_string()]));
+    app.route(&route, uploads_router, Some("POST"), Some(&["upload".to_string()]));
 }
 
-fn create_download_route(app: &mut App, download_path: String, route: &str) {
-    let download_route = format!("{}/{{file_name}}", route);
+fn create_download_route(app: &mut App, upload_def: &RouteUpload) {
+    let download_route = upload_def.get_download_route();
+    let download_path = upload_def.path.to_string_lossy().to_string();
 
     // GET /uploads/{filename} - download file
     let download_router = get(move |AxumPath(file_name): AxumPath<String>| {
@@ -89,10 +92,12 @@ fn create_download_route(app: &mut App, download_path: String, route: &str) {
     app.route(&download_route, download_router, Some("GET"), Some(&["download".to_string()]));
 }
 
-fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
-    let upload_list_route = route.to_string();
+fn create_uploaded_list_route(app: &mut App, upload_def: &RouteUpload) {
+    let route = upload_def.get_list_files_route();
+    let download_route = upload_def.get_download_route();
+    let upload_path = upload_def.path.to_string_lossy().to_string();
 
-    // GET /uploads/{filename} - download file
+    // GET /uploads - download file
     let upload_list_router = get(move || {
         async move {
             let upload_path = Path::new(&upload_path);
@@ -103,14 +108,16 @@ fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
             }
 
             let entries = fs::read_dir(upload_path).unwrap();
-            let array = entries.map(|entry| {
-                let value = format!("{}/{}",
-                    upload_list_route,
-                    entry.unwrap().file_name().to_string_lossy()
-                );
+            let array = entries
+                .filter_map(Result::ok)
+                .filter(|entry|
+                    !entry.path().extension().and_then(OsStr::to_str).unwrap_or_default().eq_ignore_ascii_case("toml"))
+                .map(|entry| {
+                    let value =
+                        download_route.replace(FILE_NAME_PARAM, entry.file_name().to_str().unwrap());
 
-                Value::String(value)
-            }).collect();
+                    Value::String(value)
+                }).collect();
 
             let body = Value::Array(array);
 
@@ -118,13 +125,13 @@ fn create_uploaded_list_route(app: &mut App, upload_path: String, route: &str) {
         }
     });
 
-    app.route(route, upload_list_router, Some("GET"), None);
+    app.route(&route, upload_list_router, Some("GET"), None);
 }
 
-pub fn build_upload_routes(app: &mut App, path: String, route: &str) {
-    create_upload_route(app, path.clone(), route);
+pub fn build_upload_routes(app: &mut App, upload_def: &RouteUpload) {
+    create_upload_route(app, upload_def);
 
-    create_download_route(app, path.clone(), route);
+    create_download_route(app, upload_def);
 
-    create_uploaded_list_route(app, path.clone(), route);
+    create_uploaded_list_route(app, upload_def);
 }

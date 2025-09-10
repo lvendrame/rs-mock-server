@@ -22,10 +22,11 @@ pub struct  RouteAuth {
 impl RouteAuth {
     pub fn try_parse(route_params: RouteParams) -> Route {
         if RE_FILE_AUTH.is_match(&route_params.file_stem) {
+            let config = route_params.config.clone();
 
             let route_auth = Self {
                 path: route_params.file_path,
-                route: route_params.full_route,
+                route: config.route.unwrap_or_default().remap.unwrap_or(route_params.full_route),
             };
 
             return Route::Auth(route_auth);

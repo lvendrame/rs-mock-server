@@ -17,8 +17,12 @@ impl RouteManager {
         let start_time = std::time::Instant::now();
         println!("Start - Loading routes");
 
+        let parent_route = config.clone().unwrap_or_default()
+            .route.unwrap_or_default()
+            .remap.unwrap_or("".into());
+
         let mut manager = Self::new();
-        manager.load_dir("", root_path, config);
+        manager.load_dir(&parent_route, root_path, config);
         manager.sort();
 
         println!("Finish - Loading routes. Routes loaded in {:?}", start_time.elapsed());
@@ -41,6 +45,9 @@ impl RouteManager {
 
     fn load_entry(&mut self, parent_route: &str, entry: &DirEntry, config: &Option<Config>, config_store: &ConfigStore) {
         let route_params = RouteParams::new(parent_route, entry, config.clone().unwrap_or_default(), config_store);
+        if route_params.file_extension == "toml" {
+            return;
+        }
 
         let route = Route::try_parse(&route_params);
 

@@ -14,6 +14,9 @@ static PUBLIC_ROUTE_NAME: &str = "public";
 impl RoutePublic {
     pub fn try_parse(route_params: RouteParams) -> Route {
         if route_params.file_stem == PUBLIC_ROUTE_NAME || route_params.file_stem.starts_with(&format!("{}-", PUBLIC_ROUTE_NAME)) {
+            let config = route_params.config.clone();
+            let route_config = config.route.clone().unwrap_or_default();
+
             let public_route = if let Some((_, to)) = route_params.file_stem.split_once('-') {
                 if to.is_empty() {
                     PUBLIC_ROUTE_NAME
@@ -25,7 +28,8 @@ impl RoutePublic {
             };
 
 
-            let route = format!("{}/{}", route_params.parent_route, public_route);
+            let route = route_config.remap
+                .unwrap_or(format!("{}/{}", route_params.parent_route, public_route));
 
             let route_public = Self {
                 path: route_params.file_path,

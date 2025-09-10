@@ -13,39 +13,81 @@ const ELEMENT_IS_PROTECTED: usize = 1;
 const ELEMENT_IS_TEMPORARY: usize = 2;
 const ELEMENT_ROUTE: usize = 4;
 
+pub const FILE_NAME_PARAM: &str = "{file_name}";
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct  RouteUpload {
+pub struct RouteUpload {
     pub path: OsString,
     pub route: String,
     pub is_temporary: bool,
     pub is_protected: bool,
+    pub delay: Option<u16>,
+    pub upload_endpoint: Option<String>,
+    pub download_endpoint: Option<String>,
+    pub list_files_endpoint: Option<String>,
 }
 
 impl RouteUpload {
     pub fn try_parse(route_params: RouteParams) -> Route {
-        let is_protected = route_params.config.route.unwrap_or_default().protect.unwrap_or(false);
         if let Some(captures) = RE_DIR_UPLOAD.captures(&route_params.file_name) {
+            let config = route_params.config.clone();
+            let route_config = config.route.clone().unwrap_or_default();
+            let upload_config = config.upload.clone().unwrap_or_default();
+
+            // From config
+            let delay = route_config.delay;
+            let is_protected = route_config.protect.unwrap_or(false);
+            let is_temporary = upload_config.temporary.unwrap_or(false);
+            let upload_endpoint = upload_config.upload_endpoint;
+            let download_endpoint = upload_config.download_endpoint;
+            let list_files_endpoint = upload_config.list_files_endpoint;
+
+            // From file
             let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
-            let is_temporary = captures.get(ELEMENT_IS_TEMPORARY).is_some();
+            let is_temporary = is_temporary || captures.get(ELEMENT_IS_TEMPORARY).is_some();
             let uploads_route = if let Some(route) = captures.get(ELEMENT_ROUTE) {
                 route.as_str()
             } else {
                 "upload"
             };
 
-            let route = format!("{}/{}", route_params.parent_route, uploads_route);
+            let route = route_config.remap
+                .unwrap_or(format!("{}/{}", route_params.parent_route, uploads_route));
 
             let route_upload = Self {
                 path: route_params.file_path,
                 route: route.to_string(),
+                delay,
                 is_temporary,
                 is_protected,
+                upload_endpoint,
+                download_endpoint,
+                list_files_endpoint,
             };
 
             return Route::Upload(route_upload);
         }
 
         Route::None
+    }
+
+    pub fn get_route(&self, endpoint: &Option<String>) -> String {
+        match endpoint {
+            Some(endpoint) => format!("{}{}", self.route, endpoint),
+            None => self.route.clone(),
+        }
+    }
+
+    pub fn get_upload_route(&self) -> String {
+        self.get_route(&self.upload_endpoint)
+    }
+
+    pub fn get_download_route(&self) -> String {
+        format!("{}/{}", self.get_route(&self.download_endpoint), FILE_NAME_PARAM)
+    }
+
+    pub fn get_list_files_route(&self) -> String {
+        self.get_route(&self.list_files_endpoint)
     }
 }
 
@@ -54,13 +96,16 @@ impl RouteGenerator for RouteUpload {
         let path = self.path.to_string_lossy();
         app.push_uploads_config(path.to_string(), self.is_temporary);
 
-        build_upload_routes(app, path.to_string(), &self.route);
+        build_upload_routes(app, self);
     }
 }
 
 impl PrintRoute for RouteUpload {
     fn println(&self) {
-        println!("✔️ Mapped uploads from folder {} to {}", self.path.to_string_lossy(), self.route);
+        println!("✔️ Mapped uploads routes from folder {} to {}", self.path.to_string_lossy(), self.route);
+        println!("   ├── upload route to     POST {}", self.get_upload_route());
+        println!("   ├── download route to   GET {}", self.get_download_route());
+        println!("   └── list files route to GET {}", self.get_list_files_route());
     }
 }
 

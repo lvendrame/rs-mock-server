@@ -1,0 +1,8 @@
+[route]
+remap = "/documents"
+
+[upload]
+upload_endpoint = "/upload"        # endpoint for upload a file
+download_endpoint = "/download"    # endpoint for download a file
+list_files_endpoint = "/files"     # endpoint to list uploads
+temporary = true                   # delete files on server shutdown

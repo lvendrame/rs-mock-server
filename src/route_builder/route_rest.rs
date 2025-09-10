@@ -53,8 +53,11 @@ impl RouteRest {
     }
 
     pub fn try_parse(route_params: RouteParams) -> Route {
-        let is_protected = route_params.config.route.unwrap_or_default().protect.unwrap_or(false);
         if let Some(captures) = RE_FILE_REST.captures(&route_params.file_stem) {
+            let config = route_params.config.clone();
+            let route_config = config.route.clone().unwrap_or_default();
+
+            let is_protected = route_config.protect.unwrap_or(false);
             let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let descriptor = if let Some(pattern) = captures.get(ELEMENT_DESCRIPTOR) {
                 pattern.as_str()
@@ -66,7 +69,7 @@ impl RouteRest {
 
             let route_rest = Self {
                 path: route_params.file_path,
-                route: route_params.full_route,
+                route: route_config.remap.unwrap_or(route_params.full_route),
                 id_key: id_key.to_string(),
                 id_type,
                 is_protected,

@@ -1,4 +1,4 @@
-use std::{ffi::OsString, fs::DirEntry};
+use std::{ffi::{OsStr, OsString}, fs::DirEntry};
 
 use crate::route_builder::config::{Config, ConfigStore};
 
@@ -9,6 +9,7 @@ pub struct RouteParams {
     pub file_name: String,
     pub file_stem: String,
     pub file_path: OsString,
+    pub file_extension: String,
     pub config: Config,
     pub is_dir: bool,
 }
@@ -19,13 +20,23 @@ impl RouteParams {
         let parent_route = parent_route.to_string();
         let file_name = entry.file_name().to_string_lossy().to_string();
         let file_stem = file_name.split('.').next().unwrap_or("").to_string();
+        let file_extension = entry.path().extension().and_then(OsStr::to_str).unwrap_or_default().to_string();
 
         let is_dir = entry.file_type().unwrap().is_dir();
 
 
         let full_route = if is_dir {
+            let config_store = ConfigStore::try_from_dir(entry.path().to_str().unwrap())
+                .unwrap_or_else(|_| {
+                    println!("Unable to read configs from folder {:?}", entry.path());
+                    ConfigStore::default()
+                });
+
             if file_name.starts_with("$") {
                 effective_config = effective_config.with_protect(true);
+            }
+            if let Some(config) = config_store.get("config") {
+                effective_config = config.merge_with_ref(&effective_config);
             }
             let end_point = file_name.replace("$", "");
             format!("{}/{}", parent_route, end_point)
@@ -44,6 +55,7 @@ impl RouteParams {
             file_name,
             file_path,
             file_stem,
+            file_extension,
             config: effective_config,
             is_dir,
         }

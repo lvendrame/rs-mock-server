@@ -1,6 +1,6 @@
 //! Configuration module for the mock server, defining structures for loading and storing configuration from TOML files.
 
-use std::{collections::HashMap, fs::{self, DirEntry}};
+use std::{collections::HashMap, ffi::OsStr, fs::{self, DirEntry}};
 
 use fosk::IdType;
 use serde::{Deserialize, Serialize};
@@ -89,10 +89,10 @@ pub struct AuthConfig {
     pub token_collection: Option<CollectionConfig>,
     /// Fosk collection configuration for storing user data.
     pub user_collection: Option<CollectionConfig>,
-    /// Route path for user login.
-    pub login_route: Option<String>,
-    /// Route path for user logout.
-    pub logout_route: Option<String>,
+    /// Endpoint for user login.
+    pub login_endpoint: Option<String>,
+    /// Endpoint for user logout.
+    pub logout_endpoint: Option<String>,
     /// Route path for user management.
     pub users_route: Option<String>,
 }
@@ -104,11 +104,11 @@ pub struct AuthConfig {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UploadConfig {
     /// Route path for handling file uploads.
-    pub upload_route: Option<String>,
+    pub upload_endpoint: Option<String>,
     /// Route path for file downloads.
-    pub download_route: Option<String>,
+    pub download_endpoint: Option<String>,
     /// Route path for listing files.
-    pub list_files_route: Option<String>,
+    pub list_files_endpoint: Option<String>,
     /// Use temporary storage for uploads.
     pub temporary: Option<bool>,
 }
@@ -143,7 +143,13 @@ impl ConfigStore {
         let mut store = Self::default();
         fs::read_dir( dir_path)?
             .filter_map(Result::ok)
-            .filter(|file| file.path().ends_with(".toml"))
+            .filter(|file| {
+                let path = file.path();
+                let extension = path.extension().and_then(OsStr::to_str).unwrap_or_default();
+                let result = extension.eq("toml");
+                result.to_string();
+                result
+            })
             .for_each(|file| {
                 let key = file.path().as_path().file_stem().unwrap().to_string_lossy().to_ascii_lowercase();
                 match Config::try_from(&file) {
@@ -171,9 +177,9 @@ impl Config {
             Some(parent) => Self {
                 server: self.server.merge(parent.server),
                 route: self.route.merge(parent.route),
-                collection: self.collection.merge(parent.collection),
-                auth: self.auth.merge(parent.auth),
-                upload: self.upload.merge(parent.upload),
+                collection: self.collection,//.merge(parent.collection), don't merge collections
+                auth: self.auth, //.merge(parent.auth), don't merge auths
+                upload: self.upload, //.merge(parent.upload), don't merge upload
             },
             None => self,
         }
@@ -184,9 +190,9 @@ impl Config {
         Self {
             server: self.server.merge(parent.server),
             route: self.route.merge(parent.route),
-            collection: self.collection.merge(parent.collection),
-            auth: self.auth.merge(parent.auth),
-            upload: self.upload.merge(parent.upload),
+            collection: self.collection,//.merge(parent.collection), don't merge collections
+            auth: self.auth, //.merge(parent.auth), don't merge auths
+            upload: self.upload, //.merge(parent.upload), don't merge upload
         }
     }
 
@@ -228,9 +234,9 @@ impl Mergeable for Config {
         Self {
             server: self.server.merge(parent.server),
             route: self.route.merge(parent.route),
-            collection: self.collection.merge(parent.collection),
-            auth: self.auth.merge(parent.auth),
-            upload: self.upload.merge(parent.upload),
+            collection: self.collection,//.merge(parent.collection), don't merge collections
+            auth: self.auth, //.merge(parent.auth), don't merge auths
+            upload: self.upload, //.merge(parent.upload), don't merge upload
         }
     }
 }
@@ -244,9 +250,9 @@ impl Mergeable for Option<Config> {
             (Some(child), Some(parent)) => Some(Config {
                 server: child.server.merge(parent.server),
                 route: child.route.merge(parent.route),
-                collection: child.collection.merge(parent.collection),
-                auth: child.auth.merge(parent.auth),
-                upload: child.upload.merge(parent.upload),
+                collection: child.collection,//.merge(parent.collection), don't merge collections
+                auth: child.auth, //.merge(parent.auth), don't merge auths
+                upload: child.upload, //.merge(parent.upload), don't merge upload
             }),
         }
     }
@@ -276,7 +282,7 @@ impl Mergeable for Option<RouteConfig> {
             (Some(child), None) => Some(child),
             (Some(child), Some(parent)) => Some(RouteConfig {
                 delay: child.delay.merge(parent.delay),
-                remap: child.remap.merge(parent.remap),
+                remap: child.remap,//.merge(parent.remap),
                 protect: child.protect.merge(parent.protect),
             }),
         }
@@ -313,8 +319,8 @@ impl Mergeable for Option<AuthConfig> {
                 jwt_secret: child.jwt_secret.merge(parent.jwt_secret),
                 token_collection: child.token_collection.merge(parent.token_collection),
                 user_collection: child.user_collection.merge(parent.user_collection),
-                login_route: child.login_route.merge(parent.login_route),
-                logout_route: child.logout_route.merge(parent.logout_route),
+                login_endpoint: child.login_endpoint.merge(parent.login_endpoint),
+                logout_endpoint: child.logout_endpoint.merge(parent.logout_endpoint),
                 users_route: child.users_route.merge(parent.users_route),
             }),
         }
@@ -328,9 +334,9 @@ impl Mergeable for Option<UploadConfig> {
             (None, Some(parent)) => Some(parent),
             (Some(child), None) => Some(child),
             (Some(child), Some(parent)) => Some(UploadConfig {
-                upload_route: child.upload_route.merge(parent.upload_route),
-                download_route: child.download_route.merge(parent.download_route),
-                list_files_route: child.list_files_route.merge(parent.list_files_route),
+                upload_endpoint: child.upload_endpoint.merge(parent.upload_endpoint),
+                download_endpoint: child.download_endpoint.merge(parent.download_endpoint),
+                list_files_endpoint: child.list_files_endpoint.merge(parent.list_files_endpoint),
                 temporary: child.temporary.merge(parent.temporary)
             }),
         }
@@ -420,12 +426,12 @@ mod tests {
 
     #[test]
     fn test_upload_config_merge() {
-        let child = UploadConfig { upload_route: None, download_route: Some("/dl".into()), list_files_route: None, temporary: Some(true) };
-        let parent = UploadConfig { upload_route: Some("/up".into()), download_route: None, list_files_route: Some("/list".into()), temporary: Some(false) };
+        let child = UploadConfig { upload_endpoint: None, download_endpoint: Some("/dl".into()), list_files_endpoint: None, temporary: Some(true) };
+        let parent = UploadConfig { upload_endpoint: Some("/up".into()), download_endpoint: None, list_files_endpoint: Some("/list".into()), temporary: Some(false) };
         let merged = Some(child.clone()).merge(Some(parent.clone())).unwrap();
-        assert_eq!(merged.upload_route, Some("/up".into()));
-        assert_eq!(merged.download_route, Some("/dl".into()));
-        assert_eq!(merged.list_files_route, Some("/list".into()));
+        assert_eq!(merged.upload_endpoint, Some("/up".into()));
+        assert_eq!(merged.download_endpoint, Some("/dl".into()));
+        assert_eq!(merged.list_files_endpoint, Some("/list".into()));
         assert_eq!(merged.temporary, Some(true));
     }
 
@@ -449,7 +455,7 @@ mod tests {
         let merged = child.merge(Some(parent));
         let route = merged.route.unwrap();
         assert_eq!(route.delay, Some(2));
-        assert_eq!(route.remap, Some("/p".into()));
+        assert!(route.remap.is_none());
         assert_eq!(route.protect, Some(true));
     }
 }

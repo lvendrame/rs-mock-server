@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+
 pub struct UploadConfiguration {
     pub uploads_path: String,
     pub clean_uploads: bool,
@@ -21,7 +23,8 @@ impl UploadConfiguration {
                 for entry in entries.flatten() {
                     let entry_path = entry.path();
 
-                    if entry_path.is_file() {
+                    if entry_path.is_file() &&
+                        !entry_path.extension().and_then(OsStr::to_str).unwrap_or_default().eq_ignore_ascii_case("toml") {
                         if let Err(e) = fs::remove_file(&entry_path) {
                             eprintln!("⚠️ Failed to delete file {}: {}", entry_path.display(), e);
                         } else {

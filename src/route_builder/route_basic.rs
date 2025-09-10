@@ -19,7 +19,7 @@ const ELEMENT_METHOD: usize = 2;
 const ELEMENT_DESCRIPTOR: usize = 4;
 
 const ELEMENT_ROUTE_NAME: usize = 2;
-const ELEMENT_PARAM: usize = 3;
+const ELEMENT_PARAM: usize = 4;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum SubRoute {
@@ -75,6 +75,9 @@ pub struct RouteBasic {
 
 impl RouteBasic {
     pub fn try_parse(route_params: RouteParams) -> Route {
+        let config = route_params.config.clone();
+        let route_config = config.route.clone().unwrap_or_default();
+
         let is_protected = route_params.config.route.unwrap_or_default().protect.unwrap_or(false);
         if let Some(captures) = RE_FILE_METHODS.captures(&route_params.file_stem) {
             let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
@@ -84,7 +87,8 @@ impl RouteBasic {
             let route_basic = Self {
                 path: route_params.file_path,
                 method: method_from_str(method),
-                route: route_params.full_route,
+                route: route_config.remap
+                    .unwrap_or(route_params.full_route),
                 sub_route: SubRoute::from(pattern),
                 is_protected,
             };
@@ -99,8 +103,9 @@ impl RouteBasic {
 
             let route_basic = Self {
                 path: route_params.file_path,
-                method: method_from_str(route),
-                route: format!("{}/{}", route_params.full_route, route_params.file_stem.replace(param.unwrap().as_str(), "")),
+                method: Method::GET,
+                route: route_config.remap
+                    .unwrap_or(format!("{}/{}", route_params.full_route, route)),
                 sub_route: SubRoute::from(param),
                 is_protected,
             };
@@ -111,7 +116,8 @@ impl RouteBasic {
         let route_basic = Self {
             path: route_params.file_path,
             method: Method::GET,
-            route: format!("{}/{}", route_params.full_route, route_params.file_stem),
+            route: route_config.remap
+                .unwrap_or(format!("{}/{}", route_params.full_route, route_params.file_stem)),
             sub_route: SubRoute::None,
             is_protected,
         };

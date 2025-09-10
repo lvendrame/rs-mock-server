@@ -10,7 +10,13 @@ use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
-use crate::{handlers::{create_collections_routes, make_auth_middleware, AUTH_COLLECTION}, pages::Pages, route_builder::{config::{Config, ServerConfig}, route_manager::RouteManager, RouteGenerator, RouteRegistrator}, upload_configuration::UploadConfiguration, DEFAULT_FOLDER, DEFAULT_PORT
+use crate::{
+    handlers::{create_collections_routes, make_auth_middleware, AUTH_COLLECTION},
+    pages::Pages,
+    route_builder::{config::{Config, ServerConfig},
+    route_manager::RouteManager, RouteGenerator, RouteRegistrator},
+    upload_configuration::UploadConfiguration,
+    DEFAULT_FOLDER, DEFAULT_PORT
 };
 
 pub const MOCK_SERVER_ROUTE: &str = "/mock-server";
