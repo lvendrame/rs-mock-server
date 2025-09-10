@@ -23,8 +23,9 @@ pub struct  RouteUpload {
 
 impl RouteUpload {
     pub fn try_parse(route_params: RouteParams) -> Route {
+        let is_protected = route_params.config.route.unwrap_or_default().protect.unwrap_or(false);
         if let Some(captures) = RE_DIR_UPLOAD.captures(&route_params.file_name) {
-            let is_protected = route_params.is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
+            let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let is_temporary = captures.get(ELEMENT_IS_TEMPORARY).is_some();
             let uploads_route = if let Some(route) = captures.get(ELEMENT_ROUTE) {
                 route.as_str()
@@ -66,6 +67,7 @@ impl PrintRoute for RouteUpload {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::route_builder::config::{Config, ConfigStore};
     use crate::route_builder::route_params::RouteParams;
     use std::fs;
     use std::path::Path;
@@ -84,7 +86,7 @@ mod tests {
     fn test_try_parse_basic_upload_directory() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -104,7 +106,7 @@ mod tests {
     fn test_try_parse_protected_upload_directory() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "${upload}");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -122,7 +124,7 @@ mod tests {
     fn test_try_parse_temporary_upload_directory() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}{temp}");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -140,7 +142,7 @@ mod tests {
     fn test_try_parse_protected_temporary_upload() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "${upload}{temp}");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -158,7 +160,7 @@ mod tests {
     fn test_try_parse_upload_with_custom_route() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}-files");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -176,7 +178,7 @@ mod tests {
     fn test_try_parse_temporary_upload_with_custom_route() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}{temp}-media");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -194,7 +196,7 @@ mod tests {
     fn test_try_parse_protected_upload_with_custom_route() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "${upload}-documents");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -212,7 +214,7 @@ mod tests {
     fn test_try_parse_full_featured_upload() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "${upload}{temp}-assets");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -230,7 +232,7 @@ mod tests {
     fn test_try_parse_inherited_protection() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}");
-        let route_params = RouteParams::new("/api/admin", &entry, true);
+        let route_params = RouteParams::new("/api/admin", &entry, Config::default().with_protect(true), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -248,7 +250,7 @@ mod tests {
     fn test_try_parse_nested_route_paths() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}-images");
-        let route_params = RouteParams::new("/api/v1/content", &entry, false);
+        let route_params = RouteParams::new("/api/v1/content", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -266,7 +268,7 @@ mod tests {
     fn test_try_parse_upload_with_empty_parent_route() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}-data");
-        let route_params = RouteParams::new("", &entry, false);
+        let route_params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -292,7 +294,7 @@ mod tests {
 
         for (dirname, expected_route) in test_cases {
             let entry = create_test_dir(temp_dir.path(), dirname);
-            let route_params = RouteParams::new("/api", &entry, false);
+            let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
             let result = RouteUpload::try_parse(route_params);
 
             match result {
@@ -310,7 +312,7 @@ mod tests {
     fn test_try_parse_non_upload_directory() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "regular_folder");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -326,7 +328,7 @@ mod tests {
     fn test_try_parse_partial_upload_match() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "upload_folder");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -350,7 +352,7 @@ mod tests {
 
         for pattern in malformed_patterns {
             let entry = create_test_dir(temp_dir.path(), pattern);
-            let route_params = RouteParams::new("/api", &entry, false);
+            let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
             let result = RouteUpload::try_parse(route_params);
 
             match result {
@@ -366,7 +368,7 @@ mod tests {
     fn test_try_parse_file_path_preservation() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}{temp}-cache");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -399,7 +401,7 @@ mod tests {
 
         for pattern in valid_patterns {
             let entry = create_test_dir(temp_dir.path(), pattern);
-            let route_params = RouteParams::new("/test", &entry, false);
+            let route_params = RouteParams::new("/test", &entry, Config::default().with_protect(false), &ConfigStore::default());
             let result = RouteUpload::try_parse(route_params);
 
             match result {
@@ -415,7 +417,7 @@ mod tests {
     fn test_try_parse_edge_case_empty_custom_route() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}-");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteUpload::try_parse(route_params);
 
@@ -446,7 +448,7 @@ mod tests {
 
         for (pattern, expected_protected, expected_temporary, expected_route) in combinations {
             let entry = create_test_dir(temp_dir.path(), pattern);
-            let route_params = RouteParams::new("/api", &entry, false);
+            let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
             let result = RouteUpload::try_parse(route_params);
 
             match result {

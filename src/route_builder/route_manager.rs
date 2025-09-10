@@ -1,6 +1,6 @@
 use std::{fs::{self, DirEntry}};
 
-use crate::{app::App, route_builder::{config::ConfigStore, Route, RouteGenerator, RouteParams}};
+use crate::{app::App, route_builder::{config::{Config, ConfigStore, Mergeable}, Route, RouteGenerator, RouteParams}};
 
 #[derive(Debug, Default)]
 pub struct RouteManager {
@@ -13,12 +13,12 @@ impl RouteManager {
         Self { auth_route: Route::None, routes: vec![] }
     }
 
-    pub fn from_dir(root_path: &str) -> Self {
+    pub fn from_dir(root_path: &str, config: Option<Config>) -> Self {
         let start_time = std::time::Instant::now();
         println!("Start - Loading routes");
 
         let mut manager = Self::new();
-        manager.load_dir("", root_path, false);
+        manager.load_dir("", root_path, config);
         manager.sort();
 
         println!("Finish - Loading routes. Routes loaded in {:?}", start_time.elapsed());
@@ -26,19 +26,21 @@ impl RouteManager {
         manager
     }
 
-    fn load_dir(&mut self, parent_route: &str, entries_path: &str, is_protected: bool) {
-        let configs = ConfigStore::try_from_dir(entries_path)
+    fn load_dir(&mut self, parent_route: &str, entries_path: &str, config: Option<Config>) {
+        let config_store = ConfigStore::try_from_dir(entries_path)
             .unwrap_or_else(|err| panic!("Unable to load configs from {}. Error: {:?}", entries_path, err));
+
+        let config = config_store.get("config").merge(config);
 
         let entries = fs::read_dir(entries_path).unwrap();
         for entry in entries {
             let entry = entry.unwrap();
-            self.load_entry(parent_route, &entry, is_protected);
+            self.load_entry(parent_route, &entry, &config, &config_store);
         }
     }
 
-    fn load_entry(&mut self, parent_route: &str, entry: &DirEntry, is_protected: bool) {
-        let route_params = RouteParams::new(parent_route, entry, is_protected);
+    fn load_entry(&mut self, parent_route: &str, entry: &DirEntry, config: &Option<Config>, config_store: &ConfigStore) {
+        let route_params = RouteParams::new(parent_route, entry, config.clone().unwrap_or_default(), config_store);
 
         let route = Route::try_parse(&route_params);
 
@@ -47,7 +49,7 @@ impl RouteManager {
                 self.load_dir(
                     &route_params.full_route,
                     &route_params.file_path.to_string_lossy(),
-                    route_params.is_protected
+                    Some(route_params.config.clone())
                 );
             }
             return;

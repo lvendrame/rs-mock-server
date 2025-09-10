@@ -55,6 +55,7 @@ impl PrintRoute for RoutePublic {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::route_builder::config::{Config, ConfigStore};
     use crate::route_builder::route_params::RouteParams;
     use std::fs::File;
     use std::path::Path;
@@ -82,7 +83,7 @@ mod tests {
     fn test_try_parse_basic_public_directory() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -101,7 +102,7 @@ mod tests {
     fn test_try_parse_public_with_custom_route() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public-static");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -118,7 +119,7 @@ mod tests {
     fn test_try_parse_public_with_nested_route() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public-assets");
-        let route_params = RouteParams::new("/api/v1", &entry, false);
+        let route_params = RouteParams::new("/api/v1", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -135,7 +136,7 @@ mod tests {
     fn test_try_parse_public_with_hyphenated_name() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public-my-assets");
-        let route_params = RouteParams::new("", &entry, false);
+        let route_params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -152,7 +153,7 @@ mod tests {
     fn test_try_parse_public_file_instead_of_directory() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "public.json");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -169,7 +170,7 @@ mod tests {
     fn test_try_parse_public_with_empty_parent_route() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public-images");
-        let route_params = RouteParams::new("", &entry, false);
+        let route_params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -187,7 +188,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public-secure");
         // Even when parent is protected, public routes should not be protected
-        let route_params = RouteParams::new("/api/admin", &entry, true);
+        let route_params = RouteParams::new("/api/admin", &entry, Config::default().with_protect(true), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -204,7 +205,7 @@ mod tests {
     fn test_try_parse_non_public_directory() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "private");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -220,7 +221,7 @@ mod tests {
     fn test_try_parse_partial_public_match() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "publicity");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -236,7 +237,7 @@ mod tests {
     fn test_try_parse_public_with_multiple_hyphens() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public-api-v1-docs");
-        let route_params = RouteParams::new("", &entry, false);
+        let route_params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -254,7 +255,7 @@ mod tests {
     fn test_try_parse_public_case_sensitive() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "Public");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -270,7 +271,7 @@ mod tests {
     fn test_try_parse_file_path_preservation() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public-media");
-        let route_params = RouteParams::new("/content", &entry, false);
+        let route_params = RouteParams::new("/content", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 
@@ -288,7 +289,7 @@ mod tests {
     fn test_try_parse_edge_case_public_only() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "public-");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RoutePublic::try_parse(route_params);
 

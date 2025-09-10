@@ -53,8 +53,9 @@ impl RouteRest {
     }
 
     pub fn try_parse(route_params: RouteParams) -> Route {
+        let is_protected = route_params.config.route.unwrap_or_default().protect.unwrap_or(false);
         if let Some(captures) = RE_FILE_REST.captures(&route_params.file_stem) {
-            let is_protected = route_params.is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
+            let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let descriptor = if let Some(pattern) = captures.get(ELEMENT_DESCRIPTOR) {
                 pattern.as_str()
             } else {
@@ -100,6 +101,7 @@ impl PrintRoute for RouteRest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::route_builder::config::{Config, ConfigStore};
     use crate::route_builder::route_params::RouteParams;
     use std::fs::File;
     use std::path::Path;
@@ -118,7 +120,7 @@ mod tests {
     fn test_try_parse_basic_rest_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest.json");
-        let route_params = RouteParams::new("/api/users", &entry, false);
+        let route_params = RouteParams::new("/api/users", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -139,7 +141,7 @@ mod tests {
     fn test_try_parse_protected_rest_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "$rest.json");
-        let route_params = RouteParams::new("/api/admin", &entry, false);
+        let route_params = RouteParams::new("/api/admin", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -158,7 +160,7 @@ mod tests {
     fn test_try_parse_rest_with_none_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{none}.json");
-        let route_params = RouteParams::new("/api/products", &entry, false);
+        let route_params = RouteParams::new("/api/products", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -177,7 +179,7 @@ mod tests {
     fn test_try_parse_rest_with_uuid_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{uuid}.json");
-        let route_params = RouteParams::new("/api/products", &entry, false);
+        let route_params = RouteParams::new("/api/products", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -196,7 +198,7 @@ mod tests {
     fn test_try_parse_rest_with_int_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{int}.json");
-        let route_params = RouteParams::new("/api/orders", &entry, false);
+        let route_params = RouteParams::new("/api/orders", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -215,7 +217,7 @@ mod tests {
     fn test_try_parse_rest_with_custom_id_key() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{_id}.json");
-        let route_params = RouteParams::new("/api/documents", &entry, false);
+        let route_params = RouteParams::new("/api/documents", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -234,7 +236,7 @@ mod tests {
     fn test_try_parse_rest_with_id_key_and_type() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{_id:int}.json");
-        let route_params = RouteParams::new("/api/items", &entry, false);
+        let route_params = RouteParams::new("/api/items", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -253,7 +255,7 @@ mod tests {
     fn test_try_parse_rest_with_custom_key_uuid_type() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{user_id:uuid}.json");
-        let route_params = RouteParams::new("/api/profiles", &entry, false);
+        let route_params = RouteParams::new("/api/profiles", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -272,7 +274,7 @@ mod tests {
     fn test_try_parse_protected_rest_with_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "$rest{id:int}.json");
-        let route_params = RouteParams::new("/api/secure", &entry, false);
+        let route_params = RouteParams::new("/api/secure", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -291,7 +293,7 @@ mod tests {
     fn test_try_parse_inherited_protection() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest.json");
-        let route_params = RouteParams::new("/api/admin", &entry, true);
+        let route_params = RouteParams::new("/api/admin", &entry, Config::default().with_protect(true), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -310,7 +312,7 @@ mod tests {
     fn test_try_parse_invalid_type_defaults_to_uuid() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{id:invalid}.json");
-        let route_params = RouteParams::new("/api/test", &entry, false);
+        let route_params = RouteParams::new("/api/test", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -329,7 +331,7 @@ mod tests {
     fn test_try_parse_malformed_descriptor_uses_defaults() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{id:uuid:extra}.json");
-        let route_params = RouteParams::new("/api/malformed", &entry, false);
+        let route_params = RouteParams::new("/api/malformed", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -348,7 +350,7 @@ mod tests {
     fn test_try_parse_non_rest_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "config.json");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -364,7 +366,7 @@ mod tests {
     fn test_try_parse_partial_rest_match() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "restaurant.json");
-        let route_params = RouteParams::new("/api", &entry, false);
+        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -389,7 +391,7 @@ mod tests {
 
         for (filename, expected_key, expected_type) in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/api/complex", &entry, false);
+            let route_params = RouteParams::new("/api/complex", &entry, Config::default().with_protect(false), &ConfigStore::default());
             let result = RouteRest::try_parse(route_params);
 
             match result {
@@ -408,7 +410,7 @@ mod tests {
     fn test_try_parse_nested_route_paths() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{id:int}.json");
-        let route_params = RouteParams::new("/api/v1/users/profile", &entry, false);
+        let route_params = RouteParams::new("/api/v1/users/profile", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 
@@ -427,7 +429,7 @@ mod tests {
     fn test_try_parse_file_path_preservation() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest.json");
-        let route_params = RouteParams::new("/api/data", &entry, false);
+        let route_params = RouteParams::new("/api/data", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteRest::try_parse(route_params);
 

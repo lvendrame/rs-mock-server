@@ -151,6 +151,8 @@ impl PartialOrd for Route {
 
 #[cfg(test)]
 mod tests {
+    use crate::route_builder::config::{Config, ConfigStore};
+
     use super::*;
     use tempfile::TempDir;
     use std::fs::{self, DirEntry};
@@ -170,7 +172,7 @@ mod tests {
             get_dir_entry(&file_path)
         };
 
-        RouteParams::new("/test", &entry, is_protected)
+        RouteParams::new("/test", &entry, Config::default().with_protect(is_protected), &ConfigStore::default())
     }
 
     fn get_dir_entry(path: &Path) -> DirEntry {

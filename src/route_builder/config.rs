@@ -155,9 +155,13 @@ impl ConfigStore {
 
         Ok(store)
     }
+
+    pub fn get(&self, key: &str) -> Option<Config> {
+        self.map_configs.get(key.to_ascii_lowercase().as_str()).cloned()
+    }
 }
 
-trait Mergeable {
+pub trait Mergeable {
     fn merge(self, parent: Self) -> Self;
 }
 
@@ -172,6 +176,17 @@ impl Config {
                 upload: self.upload.merge(parent.upload),
             },
             None => self,
+        }
+    }
+
+    pub fn merge_with_ref(self, parent: &Self) -> Self {
+        let parent = parent.clone();
+        Self {
+            server: self.server.merge(parent.server),
+            route: self.route.merge(parent.route),
+            collection: self.collection.merge(parent.collection),
+            auth: self.auth.merge(parent.auth),
+            upload: self.upload.merge(parent.upload),
         }
     }
 

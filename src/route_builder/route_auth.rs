@@ -54,6 +54,7 @@ mod tests {
     use std::fs::{self, File};
     use std::path::Path;
     use tempfile::TempDir;
+    use crate::route_builder::config::{Config, ConfigStore};
     use crate::route_builder::route_params::RouteParams;
 
     fn create_test_file(dir: &Path, filename: &str) -> std::fs::DirEntry {
@@ -73,7 +74,7 @@ mod tests {
     fn test_try_parse_with_valid_auth_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.json");
-        let route_params = RouteParams::new("/api/auth", &entry, false);
+        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -90,7 +91,7 @@ mod tests {
     fn test_try_parse_with_auth_file_different_extension() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.txt");
-        let route_params = RouteParams::new("/account", &entry, false);
+        let route_params = RouteParams::new("/account", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -107,7 +108,7 @@ mod tests {
     fn test_try_parse_with_auth_file_no_extension() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}");
-        let route_params = RouteParams::new("/login", &entry, false);
+        let route_params = RouteParams::new("/login", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -124,7 +125,7 @@ mod tests {
     fn test_try_parse_with_root_level_auth() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.json");
-        let route_params = RouteParams::new("", &entry, false);
+        let route_params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -141,7 +142,7 @@ mod tests {
     fn test_try_parse_with_protected_auth_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.json");
-        let route_params = RouteParams::new("/api/auth", &entry, true); // Protected context
+        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(true), &ConfigStore::default()); // Protected context
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -158,7 +159,7 @@ mod tests {
     fn test_try_parse_with_invalid_auth_filename() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "auth.json");
-        let route_params = RouteParams::new("/api/auth", &entry, false);
+        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -174,7 +175,7 @@ mod tests {
     fn test_try_parse_with_partial_auth_match() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}extra.json");
-        let route_params = RouteParams::new("/api/auth", &entry, false);
+        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -203,7 +204,7 @@ mod tests {
 
         for filename in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/api", &entry, false);
+            let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
             let result = RouteAuth::try_parse(route_params);
 
@@ -231,7 +232,7 @@ mod tests {
 
         for filename in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/api/test", &entry, false);
+            let route_params = RouteParams::new("/api/test", &entry, Config::default().with_protect(false), &ConfigStore::default());
 
             let result = RouteAuth::try_parse(route_params);
 

@@ -108,7 +108,7 @@ impl App {
 
     fn build_dyn_routes(&mut self) {
         let dir = self.get_folder();
-        RouteManager::from_dir(&dir)
+        RouteManager::from_dir(&dir, Some(self.server_config.clone()))
             .make_routes(self);
     }
 
