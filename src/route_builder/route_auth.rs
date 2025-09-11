@@ -83,7 +83,7 @@ impl RouteAuth {
                 encrypt_password: auth_config.encrypt_password.unwrap_or(false),
             };
 
-            return Route::Auth(route_auth);
+            return Route::Auth(Box::new(route_auth));
         }
 
         Route::None
@@ -98,8 +98,8 @@ impl RouteGenerator for RouteAuth {
 
 impl PrintRoute for RouteAuth {
     fn println(&self) {
-        println!("✔️ Built AUTH route for {}/login", self.route);
-        println!("✔️ Built logout routes for {}/logout", self.route);
+        println!("✔️ Built AUTH route for {}{}", self.route, self.login_endpoint);
+        println!("✔️ Built logout routes for {}{}", self.route, self.logout_endpoint);
     }
 }
 

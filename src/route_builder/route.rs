@@ -17,7 +17,7 @@ pub struct CollectionConfig {
 pub enum Route {
     #[default]
     None,
-    Auth(RouteAuth),
+    Auth(Box<RouteAuth>),
     Basic(RouteBasic),
     Rest(RouteRest),
     Public(RoutePublic),

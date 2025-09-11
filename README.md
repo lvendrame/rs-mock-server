@@ -188,10 +188,12 @@ mocks/
 rs-mock-server [OPTIONS]
 
 Options:
-  -p, --port <PORT>      Port to run the server [default: 4520]
-  -f, --folder <FOLDER>  Mock files directory [default: mocks]
-  -h, --help             Print help
-  -V, --version          Print version
+  -p, --port <PORT>                      Port to run the server on [default: 4520]
+  -f, --folder <FOLDER>                  Directory to load mock files from [default: mocks]
+  -d, --disable-cors                     Disable CORS, by default CORS is enabled
+  -a, --allowed-origin <ALLOWED_ORIGIN>  Allowed origin, by default all origins are allowed
+  -h, --help                             Print help
+  -V, --version                          Print version
 ```
 
 ---

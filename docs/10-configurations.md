@@ -34,6 +34,7 @@ Omitted sections fall back to default behavior documented elsewhere.
 ## 2. Directory-Level Configuration
 
 To override defaults for all routes under a given folder, add a file named `config.toml` inside that directory. Any settings in this file will apply to child routes, unless overridden further by route-level configs.
+Only protect and delay configurations were inherited
 
 Example folder structure:
 
@@ -50,10 +51,8 @@ Example `mocks/api/config.toml`:
 
 ```toml
 [route]
-protect = true       # require auth on all /api/* routes
-
-[upload]
-temporary = true     # use temp storage for uploads under /api
+protect = true  # require auth on all /api/* routes
+delay = 300     # 300 milliseconds of response delay
 ```
 
 ---
@@ -119,6 +118,7 @@ Example `{upload}.toml`:
 [route]
 delay = 0                    # no delay on upload endpoints
 protect = false              # public by default
+remap = "/manage-files"
 
 [upload]
 upload_endpoint = "/upload"        # endpoint for upload a file

@@ -183,4 +183,20 @@
 
 -   chore: change the rest get route (Luis Vendrame)
 
+## 0.6.8 (2025-09-09)
+
+-   chore: configuration struct and documentation (Luis Vendrame)
+-   docs: add changelog (Luis Vendrame)
+
+## 0.6.9 (2025-09-11)
+
+-   fix: auth route print, configuration docs and update version (Luis Vendrame)
+-   feat: configs for server, add new args to cli (Luis Vendrame)
+-   feat: finish config implementation (Luis Vendrame)
+-   feat: configs for auth (Luis Vendrame)
+-   feat: increase using of routes config (Luis Vendrame)
+-   chore: remove is_protect from RouteParams and added Config (Luis Vendrame)
+-   chore: merge configs and load all configs (Luis Vendrame)
+-   feat: load server configs (Luis Vendrame)
+
 ## Unreleased
