@@ -94,20 +94,19 @@ roles_field = "roles"        # field name for user roles
 cookie_name = "auth_token"   # name of the auth cookie
 encrypt_password = false     # store passwords as plain text
 jwt_secret = "super-secret"  # secret for signing JWTs
-# Nested collection settings (optional)
-[token_collection]
-name = "tokens"              # collection name for tokens
-id_key = "token"             # identifier field for tokens
-id_type = "Uuid"             # token ID generation
-[user_collection]
-name = "users"               # collection name for users
-id_key = "id"                # identifier field for users
-id_type = "Uuid"             # user ID generation
-
 # Routes for login/logout and user management
 login_endpoint = "/signin"     # login endpoint path suffix
 logout_endpoint = "/signout"   # logout endpoint path suffix
 users_route = "/users"         # users REST route
+# Nested collection settings (optional)
+[auth.token_collection]
+name = "tokens"              # collection name for tokens
+id_key = "token"             # identifier field for tokens
+id_type = "Uuid"             # token ID generation
+[auth.user_collection]
+name = "users"               # collection name for users
+id_key = "id"                # identifier field for users
+id_type = "Uuid"             # user ID generation
 ```
 
 ### Upload Routes

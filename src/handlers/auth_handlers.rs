@@ -1,7 +1,7 @@
-use std::{ffi::OsString, pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc};
 
 use axum::{body::Body, extract::Request, middleware::Next, response::{IntoResponse, Response}, routing::post, Json};
-use fosk::{DbConfig, DbCollection, IdType};
+use fosk::{DbConfig, DbCollection};
 use http::{StatusCode, HeaderValue};
 use serde_json::{json, Value};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};
@@ -9,19 +9,8 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 
 use crate::{
-    app::App, handlers::build_rest_routes
+    app::{App, GLOBAL_SHARED_INFO}, handlers::build_rest_routes, route_builder::RouteAuth
 };
-
-static ID_FIELD: &str = "id";
-static USERNAME_FIELD: &str = "username";
-static PASSWORD_FIELD: &str = "password";
-static TOKEN_FIELD: &str = "token";
-static AUTH_TOKEN_FIELD: &str = "auth_token";
-static JWT_SECRET: &str = "1!2@3#4$5%6â7&8*9(0)-_=+±§";
-
-pub static USER_PATH: &str = "users";
-pub static USER_COLLECTION: &str = "internal_auth_users";
-pub static AUTH_COLLECTION: &str = "internal_auth_tokens";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -37,30 +26,34 @@ struct AuthResponse {
     user: Value,
 }
 
-fn try_get_auth_info(payload: Value) -> Option<(String, String)> {
-    if let Some(Value::String(username)) = payload.get(USERNAME_FIELD.to_string()) {
-        if let Some(Value::String(password)) = payload.get(PASSWORD_FIELD.to_string()) {
+fn try_get_auth_info(payload: Value, username_field: &str, password_field: &str) -> Option<(String, String)> {
+    if let Some(Value::String(username)) = payload.get(username_field) {
+        if let Some(Value::String(password)) = payload.get(password_field) {
             return Some((username.clone(), password.clone()));
         }
     }
     None
 }
 
-fn check_password(item: &Value, password: String) -> bool {
-    if let Some(Value::String(user_pass)) = item.get(PASSWORD_FIELD) {
+fn check_password(item: &Value, password: String, password_field: &str) -> bool {
+    if let Some(Value::String(user_pass)) = item.get(password_field) {
         return password == *user_pass;
     }
     false
 }
 
-fn generate_token(auth_collection: Arc<DbCollection>, item: &Value) -> Response<axum::body::Body> {
+fn generate_token(
+    token_collection: Arc<DbCollection>,
+    item: &Value,
+    auth_def: &RouteAuth,
+) -> Response<axum::body::Body> {
     // Extract username from the user data
-    let username = item.get(USERNAME_FIELD)
+    let username = item.get(&auth_def.username_field)
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
     // Extract user ID (could be from 'id' or '_id' field)
-    let user_id = item.get(auth_collection.get_config().id_key)
+    let user_id = item.get(token_collection.get_config().id_key)
         .or_else(|| item.get("id"))
         .or_else(|| item.get("_id"))
         .and_then(|v| v.as_str())
@@ -78,7 +71,7 @@ fn generate_token(auth_collection: Arc<DbCollection>, item: &Value) -> Response<
     };
 
     // Generate JWT token
-    let token = match encode(&Header::default(), &claims, &EncodingKey::from_secret(JWT_SECRET.as_ref())) {
+    let token = match encode(&Header::default(), &claims, &EncodingKey::from_secret(auth_def.jwt_secret.as_ref())) {
         Ok(token) => token,
         Err(err) => {
             eprintln!("⚠️ Failed to generate JWT token: {}", err);
@@ -91,7 +84,7 @@ fn generate_token(auth_collection: Arc<DbCollection>, item: &Value) -> Response<
     // Create response with token and user info (excluding password)
     let mut user_data = item.clone();
     if let Some(obj) = user_data.as_object_mut() {
-        obj.remove(PASSWORD_FIELD); // Remove password from response
+        obj.remove(&auth_def.password_field); // Remove password from response
     }
 
     let response = AuthResponse {
@@ -102,16 +95,16 @@ fn generate_token(auth_collection: Arc<DbCollection>, item: &Value) -> Response<
     {
         let mut user_data = user_data.clone();
         if let Some(obj) = user_data.as_object_mut() {
-            obj.insert(TOKEN_FIELD.to_string(), Value::String(token.clone())); // add token
+            obj.insert(auth_def.token_collection.id_key.to_string(), Value::String(token.clone())); // add token
         }
 
-        auth_collection.add(user_data);
+        token_collection.add(user_data);
     }
 
     // Create cookie with JWT token
     let cookie_value = format!(
         "{}={}; HttpOnly; Secure; SameSite=Strict; Max-Age=86400; Path=/",
-        AUTH_TOKEN_FIELD, token
+        auth_def.cookie_name, token
     );
 
     // Build response with cookie header
@@ -133,20 +126,25 @@ fn generate_token(auth_collection: Arc<DbCollection>, item: &Value) -> Response<
 
 pub fn create_login_route(
     app: &mut App,
-    route_path: &str
+    auth_def: &RouteAuth
 ) {
-    let login_route = format!("{}/login", route_path);
+    let login_route = format!("{}{}", auth_def.route, auth_def.login_endpoint);
+    let token_collection = auth_def.token_collection.name.clone();
+    let user_collection = auth_def.user_collection.name.clone();
+    let username_field = auth_def.username_field.clone();
+    let password_field = auth_def.password_field.clone();
 
     // POST /resource/login - auth
     let db = app.db.clone();
 
+    let auth_def_clone = auth_def.clone();
     let create_router = post(move |Json(payload): Json<Value>| {
         async move {
-            if let Some((username, password)) = try_get_auth_info(payload) {
+            if let Some((username, password)) = try_get_auth_info(payload, &username_field, &password_field) {
 
                 let sql = format!(r#"
-                    SELECT * FROM {USER_COLLECTION}
-                    WHERE {USERNAME_FIELD} = ? AND {PASSWORD_FIELD} = ?
+                    SELECT * FROM {user_collection}
+                    WHERE {username_field} = ? AND {password_field} = ?
                 "#);
 
                 let users = db.query_with_args(&sql, json!([username, password]));
@@ -160,9 +158,9 @@ pub fn create_login_route(
                 }
 
                 return match users.first() {
-                    Some(item) => if check_password(item, password) {
-                        let auth_collection = db.get(AUTH_COLLECTION).unwrap();
-                        (StatusCode::OK, generate_token(auth_collection, item)).into_response()
+                    Some(item) => if check_password(item, password, &auth_def_clone.password_field) {
+                        let token_collection = db.get(&token_collection).unwrap();
+                        (StatusCode::OK, generate_token(token_collection, item, &auth_def_clone)).into_response()
                     } else {
                         StatusCode::UNAUTHORIZED.into_response()
                     },
@@ -176,45 +174,17 @@ pub fn create_login_route(
     app.route(&login_route, create_router, Some("POST"), None);
 }
 
-pub fn build_auth_routes(app: &mut App, route_path: &str, file_path: &OsString) {
-    println!("Starting loading Auth route");
-
-    // !the Auth collection should be created before the rest endpoints
-    app.db.create_with_config(AUTH_COLLECTION, DbConfig::none(TOKEN_FIELD));
-
-    let users_routes = format!("{}/{}", route_path, USER_PATH);
-    let users_collection = build_rest_routes(
-        app,
-        &users_routes,
-        file_path,
-        ID_FIELD,
-        IdType::None,
-        true,
-        Some(USER_COLLECTION)
-    );
-
-    println!("✔️ Built REST routes for {}", users_routes);
-
-    if users_collection.count() == 0 {
-        return eprintln!("⚠️ Authentication routes were not created")
-    }
-
-    create_login_route(app, route_path);
-    create_logout_route(app, route_path);
-
-}
-
-fn decode_jwt(jwt_token: String) -> Result<TokenData<Claims>, StatusCode> {
+fn decode_jwt(jwt_token: &str, jwt_secret: &str) -> Result<TokenData<Claims>, StatusCode> {
     let result: Result<TokenData<Claims>, StatusCode> = decode(
-        &jwt_token,
-        &DecodingKey::from_secret(JWT_SECRET.as_ref()),
+        jwt_token,
+        &DecodingKey::from_secret(jwt_secret.as_bytes()),
         &Validation::default(),
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
     result
 }
 
-fn extract_token_from_request(req: &Request) -> Option<String> {
+fn extract_token_from_request(req: &Request, cookie_name: &str) -> Option<String> {
     // Try to get token from Authorization header first
     if let Some(auth_header) = req.headers().get("Authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
@@ -230,7 +200,7 @@ fn extract_token_from_request(req: &Request) -> Option<String> {
             for cookie in cookie_str.split(';') {
                 let cookie = cookie.trim();
                 if let Some((name, value)) = cookie.split_once('=') {
-                    if name.trim() == AUTH_TOKEN_FIELD {
+                    if name.trim() == cookie_name {
                         return Some(value.trim().to_string());
                     }
                 }
@@ -242,54 +212,66 @@ fn extract_token_from_request(req: &Request) -> Option<String> {
 }
 
 // Simple authorization middleware function that can be used with axum::middleware::from_fn
-pub async fn authorization_middleware(
-    req: Request,
-    next: Next,
-) -> Result<Response<Body>, StatusCode> {
-    // This is a simplified version that only validates JWT tokens
-    // For token revocation, you'd need to use the factory function below
+#[allow(clippy::complexity)]
+pub fn authorization_middleware(
+    jwt_secret: &str,
+    cookie_name: &str,
+) -> impl Clone + Send + Sync + 'static + Fn(Request, Next) -> Pin<Box<dyn Future<Output = Result<Response<Body>, StatusCode>> + Send>> {
+    let jwt_secret = jwt_secret.to_string();
+    let cookie_name = cookie_name.to_string();
+    move |req: Request, next: Next| {
+        let jwt_secret = jwt_secret.clone();
+        let cookie_name = cookie_name.clone();
+        Box::pin(async move {
+            // Extract token from request
+            let token = match extract_token_from_request(&req, &cookie_name) {
+                Some(token) => token,
+                None => return Err(StatusCode::UNAUTHORIZED),
+            };
 
-    // Extract token from request
-    let token = match extract_token_from_request(&req) {
-        Some(token) => token,
-        None => return Err(StatusCode::UNAUTHORIZED),
-    };
+            // Decode and validate JWT token
+            let _token_data = match decode_jwt(&token, &jwt_secret) {
+                Ok(data) => data,
+                Err(status) => return Err(status),
+            };
 
-    // Decode and validate JWT token
-    let _token_data = match decode_jwt(token) {
-        Ok(data) => data,
-        Err(status) => return Err(status),
-    };
-
-    // Token is valid, continue with the request
-    let response = next.run(req).await;
-    Ok(response)
+            // Token is valid, continue with the request
+            let response = next.run(req).await;
+            Ok(response)
+        })
+    }
 }
 
 type AuthMiddlewareReturn = Pin<Box<dyn std::future::Future<Output = Result<Response<Body>, StatusCode>> + Send + 'static>>;
 
 // For when you need access to the auth collection (token revocation)
 pub fn make_auth_middleware(
-    auth_collection: &Arc<DbCollection>,
+    token_collection: &Arc<DbCollection>,
+    jwt_secret: &str,
+    cookie_name: &str,
 ) -> impl Clone + Send + Sync + 'static + Fn(Request, Next) -> AuthMiddlewareReturn {
-    let auth_collection = Arc::clone(auth_collection);
+    let token_collection = Arc::clone(token_collection);
+    let jwt_secret = jwt_secret.to_string();
+    let cookie_name = cookie_name.to_string();
     move |req: Request, next: Next| {
-        let auth_collection = Arc::clone(&auth_collection);
+        let jwt_secret = jwt_secret.to_string();
+        let token_collection = Arc::clone(&token_collection);
+        let cookie_name = cookie_name.clone();
         Box::pin(async move {
             // Extract token from request
-            let token = match extract_token_from_request(&req) {
+            let token = match extract_token_from_request(&req, &cookie_name) {
                 Some(token) => token,
                 None => return Err(StatusCode::UNAUTHORIZED),
             };
 
             // Decode and validate JWT token
-            let _token_data = match decode_jwt(token.clone()) {
+            let _token_data = match decode_jwt(&token, &jwt_secret) {
                 Ok(data) => data,
                 Err(status) => return Err(status),
             };
 
-            // Check if token exists in auth_collection (for token revocation/blacklisting)
-            if !auth_collection.exists(&token) {
+            // Check if token exists in token_collection (for token revocation/blacklisting)
+            if !token_collection.exists(&token) {
                 return Err(StatusCode::UNAUTHORIZED);
             }
 
@@ -302,21 +284,23 @@ pub fn make_auth_middleware(
 
 pub fn create_logout_route(
     app: &mut App,
-    route_path: &str
+    auth_def: &RouteAuth
 ) {
-    let logout_route = format!("{}/logout", route_path);
+    let logout_route = format!("{}{}", auth_def.route, auth_def.logout_endpoint);
 
-    let auth_collection = app.db.get(AUTH_COLLECTION).unwrap();
+    let token_collection = app.db.get(&auth_def.token_collection.name).unwrap();
+    let cookie_name = auth_def.cookie_name.clone();
+
     let logout_router = post(move |req: Request| {
         async move {
             // Extract token from request
-            let token = match extract_token_from_request(&req) {
+            let token = match extract_token_from_request(&req, &cookie_name) {
                 Some(token) => token,
                 None => return StatusCode::UNAUTHORIZED.into_response(),
             };
 
             // Remove token from auth collection (logout/revoke)
-            auth_collection.delete(&token);
+            token_collection.delete(&token);
 
             Json(serde_json::json!({
                 "message": "Successfully logged out"
@@ -325,4 +309,41 @@ pub fn create_logout_route(
     });
 
     app.route(&logout_route, logout_router, Some("POST"), None);
+}
+
+pub fn build_auth_routes(app: &mut App, auth_def: &RouteAuth) {
+    println!("Starting loading Auth route");
+
+    let mut shared_info = GLOBAL_SHARED_INFO.write().unwrap();
+    shared_info.jwt_secret = auth_def.jwt_secret.clone();
+    shared_info.token_collection = auth_def.token_collection.name.clone();
+    shared_info.auth_cookie_name = auth_def.cookie_name.clone();
+    drop(shared_info);
+
+    // !the Auth collection should be created before the rest endpoints
+    app.db.create_with_config(
+        &auth_def.token_collection.name,
+        DbConfig::from(auth_def.token_collection.id_type, &auth_def.token_collection.id_key));
+
+    let users_routes = auth_def.users_route.clone();
+
+    let users_collection = build_rest_routes(
+        app,
+        &users_routes,
+        &auth_def.path,
+        &auth_def.user_collection.id_key,
+        auth_def.user_collection.id_type,
+        true,
+        Some(auth_def.user_collection.name.as_str())
+    );
+
+    println!("✔️ Built REST routes for {}", users_routes);
+
+    if users_collection.count() == 0 {
+        return eprintln!("⚠️ Authentication routes were not created")
+    }
+
+    create_login_route(app, auth_def);
+    create_logout_route(app, auth_def);
+
 }

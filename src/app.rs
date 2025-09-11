@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex}};
+use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex, RwLock}};
 
 use axum::{
     middleware, response::IntoResponse, routing::{get, MethodRouter}, Router
@@ -11,7 +11,7 @@ use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
 use crate::{
-    handlers::{create_collections_routes, make_auth_middleware, AUTH_COLLECTION},
+    handlers::{create_collections_routes, make_auth_middleware},
     pages::Pages,
     route_builder::{config::{Config, ServerConfig},
     route_manager::RouteManager, RouteGenerator, RouteRegistrator},
@@ -19,7 +19,19 @@ use crate::{
     DEFAULT_FOLDER, DEFAULT_PORT
 };
 
+#[derive(Default)]
+pub struct GlobalSharedInfo {
+    pub jwt_secret: String,
+    pub token_collection: String,
+    pub auth_cookie_name: String,
+}
+
 pub const MOCK_SERVER_ROUTE: &str = "/mock-server";
+pub static GLOBAL_SHARED_INFO: RwLock<GlobalSharedInfo> = RwLock::new(GlobalSharedInfo {
+    jwt_secret: String::new(),
+    token_collection: String::new(),
+    auth_cookie_name: String::new(),
+});
 
 pub struct App {
     pub router: RefCell<Router>,
@@ -104,9 +116,10 @@ impl App {
             return router;
         }
 
-        if let Some(auth_collection) = &self.db.get(AUTH_COLLECTION) {
+        let shared_info = GLOBAL_SHARED_INFO.read().unwrap();
+        if let Some(token_collection) = &self.db.get(&shared_info.token_collection) {
             return router.layer(
-                middleware::from_fn(make_auth_middleware(auth_collection))
+                middleware::from_fn(make_auth_middleware(token_collection, &shared_info.jwt_secret, &shared_info.auth_cookie_name))
             )
         }
         router

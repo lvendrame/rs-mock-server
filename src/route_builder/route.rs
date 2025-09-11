@@ -1,8 +1,17 @@
 use std::cmp::Ordering;
 
+use fosk::IdType;
+
 use crate::{app::App, route_builder::{
     PrintRoute, RouteAuth, RouteBasic, RouteGenerator, RouteParams, RoutePublic, RouteRest, RouteUpload
 }};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CollectionConfig {
+    pub name: String,
+    pub id_key: String,
+    pub id_type: IdType,
+}
 
 #[derive(Debug, Default, PartialEq)]
 pub enum Route {

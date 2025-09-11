@@ -1,32 +1,86 @@
 use std::ffi::OsString;
 
+use fosk::IdType;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::{
     app::App,
     handlers::build_auth_routes,
-    route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}
+    route_builder::{route_params::RouteParams, CollectionConfig, PrintRoute, Route, RouteGenerator}
 };
 
 static RE_FILE_AUTH: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^\{auth\}$").unwrap()
 });
 
+static ID_FIELD: &str = "id";
+static TOKEN_FIELD: &str = "token";
+static USERNAME_FIELD: &str = "username";
+static PASSWORD_FIELD: &str = "password";
+static ROLES_FIELD: &str = "roles";
+static JWT_SECRET: &str = "1!2@3#4$5%6â7&8*9(0)-_=+±§";
+static COOKIE_NAME: &str = "auth_token";
+
+pub static USER_COLLECTION: &str = "internal_auth_users";
+pub static TOKEN_COLLECTION: &str = "internal_auth_tokens";
+
+pub static LOGIN_ENDPOINT: &str = "/login";
+pub static LOGOUT_ENDPOINT: &str = "/logout";
+pub static USERS_ENDPOINT: &str = "/users";
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct  RouteAuth {
     pub path: OsString,
     pub route: String,
+    pub delay: Option<u16>,
+    pub login_endpoint: String,
+    pub logout_endpoint: String,
+    pub users_route: String,
+    pub token_collection: CollectionConfig,
+    pub user_collection: CollectionConfig,
+    pub username_field: String,
+    pub password_field: String,
+    pub roles_field: String,
+    pub jwt_secret: String,
+    pub cookie_name: String,
+    pub encrypt_password: bool,
 }
 
 impl RouteAuth {
     pub fn try_parse(route_params: RouteParams) -> Route {
         if RE_FILE_AUTH.is_match(&route_params.file_stem) {
             let config = route_params.config.clone();
+            let route_config = config.route.clone().unwrap_or_default();
+            let auth_config = config.auth.clone().unwrap_or_default();
+            let token_coll_config = auth_config.token_collection.clone().unwrap_or_default();
+            let users_coll_config = auth_config.user_collection.clone().unwrap_or_default();
+
+            let route = route_config.remap.unwrap_or(route_params.full_route);
 
             let route_auth = Self {
                 path: route_params.file_path,
-                route: config.route.unwrap_or_default().remap.unwrap_or(route_params.full_route),
+                route: route.clone(),
+                delay: route_config.delay,
+                login_endpoint: auth_config.login_endpoint.unwrap_or(LOGIN_ENDPOINT.into()),
+                logout_endpoint: auth_config.logout_endpoint.unwrap_or(LOGOUT_ENDPOINT.into()),
+                users_route: auth_config.users_route.unwrap_or(format!("{}{}", route, USERS_ENDPOINT)),
+                token_collection: CollectionConfig {
+                    name: token_coll_config.name.unwrap_or(TOKEN_COLLECTION.into()),
+                    id_key: token_coll_config.id_key.unwrap_or(TOKEN_FIELD.into()),
+                    id_type: token_coll_config.id_type.unwrap_or(IdType::None),
+                },
+                user_collection: CollectionConfig {
+                    name: users_coll_config.name.unwrap_or(USER_COLLECTION.into()),
+                    id_key: users_coll_config.id_key.unwrap_or(ID_FIELD.into()),
+                    id_type: users_coll_config.id_type.unwrap_or_default(),
+                },
+                username_field: auth_config.username_field.unwrap_or(USERNAME_FIELD.into()),
+                password_field: auth_config.password_field.unwrap_or(PASSWORD_FIELD.into()),
+                roles_field: auth_config.roles_field.unwrap_or(ROLES_FIELD.into()),
+                cookie_name: auth_config.cookie_name.unwrap_or(COOKIE_NAME.into()),
+                jwt_secret: auth_config.jwt_secret.unwrap_or(JWT_SECRET.into()),
+                encrypt_password: auth_config.encrypt_password.unwrap_or(false),
             };
 
             return Route::Auth(route_auth);
@@ -38,7 +92,7 @@ impl RouteAuth {
 
 impl RouteGenerator for RouteAuth {
     fn make_routes(&self, app: &mut App) {
-        build_auth_routes(app, &self.route, &self.path);
+        build_auth_routes(app, self);
     }
 }
 

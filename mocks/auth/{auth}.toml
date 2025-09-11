@@ -1,0 +1,8 @@
+[auth]
+cookie_name = "auth_little_token"   # name of the auth cookie
+jwt_secret = "super-secret-123"  # secret for signing JWTs
+users_route = "/users-ext"
+[auth.token_collection]
+name = "int_tokens"              # collection name for tokens
+[auth.user_collection]
+name = "int_users"               # collection name for users
