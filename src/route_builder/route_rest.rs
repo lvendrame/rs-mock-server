@@ -4,7 +4,11 @@ use fosk::IdType;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{app::App, handlers::build_rest_routes, route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}};
+use crate::{
+    app::App,
+    handlers::build_rest_routes,
+    route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}
+};
 
 static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\$)?rest(\{(.+)\})?$").unwrap()
@@ -19,10 +23,24 @@ pub struct  RouteRest {
     pub route: String,
     pub id_key: String,
     pub id_type: IdType,
+    pub collection_name: String,
+    pub delay: Option<u16>,
     pub is_protected: bool,
 }
 
 impl RouteRest {
+    pub fn new(
+        route: String,
+        path: OsString,
+        id_key: String,
+        id_type: IdType,
+        is_protected: bool,
+        collection_name: String,
+        delay: Option<u16>,
+    ) -> Self {
+        Self { route, path, id_key, id_type, is_protected, collection_name, delay }
+    }
+
     fn get_rest_options(descriptor: &str) -> (&str, IdType) {
         let parts: Vec<&str> = descriptor.split(':').collect();
 
@@ -56,7 +74,9 @@ impl RouteRest {
         if let Some(captures) = RE_FILE_REST.captures(&route_params.file_stem) {
             let config = route_params.config.clone();
             let route_config = config.route.clone().unwrap_or_default();
+            let collection_config = config.collection.clone().unwrap_or_default();
 
+            let delay = route_config.delay;
             let is_protected = route_config.protect.unwrap_or(false);
             let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let descriptor = if let Some(pattern) = captures.get(ELEMENT_DESCRIPTOR) {
@@ -67,11 +87,22 @@ impl RouteRest {
 
             let (id_key, id_type) = Self::get_rest_options(descriptor);
 
+            let id_key = collection_config.id_key.unwrap_or(id_key.to_string());
+            let id_type = collection_config.id_type.unwrap_or(id_type);
+
+            let route = route_config.remap.unwrap_or(route_params.full_route);
+            let collection_name = collection_config.name.unwrap_or_else(|| {
+                route.split('/').next_back().unwrap().to_string()
+            });
+
+
             let route_rest = Self {
                 path: route_params.file_path,
-                route: route_config.remap.unwrap_or(route_params.full_route),
-                id_key: id_key.to_string(),
+                route,
+                id_key,
                 id_type,
+                collection_name,
+                delay,
                 is_protected,
             };
 
@@ -84,14 +115,7 @@ impl RouteRest {
 
 impl RouteGenerator for RouteRest {
     fn make_routes(&self, app: &mut App) {
-        build_rest_routes(app,
-            &self.route,
-            &self.path,
-             &self.id_key,
-            self.id_type,
-            self.is_protected,
-            None
-        );
+        build_rest_routes(app, self);
     }
 }
 

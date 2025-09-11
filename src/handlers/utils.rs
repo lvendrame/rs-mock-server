@@ -22,3 +22,16 @@ pub fn is_sql(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
     extension == "sql"
 }
+
+pub trait SleepThread {
+    fn sleep_thread(self);
+}
+
+impl SleepThread for Option<u16> {
+    fn sleep_thread(self) {
+        if let Some(delay) = self {
+            let millis = std::time::Duration::from_millis(delay.into());
+            std::thread::sleep(millis);
+        }
+    }
+}

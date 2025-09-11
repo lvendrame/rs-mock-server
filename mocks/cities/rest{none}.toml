@@ -1,2 +1,3 @@
 [route]
 remap = "/my/cities"
+delay = 500
