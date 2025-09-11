@@ -1,13 +1,13 @@
 use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex, RwLock}};
 
 use axum::{
-    middleware, response::IntoResponse, routing::{get, MethodRouter}, Router
+    middleware, response::IntoResponse, routing::{get, MethodRouter, Route}, Router
 };
 use fosk::Db;
 use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode};
 use terminal_link::Link;
 use tokio::net::TcpListener;
-use tower::ServiceBuilder;
+use tower::{layer::util::{Identity, Stack}, Layer, ServiceBuilder};
 use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
 
 use crate::{
@@ -147,12 +147,61 @@ impl App {
             }), None, None);
     }
 
+    // fn build_cors_layer<L>(
+    //     &self,
+    //     service_builder: ServiceBuilder<L>,
+    // ) -> ServiceBuilder<L>
+    // where
+    //     L: Layer<Route> + Clone + Send + Sync + 'static,
+    //     tower::layer::util::Stack<tower_http::cors::CorsLayer, L>: Clone + Send + Sync + 'static,
+    //     L::Service: Service<Request> + Clone + Send + Sync + 'static,
+    //     <L::Service as Service<Request>>::Response: IntoResponse + 'static,
+    //     <L::Service as Service<Request>>::Error: Into<Infallible> + 'static,
+    //     <L::Service as Service<Request>>::Future: Send + 'static,
+    // {
+    //     let server_config = self.server_config.server.clone().unwrap_or_default();
+
+    //     if server_config.enable_cors.unwrap_or(true) {
+    //         return service_builder.layer(CorsLayer::very_permissive());
+    //     }
+
+    //     service_builder
+    // }
+
+    fn build_cors_layer<L>(
+        &self,
+        service_builder: ServiceBuilder<L>,
+    ) -> ServiceBuilder<Stack<tower::util::Either<CorsLayer, Identity>, L>>
+    where
+        L: Layer<Route> + Clone + Send + Sync + 'static,
+        Stack<CorsLayer, L>: Layer<Route> + Clone + Send + Sync + 'static,
+    {
+        let server_config = self.server_config.server.clone().unwrap_or_default();
+        let enable = server_config.enable_cors.unwrap_or(true);
+        let allowed_origin = server_config.allowed_origin;
+
+        service_builder.option_layer(
+            enable.then(|| {
+                if let Some(allowed_origin) = allowed_origin {
+                    CorsLayer::very_permissive()
+                        .allow_origin(allowed_origin.parse::<HeaderValue>().unwrap())
+                } else {
+                    CorsLayer::very_permissive()
+                }
+            })
+        )
+    }
+
     fn build_middlewares(&mut self) {
-        let new_router = self.get_router().layer(ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http())
-            .layer(CorsLayer::very_permissive())
-            .layer(NormalizePathLayer::trim_trailing_slash())
-        );
+        let service_builder = ServiceBuilder::new()
+            .layer(TraceLayer::new_for_http());
+
+        let service_builder = self.build_cors_layer(service_builder);
+
+        let service_builder = service_builder
+            .layer(NormalizePathLayer::trim_trailing_slash());
+
+        let new_router = self.get_router().layer(service_builder);
 
         self.replace_router(new_router);
     }

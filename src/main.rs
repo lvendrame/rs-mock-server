@@ -32,6 +32,14 @@ struct Args {
     /// Directory to load mock files from
     #[arg(short, long, default_value = DEFAULT_FOLDER)]
     folder: String,
+
+    /// Disable CORS, by default CORS is enabled
+    #[arg(short, long)]
+    disable_cors: bool,
+
+    /// Allowed origin, by default all origins are allowed
+    #[arg(short, long)]
+    allowed_origin: Option<String>,
 }
 
 enum SessionResult {
@@ -143,7 +151,8 @@ async fn main() {
             server: Some(ServerConfig {
                 port: Some(args.port),
                 folder: Some(args.folder),
-                ..Default::default()
+                allowed_origin: args.allowed_origin,
+                enable_cors: Some(!args.disable_cors),
             }),
             ..Default::default()
         }

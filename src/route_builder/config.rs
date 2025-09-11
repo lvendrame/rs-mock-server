@@ -245,7 +245,10 @@ impl Mergeable for Option<Config> {
     fn merge(self, parent: Self) -> Self {
         match (self, parent) {
             (None, None) => None,
-            (None, Some(p)) => Some(p),
+            (None, Some(p)) => Some(Config {
+                route: None.merge(p.route),
+                ..Default::default()
+            }),
             (Some(child), None) => Some(child),
             (Some(child), Some(parent)) => Some(Config {
                 server: child.server.merge(parent.server),
@@ -278,7 +281,11 @@ impl Mergeable for Option<RouteConfig> {
     fn merge(self, parent: Self) -> Self {
         match (self, parent) {
             (None, None) => None,
-            (None, Some(p)) => Some(p),
+            (None, Some(p)) => Some(RouteConfig {
+                delay: p.delay,
+                protect: p.protect,
+                ..Default::default()
+            }),
             (Some(child), None) => Some(child),
             (Some(child), Some(parent)) => Some(RouteConfig {
                 delay: child.delay.merge(parent.delay),
