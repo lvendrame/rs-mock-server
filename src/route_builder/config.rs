@@ -1,6 +1,6 @@
 //! Configuration module for the mock server, defining structures for loading and storing configuration from TOML files.
 
-use std::{collections::HashMap, ffi::OsStr, fs::{self, DirEntry}};
+use std::{collections::HashMap, fs::{self, DirEntry}};
 
 use fosk::IdType;
 use serde::{Deserialize, Serialize};

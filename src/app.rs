@@ -46,7 +46,7 @@ impl Default for App {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
-        let db = Db::new_db();
+        let db = Db::new_arc();
         let server_config = Config {
             server: Some(ServerConfig {
                 folder: Some(DEFAULT_FOLDER.into()),
@@ -65,7 +65,7 @@ impl App {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
-        let db = Db::new_db();
+        let db = Db::new_arc();
         App { router, pages, uploads_configurations, db, server_config }
     }
 
@@ -147,27 +147,6 @@ impl App {
             }), None, None);
     }
 
-    // fn build_cors_layer<L>(
-    //     &self,
-    //     service_builder: ServiceBuilder<L>,
-    // ) -> ServiceBuilder<L>
-    // where
-    //     L: Layer<Route> + Clone + Send + Sync + 'static,
-    //     tower::layer::util::Stack<tower_http::cors::CorsLayer, L>: Clone + Send + Sync + 'static,
-    //     L::Service: Service<Request> + Clone + Send + Sync + 'static,
-    //     <L::Service as Service<Request>>::Response: IntoResponse + 'static,
-    //     <L::Service as Service<Request>>::Error: Into<Infallible> + 'static,
-    //     <L::Service as Service<Request>>::Future: Send + 'static,
-    // {
-    //     let server_config = self.server_config.server.clone().unwrap_or_default();
-
-    //     if server_config.enable_cors.unwrap_or(true) {
-    //         return service_builder.layer(CorsLayer::very_permissive());
-    //     }
-
-    //     service_builder
-    // }
-
     fn build_cors_layer<L>(
         &self,
         service_builder: ServiceBuilder<L>,
@@ -243,6 +222,17 @@ impl App {
         create_collections_routes(self);
     }
 
+    pub fn build_collections_references(&mut self) {
+        let collections = self.db.list_collections();
+
+        for i in 0..collections.len() - 1 {
+            for j in i+1..collections.len() {
+                self.db.infer_reference(&collections[i], &collections[j]);
+                self.db.infer_reference(&collections[j], &collections[i]);
+            }
+        }
+    }
+
     pub fn show_greetings() {
         let banner = r"
                                   ___     ___
@@ -285,6 +275,7 @@ impl App {
         self.build_collections_route();
         self.build_fallback();
         self.build_middlewares();
+        self.build_collections_references();
         self.start_server().await;
     }
 

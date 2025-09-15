@@ -14,7 +14,6 @@ use graphql_parser::query::{Definition, Document, OperationDefinition, Selection
 use serde_json;
 use uuid;
 
-use fosk::database::SchemaProvider;
 use jgd_rs::generate_jgd_from_file;
 
 use crate::{
@@ -22,19 +21,6 @@ use crate::{
     handlers::{SleepThread, is_jgd, is_json},
     route_builder::{RouteRegistrator, route_graphql::RouteGraphQL},
 };
-
-pub fn create_graphql_schemas(app: &mut App) {
-    let db = app.db.clone();
-    for coll_name in db.list_collections() {
-        if let Some(coll_schema) = db.schema_of(&coll_name) {
-            // load graphql schema dynamically
-            for (_field_name, _field_info) in coll_schema.fields {
-                // field_info.nullable
-                // field_info.ty  -  type
-            }
-        }
-    }
-}
 
 pub fn create_graphiql_route(app: &mut App) {
     let router =
@@ -90,6 +76,145 @@ fn validate_request_ast(doc: &Document<String>, db: &Db) -> Result<(), GQLError>
     Ok(())
 }
 
+// Helper to collect expansion paths for nested selections
+fn collect_expansion_paths(selection_set: &graphql_parser::query::SelectionSet<String>, prefix: &str, paths: &mut Vec<String>) {
+    for sel in &selection_set.items {
+        if let Selection::Field(f) = sel {
+            // Only process if this field has nested selections
+            if !f.selection_set.items.is_empty() {
+                // Build base path for this field
+                let base = if prefix.is_empty() {
+                    f.name.clone()
+                } else {
+                    format!("{}.{}", prefix, f.name)
+                };
+
+                for child_sel in &f.selection_set.items {
+                    if let Selection::Field(child_f) = child_sel {
+                        // Only expand further if child has its own nested selections
+                        if !child_f.selection_set.items.is_empty() {
+                            let path = format!("{}.{}", base, child_f.name);
+                            paths.push(path.clone());
+                            // Recurse deeper
+                            collect_expansion_paths(&child_f.selection_set, &path, paths);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper to filter JSON values based on selection set
+fn filter_value(value: serde_json::Value, selection_set: &graphql_parser::query::SelectionSet<String>) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(mut map) => {
+            let mut new_map = serde_json::Map::new();
+            for sel in &selection_set.items {
+                if let Selection::Field(f) = sel {
+                    let key = f.name.as_str();
+                    if let Some(val) = map.remove(key) {
+                        let filtered_val = if !f.selection_set.items.is_empty() {
+                            filter_value(val, &f.selection_set)
+                        } else {
+                            val
+                        };
+                        new_map.insert(key.to_string(), filtered_val);
+                    }
+                }
+            }
+            serde_json::Value::Object(new_map)
+        }
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(
+                arr.into_iter().map(|elem| filter_value(elem, selection_set)).collect()
+            )
+        }
+        _ => value,
+    }
+}
+
+// Updated execute_query to expand nested lists and filter fields
+fn execute_query(db: &Db, result: &mut serde_json::Map<String, serde_json::Value>, q: &graphql_parser::query::Query<'_, String>) {
+    for sel in &q.selection_set.items {
+        if let Selection::Field(f) = sel {
+            let field_name = f.name.as_str();
+
+            // Skip introspection fields
+            if field_name.starts_with("__") {
+                continue;
+            }
+
+            // Execute query on collection
+            if let Some(collection) = db.get(field_name) {
+                // Retrieve items
+                let mut items = collection.get_all();
+
+                // Expand nested lists
+                let mut paths = Vec::new();
+                collect_expansion_paths(&f.selection_set, "", &mut paths);
+                for path in paths {
+                    items = collection.expand_list(items, &path, db);
+                }
+
+                // Filter fields based on selection
+                let filtered: Vec<serde_json::Value> = items.into_iter().map(|item| {
+                    filter_value(item, &f.selection_set)
+                }).collect();
+
+                result.insert(field_name.to_string(), serde_json::Value::Array(filtered));
+            } else {
+                result.insert(field_name.to_string(), serde_json::Value::Null);
+            }
+        }
+    }
+}
+
+fn execute_operation(db: &Db, result: &mut serde_json::Map<String, serde_json::Value>, m: &graphql_parser::query::Mutation<'_, String>) {
+    for sel in &m.selection_set.items {
+        if let Selection::Field(f) = sel {
+            let field_name = f.name.as_str();
+
+            // Handle create mutations
+            if let Some(collection_name) = field_name.strip_prefix("create") {
+                if let Some(collection) = db.get(collection_name) {
+                    // Create a simple item (in real implementation, parse input from GraphQL variables)
+                    let new_item = serde_json::json!({
+                        "id": uuid::Uuid::new_v4().to_string(),
+                        "created_at": chrono::Utc::now().to_rfc3339(),
+                        "message": "Created via GraphQL"
+                    });
+                    let created_item =
+                        collection.add(new_item.clone()).unwrap_or(new_item);
+                    result.insert(field_name.to_string(), created_item);
+                } else {
+                    result.insert(field_name.to_string(), serde_json::Value::Null);
+                }
+            }
+            // Handle update mutations
+            else if let Some(collection_name) = field_name.strip_prefix("update") {
+                if let Some(_collection) = db.get(collection_name) {
+                    // TODO: Implement update logic
+                    result.insert(
+                        field_name.to_string(),
+                        serde_json::json!({"message": "Update not implemented yet"}),
+                    );
+                }
+            }
+            // Handle delete mutations
+            else if let Some(collection_name) = field_name.strip_prefix("delete") {
+                if let Some(_collection) = db.get(collection_name) {
+                    // TODO: Implement delete logic
+                    result.insert(
+                        field_name.to_string(),
+                        serde_json::json!({"message": "Delete not implemented yet"}),
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Execute GraphQL operations directly on Fosk database
 async fn execute_graphql_operations(
     doc: &Document<'_, String>,
@@ -100,68 +225,10 @@ async fn execute_graphql_operations(
     for def in &doc.definitions {
         match def {
             Definition::Operation(OperationDefinition::Query(q)) => {
-                for sel in &q.selection_set.items {
-                    if let Selection::Field(f) = sel {
-                        let field_name = f.name.as_str();
-
-                        // Skip introspection fields
-                        if field_name.starts_with("__") {
-                            continue;
-                        }
-
-                        // Execute query on collection
-                        if let Some(collection) = db.get(field_name) {
-                            let items = collection.get_all();
-                            result.insert(field_name.to_string(), serde_json::Value::Array(items));
-                        } else {
-                            result.insert(field_name.to_string(), serde_json::Value::Null);
-                        }
-                    }
-                }
+                execute_query(db, &mut result, q);
             }
             Definition::Operation(OperationDefinition::Mutation(m)) => {
-                for sel in &m.selection_set.items {
-                    if let Selection::Field(f) = sel {
-                        let field_name = f.name.as_str();
-
-                        // Handle create mutations
-                        if let Some(collection_name) = field_name.strip_prefix("create") {
-                            if let Some(collection) = db.get(collection_name) {
-                                // Create a simple item (in real implementation, parse input from GraphQL variables)
-                                let new_item = serde_json::json!({
-                                    "id": uuid::Uuid::new_v4().to_string(),
-                                    "created_at": chrono::Utc::now().to_rfc3339(),
-                                    "message": "Created via GraphQL"
-                                });
-                                let created_item =
-                                    collection.add(new_item.clone()).unwrap_or(new_item);
-                                result.insert(field_name.to_string(), created_item);
-                            } else {
-                                result.insert(field_name.to_string(), serde_json::Value::Null);
-                            }
-                        }
-                        // Handle update mutations
-                        else if let Some(collection_name) = field_name.strip_prefix("update") {
-                            if let Some(_collection) = db.get(collection_name) {
-                                // TODO: Implement update logic
-                                result.insert(
-                                    field_name.to_string(),
-                                    serde_json::json!({"message": "Update not implemented yet"}),
-                                );
-                            }
-                        }
-                        // Handle delete mutations
-                        else if let Some(collection_name) = field_name.strip_prefix("delete") {
-                            if let Some(_collection) = db.get(collection_name) {
-                                // TODO: Implement delete logic
-                                result.insert(
-                                    field_name.to_string(),
-                                    serde_json::json!({"message": "Delete not implemented yet"}),
-                                );
-                            }
-                        }
-                    }
-                }
+                execute_operation(db, &mut result, m);
             }
             _ => {}
         }
@@ -276,7 +343,31 @@ pub fn build_graphql_routes(app: &mut App, config: &RouteGraphQL) {
     let is_protected = config.is_protected;
     let delay = config.delay;
 
-    create_graphql_schemas(app);
     create_graphiql_route(app);
     create_graphql_route(app, route, is_protected, delay);
+}
+
+// Unit tests for GraphQL helper functions
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use graphql_parser::parse_query;
+    use graphql_parser::query::{Definition, OperationDefinition};
+
+    #[test]
+    fn test_collect_expansion_paths_only_full_paths() {
+        // GraphQL with nested selections: order_items -> products
+        let doc = parse_query::<String>("query { orders { order_items { products { id } } } }")
+            .expect("Failed to parse query");
+        // Extract the query definition
+        let mut paths = Vec::new();
+        if let Definition::Operation(OperationDefinition::Query(q)) = &doc.definitions[0] {
+            // SelectionSet of 'orders'
+            // First level under orders
+            if let super::Selection::Field(f_orders) = &q.selection_set.items[0] {
+                collect_expansion_paths(&f_orders.selection_set, "", &mut paths);
+            }
+        }
+        assert_eq!(paths, vec!["order_items.products"], "collect_expansion_paths should only include full nested paths");
+    }
 }

@@ -1,0 +1,37 @@
+[
+    {
+        "id": 1,
+        "customerId": 101,
+        "orderDate": "2023-10-01T10:15:30Z",
+        "status": "Shipped",
+        "totalAmount": 150.75
+    },
+    {
+        "id": 2,
+        "customerId": 102,
+        "orderDate": "2023-10-02T11:20:45Z",
+        "status": "Processing",
+        "totalAmount": 89.5
+    },
+    {
+        "id": 3,
+        "customerId": 103,
+        "orderDate": "2023-10-03T12:25:50Z",
+        "status": "Delivered",
+        "totalAmount": 200.0
+    },
+    {
+        "id": 4,
+        "customerId": 104,
+        "orderDate": "2023-10-04T13:30:55Z",
+        "status": "Cancelled",
+        "totalAmount": 45.0
+    },
+    {
+        "id": 5,
+        "customerId": 105,
+        "orderDate": "2023-10-05T14:35:00Z",
+        "status": "Shipped",
+        "totalAmount": 120.25
+    }
+]

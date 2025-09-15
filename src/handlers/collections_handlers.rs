@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{extract::{Json, Multipart, Path as AxumPath}, response::IntoResponse, routing::{get, post}};
-use fosk::{database::SchemaProvider, DbCollection, FieldInfo, JsonPrimitive, SchemaDict};
+use fosk::{DbCollection, FieldInfo, JsonPrimitive, SchemaWithRefs};
 use http::{header::{CONTENT_DISPOSITION, CONTENT_TYPE}, HeaderMap, HeaderValue, StatusCode};
 use mime_guess::from_ext;
 use serde_json::{Map, Value};
@@ -26,12 +26,38 @@ fn field_info_to_json(field_info: &FieldInfo) -> Value {
     Value::Object(j_fi)
 }
 
-fn schema_to_json(schema: &SchemaDict) -> Value {
+fn reference_to_json(s_ref: fosk::ReferenceColumn) -> Value {
+
+    let mut j_ref: Map<String, Value> = Map::new();
+
+    j_ref.insert("collection".to_string(), Value::String(s_ref.collection));
+    j_ref.insert("column".to_string(), Value::String(s_ref.column));
+    j_ref.insert("ref_collection".to_string(), Value::String(s_ref.ref_collection));
+    j_ref.insert("ref_column".to_string(), Value::String(s_ref.ref_column));
+
+    Value::Object(j_ref)
+}
+
+fn schema_to_json(schema: &SchemaWithRefs) -> Value {
     let mut j_map: Map<String, Value> = Map::new();
+    let mut j_fields: Map<String, Value> = Map::new();
+    let mut j_inbound_refs: Map<String, Value> = Map::new();
+    let mut j_outbound_refs: Map<String, Value> = Map::new();
 
     for (name, field_info) in &schema.fields {
-        j_map.insert(name.clone(), field_info_to_json(field_info));
+        j_fields.insert(name.clone(), field_info_to_json(field_info));
     }
+    j_map.insert("fields".to_string(), Value::Object(j_fields));
+
+    for in_ref in schema.inbound_refs.clone().into_values() {
+        j_inbound_refs.insert(in_ref.ref_column.clone(), reference_to_json(in_ref));
+    }
+    j_map.insert("inbound_refs".to_string(), Value::Object(j_inbound_refs));
+
+    for out_ref in schema.outbound_refs.clone().into_values() {
+        j_outbound_refs.insert(out_ref.column.clone(), reference_to_json(out_ref));
+    }
+    j_map.insert("outbound_refs".to_string(), Value::Object(j_outbound_refs));
 
     Value::Object(j_map)
 }
@@ -49,7 +75,7 @@ pub fn create_all_collections_info_route(
             let mut j_collections: Map<String, Value> = Map::new();
             let collections = db.list_collections();
             for collection in collections {
-                let schema = db.schema_of(&collection);
+                let schema = db.schema_with_refs_of(&collection);
                 if let Some(schema) = schema {
                     j_collections.insert(collection, schema_to_json(&schema));
                 }
@@ -70,7 +96,7 @@ fn create_collection_info_route(
 
     let create_router = get(move |AxumPath(name): AxumPath<String>| {
         async move {
-            let schema = db.schema_of(&name);
+            let schema = db.schema_with_refs_of(&name);
             if let Some(schema) = schema {
                 Json(schema_to_json(&schema)).into_response()
             } else {
