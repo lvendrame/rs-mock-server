@@ -10,7 +10,7 @@ use axum::{
 };
 use chrono;
 use fosk::Db;
-use graphql_parser::query::{Definition, Document, OperationDefinition, Selection, parse_query};
+use graphql_parser::query::{Definition, Document, OperationDefinition, Selection, parse_query, Value as GqlValue};
 use serde_json;
 use uuid;
 
@@ -134,40 +134,69 @@ fn filter_value(value: serde_json::Value, selection_set: &graphql_parser::query:
     }
 }
 
-// Updated execute_query to expand nested lists and filter fields
-fn execute_query(db: &Db, result: &mut serde_json::Map<String, serde_json::Value>, q: &graphql_parser::query::Query<'_, String>) {
-    for sel in &q.selection_set.items {
-        if let Selection::Field(f) = sel {
-            let field_name = f.name.as_str();
+// Convert GraphQL parser values into serde_json via JSON parsing fallback
+fn graphql_value_to_json(val: &GqlValue<String>) -> serde_json::Value {
+    let s = val.to_string();
+    serde_json::from_str(&s).unwrap_or_else(|_| serde_json::Value::String(s))
+}
 
-            // Skip introspection fields
-            if field_name.starts_with("__") {
-                continue;
-            }
+// Updated execute_query to respect GraphQL arguments for filtering
+ fn execute_query(db: &Db, result: &mut serde_json::Map<String, serde_json::Value>, q: &graphql_parser::query::Query<'_, String>) {
+     for sel in &q.selection_set.items {
+         if let Selection::Field(f) = sel {
+             let field_name = f.name.as_str();
 
-            // Execute query on collection
-            if let Some(collection) = db.get(field_name) {
-                // Retrieve items
-                let mut items = collection.get_all();
+             // Skip introspection fields
+             if field_name.starts_with("__") {
+                 continue;
+             }
 
-                // Expand nested lists
-                let mut paths = Vec::new();
-                collect_expansion_paths(&f.selection_set, "", &mut paths);
-                for path in paths {
-                    items = collection.expand_list(items, &path, db);
-                }
+             // Execute query on collection
+             if let Some(collection) = db.get(field_name) {
+                 // Retrieve items based on GraphQL arguments
+                 // Default id key, adjust if custom
+                 let id_key = collection.get_config().id_key;
+                 let mut items = if f.arguments.is_empty() {
+                     collection.get_all()
+                } else if f.arguments.len() == 1 && f.arguments[0].0 == id_key {
+                    // Single ID lookup
+                    let arg_val = graphql_value_to_json(&f.arguments[0].1);
+                    if let Some(item) = collection.get(arg_val.as_str().unwrap_or("")) {
+                         vec![item]
+                     } else {
+                         vec![]
+                     }
+                 } else {
+                     // Build simple SQL for multiple args or non-id key arg
+                     let mut clauses = Vec::new();
+                     let mut args_json = Vec::new();
+                     for (name, val) in &f.arguments {
+                         clauses.push(format!("{} = ?", name));
+                         args_json.push(graphql_value_to_json(val));
+                     }
+                     let sql = format!("SELECT * FROM {} WHERE {}", field_name, clauses.join(" AND "));
+                     db.query_with_args(&sql, serde_json::Value::Array(args_json))
+                         .unwrap_or_default()
+                 };
 
-                // Filter fields based on selection
-                let filtered: Vec<serde_json::Value> = items.into_iter().map(|item| {
-                    filter_value(item, &f.selection_set)
-                }).collect();
+                 // Expand nested lists
+                 let mut paths = Vec::new();
+                 collect_expansion_paths(&f.selection_set, "", &mut paths);
+                 for path in paths {
+                     items = collection.expand_list(items, &path, db);
+                 }
 
-                result.insert(field_name.to_string(), serde_json::Value::Array(filtered));
-            } else {
-                result.insert(field_name.to_string(), serde_json::Value::Null);
-            }
-        }
-    }
+                 // Filter fields based on selection
+                 let filtered: Vec<serde_json::Value> = items.into_iter().map(|item| {
+                     filter_value(item, &f.selection_set)
+                 }).collect();
+
+                 result.insert(field_name.to_string(), serde_json::Value::Array(filtered));
+             } else {
+                 result.insert(field_name.to_string(), serde_json::Value::Null);
+             }
+         }
+     }
 }
 
 fn execute_operation(db: &Db, result: &mut serde_json::Map<String, serde_json::Value>, m: &graphql_parser::query::Mutation<'_, String>) {
