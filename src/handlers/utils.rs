@@ -13,6 +13,11 @@ pub fn is_text_file(file_path: &OsString) -> bool {
     extension == "txt" || extension == "md" || extension == "json" || extension == "jgd" || extension == "sql"
 }
 
+pub fn is_json(file_path: &OsString) -> bool {
+    let extension = get_file_extension(file_path);
+    extension == "json"
+}
+
 pub fn is_jgd(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
     extension == "jgd"
@@ -21,6 +26,11 @@ pub fn is_jgd(file_path: &OsString) -> bool {
 pub fn is_sql(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
     extension == "sql"
+}
+
+pub fn is_toml(file_path: &OsString) -> bool {
+    let extension = get_file_extension(file_path);
+    extension == "toml"
 }
 
 pub trait SleepThread {

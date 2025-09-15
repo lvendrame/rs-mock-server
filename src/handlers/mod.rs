@@ -13,5 +13,8 @@ pub use auth_handlers::*;
 pub mod collections_handlers;
 pub use collections_handlers::*;
 
+pub mod graphql_handlers;
+pub use graphql_handlers::*;
+
 pub mod utils;
 pub use utils::*;

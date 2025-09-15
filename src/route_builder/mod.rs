@@ -6,6 +6,7 @@ pub mod route_rest;
 pub mod route_upload;
 pub mod route_params;
 pub mod route_manager;
+pub mod route_graphql;
 pub mod config;
 
 use axum::routing::MethodRouter;

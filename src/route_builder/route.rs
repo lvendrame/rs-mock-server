@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use fosk::IdType;
 
 use crate::{app::App, route_builder::{
-    PrintRoute, RouteAuth, RouteBasic, RouteGenerator, RouteParams, RoutePublic, RouteRest, RouteUpload
+    route_graphql::RouteGraphQL, PrintRoute, RouteAuth, RouteBasic, RouteGenerator, RouteParams, RoutePublic, RouteRest, RouteUpload
 }};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -20,6 +20,7 @@ pub enum Route {
     Auth(Box<RouteAuth>),
     Basic(RouteBasic),
     Rest(RouteRest),
+    GraphQL(RouteGraphQL),
     Public(RoutePublic),
     Upload(RouteUpload),
 }
@@ -45,6 +46,11 @@ impl Route {
             }
 
             let route = RouteUpload::try_parse(route_params.clone());
+            if route.is_some() {
+                return route;
+            }
+
+            let route = RouteGraphQL::try_parse(route_params.clone());
             if route.is_some() {
                 return route;
             }
@@ -88,6 +94,7 @@ impl RouteGenerator for Route {
             Route::Basic(route_basic) => route_basic.make_routes(app),
             Route::Public(route_public) => route_public.make_routes(app),
             Route::Rest(route_rest) => route_rest.make_routes(app),
+            Route::GraphQL(route_graphql) => route_graphql.make_routes(app),
             Route::Upload(route_upload) => route_upload.make_routes(app),
         }
     }
@@ -101,6 +108,7 @@ impl PrintRoute for Route {
             Route::Basic(route_basic) => route_basic.println(),
             Route::Public(route_public) => route_public.println(),
             Route::Rest(route_rest) => route_rest.println(),
+            Route::GraphQL(route_graphql) => route_graphql.println(),
             Route::Upload(route_upload) => route_upload.println(),
         }
     }
@@ -115,16 +123,18 @@ impl PartialOrd for Route {
             Route::Auth(_) => 1,
             Route::Basic(_) => 2,
             Route::Rest(_) => 3,
-            Route::Public(_) => 4,
-            Route::Upload(_) => 5,
+            Route::GraphQL(_) => 4,
+            Route::Public(_) => 5,
+            Route::Upload(_) => 6,
         };
         let other_order = match other {
             Route::None => 0,
             Route::Auth(_) => 1,
             Route::Basic(_) => 2,
             Route::Rest(_) => 3,
-            Route::Public(_) => 4,
-            Route::Upload(_) => 5,
+            Route::GraphQL(_) => 4,
+            Route::Public(_) => 5,
+            Route::Upload(_) => 6,
         };
 
         match self_order.cmp(&other_order) {

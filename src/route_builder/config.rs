@@ -6,6 +6,8 @@ use fosk::IdType;
 use serde::{Deserialize, Serialize};
 use toml::de::Error as DeserializeError;
 
+use crate::handlers::is_toml;
+
 /// Represents the combined configuration for the mock server.
 ///
 /// This configuration can be loaded from TOML and applies settings
@@ -143,13 +145,7 @@ impl ConfigStore {
         let mut store = Self::default();
         fs::read_dir( dir_path)?
             .filter_map(Result::ok)
-            .filter(|file| {
-                let path = file.path();
-                let extension = path.extension().and_then(OsStr::to_str).unwrap_or_default();
-                let result = extension.eq("toml");
-                result.to_string();
-                result
-            })
+            .filter(|file| is_toml(&file.file_name()))
             .for_each(|file| {
                 let key = file.path().as_path().file_stem().unwrap().to_string_lossy().to_ascii_lowercase();
                 match Config::try_from(&file) {

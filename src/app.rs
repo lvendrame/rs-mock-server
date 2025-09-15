@@ -46,7 +46,7 @@ impl Default for App {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
-        let db = Arc::new( Db::new_db());
+        let db = Db::new_db();
         let server_config = Config {
             server: Some(ServerConfig {
                 folder: Some(DEFAULT_FOLDER.into()),
@@ -65,7 +65,7 @@ impl App {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
-        let db = Arc::new( Db::new_db());
+        let db = Db::new_db();
         App { router, pages, uploads_configurations, db, server_config }
     }
 
