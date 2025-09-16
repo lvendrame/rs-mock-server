@@ -75,6 +75,7 @@ echo '[{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]' > mocks/api/users/
 -   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
 -   🗄️ **SQL Routes**: Use `.sql` files to create GET endpoints that execute SQL queries against the in-memory database and return results as JSON.
+-   🗄️ **GraphQL**: Create your GraphQL queries and mutations, also load collections to load data.
 
 ---
 
@@ -121,6 +122,7 @@ The following table shows how different filename patterns are mapped to routes, 
 -   **[Hot Reload](docs/08-hot-reload.md)** - Development workflow and file monitoring
 -   **[SQL Routes](docs/09-sql-routes.md)** - Execute `.sql` files as GET endpoints against in-memory database
 -   **[Configurations](docs/10-configurations.md)** - Create a `.toml` file to create specific configurations for your server and your routes
+-   **[GraphQL](docs/11-graphql.md)** - Learn how to build GraphQL queries and mutations.
 
 ### 🚀 Quick Examples
 
