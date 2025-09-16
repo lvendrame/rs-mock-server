@@ -8,11 +8,9 @@ use axum::{
     extract::Json,
     routing::{get, post},
 };
-use chrono;
 use fosk::Db;
 use graphql_parser::query::{Definition, Document, OperationDefinition, Selection, parse_query, Value as GqlValue};
 use serde_json;
-use uuid;
 
 use jgd_rs::generate_jgd_from_file;
 
@@ -207,37 +205,86 @@ fn execute_operation(db: &Db, result: &mut serde_json::Map<String, serde_json::V
             // Handle create mutations
             if let Some(collection_name) = field_name.strip_prefix("create") {
                 if let Some(collection) = db.get(collection_name) {
-                    // Create a simple item (in real implementation, parse input from GraphQL variables)
-                    let new_item = serde_json::json!({
-                        "id": uuid::Uuid::new_v4().to_string(),
-                        "created_at": chrono::Utc::now().to_rfc3339(),
-                        "message": "Created via GraphQL"
-                    });
-                    let created_item =
-                        collection.add(new_item.clone()).unwrap_or(new_item);
-                    result.insert(field_name.to_string(), created_item);
+                    // Build new item from GraphQL arguments
+                    let mut new_map = serde_json::Map::new();
+                    for (arg_name, arg_val) in &f.arguments {
+                        new_map.insert(arg_name.clone(), graphql_value_to_json(arg_val));
+                    }
+                    let new_item = serde_json::Value::Object(new_map.clone());
+                    // Add to collection (auto-generates id if configured)
+                    let created = collection.add(new_item.clone()).unwrap_or(new_item.clone());
+                    // Expand nested selections
+                    let mut item = created;
+                    let mut paths = Vec::new();
+                    collect_expansion_paths(&f.selection_set, "", &mut paths);
+                    for path in paths {
+                        item = collection.expand_row(&item, &path, db);
+                    }
+                    // Filter fields
+                    let filtered = filter_value(item, &f.selection_set);
+                    result.insert(field_name.to_string(), filtered);
                 } else {
                     result.insert(field_name.to_string(), serde_json::Value::Null);
                 }
             }
             // Handle update mutations
             else if let Some(collection_name) = field_name.strip_prefix("update") {
-                if let Some(_collection) = db.get(collection_name) {
-                    // TODO: Implement update logic
-                    result.insert(
-                        field_name.to_string(),
-                        serde_json::json!({"message": "Update not implemented yet"}),
-                    );
+                if let Some(collection) = db.get(collection_name) {
+                    // Determine id key and parse arguments
+                    let id_key = collection.get_config().id_key;
+                    let mut id_val = None;
+                    let mut update_map = serde_json::Map::new();
+                    for (arg_name, arg_val) in &f.arguments {
+                        let json_val = graphql_value_to_json(arg_val);
+                        if arg_name == &id_key {
+                            id_val = json_val.as_str().map(String::from);
+                        } else {
+                            update_map.insert(arg_name.clone(), json_val);
+                        }
+                    }
+                    // Perform update if id provided
+                    if let Some(id) = id_val {
+                        let partial = serde_json::Value::Object(update_map.clone());
+                        let updated = collection.update_partial(&id, partial).unwrap_or(serde_json::Value::Null);
+                        // Expand nested selections
+                        let mut item = updated;
+                        let mut paths = Vec::new();
+                        collect_expansion_paths(&f.selection_set, "", &mut paths);
+                        for path in paths {
+                            item = collection.expand_row(&item, &path, db);
+                        }
+                        // Filter fields
+                        let filtered = filter_value(item, &f.selection_set);
+                        result.insert(field_name.to_string(), filtered);
+                    } else {
+                        result.insert(field_name.to_string(), serde_json::Value::Null);
+                    }
                 }
             }
             // Handle delete mutations
             else if let Some(collection_name) = field_name.strip_prefix("delete") {
-                if let Some(_collection) = db.get(collection_name) {
-                    // TODO: Implement delete logic
-                    result.insert(
-                        field_name.to_string(),
-                        serde_json::json!({"message": "Delete not implemented yet"}),
-                    );
+                if let Some(collection) = db.get(collection_name) {
+                    // Determine id key and parse id argument
+                    let id_key = collection.get_config().id_key;
+                    let id_val = f.arguments.iter()
+                        .find(|(name, _)| name == &id_key)
+                        .and_then(|(_, val)| graphql_value_to_json(val).as_str().map(String::from));
+                    // Perform delete if id provided
+                    if let Some(id) = id_val {
+                        let deleted = collection.delete(&id).unwrap_or(serde_json::Value::Null);
+                        // Expand nested selections
+                        let mut item = deleted;
+                        let mut paths = Vec::new();
+                        collect_expansion_paths(&f.selection_set, "", &mut paths);
+                        for path in paths {
+                            item = collection.expand_row(&item, &path, db);
+                        }
+                        // Filter fields
+                        let filtered = filter_value(item, &f.selection_set);
+                        result.insert(field_name.to_string(), filtered);
+                    } else {
+                        result.insert(field_name.to_string(), serde_json::Value::Null);
+                    }
                 }
             }
         }
@@ -276,7 +323,7 @@ pub fn create_graphql_route(app: &mut App, route: &str, is_protected: bool, dela
         async move {
             delay.sleep_thread();
 
-            // 1) Parse request into AST
+            // Parse request into AST
             let doc = match parse_request_ast(&req) {
                 Err(err) => {
                     let mut response = GQLResponse::default();
@@ -286,17 +333,17 @@ pub fn create_graphql_route(app: &mut App, route: &str, is_protected: bool, dela
                 Ok(d) => d,
             };
 
-            // 2) Validate referenced collections exist in Fosk database
+            // Validate referenced collections exist in Fosk database
             if let Err(err) = validate_request_ast(&doc, &db) {
                 let mut response = GQLResponse::default();
                 response.errors = vec![ServerError::new(err.message, None)];
                 return Json(response);
             }
 
-            // 3) Execute GraphQL operations directly on Fosk database
+            // Execute GraphQL operations directly on Fosk database
             let result = execute_graphql_operations(&doc, &db).await;
 
-            // 4) Return GraphQL response
+            // Return GraphQL response
             let mut response = GQLResponse::default();
             match result {
                 Ok(data) => {
