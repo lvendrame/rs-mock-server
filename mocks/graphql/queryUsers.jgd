@@ -1,0 +1,25 @@
+{
+    "$format": "jgd/v1",
+    "version": "1.0.0",
+    "seed": 42,
+    "defaultLocale": "EN",
+    "root": {
+        "fields": {
+            "users": {
+                "count": 30,
+                "fields": {
+                    "id": "${ulid}",
+                    "name": "${name.name}",
+                    "email": "${internet.safeEmail}",
+                    "age": {
+                        "number": {
+                            "min": 18,
+                            "max": 65,
+                            "integer": true
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

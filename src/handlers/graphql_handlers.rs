@@ -20,12 +20,37 @@ use crate::{
     route_builder::{RouteRegistrator, route_graphql::RouteGraphQL},
 };
 
+pub const COLLECTIONS_FOLDER: &str = "/collections";
+
 pub fn create_graphiql_route(app: &mut App) {
     let router =
         get(async || axum::response::Html(GraphiQLSource::build().endpoint("/graphql").finish()));
     app.push_route("/graphiql", router, None, false, None);
 }
-// -- GraphQL handler helpers -------------------------------------------------
+
+/// Attempt to load static operation data from .json or .jgd file
+fn load_static_data(base_path: &OsString, op_name: &str) -> Option<serde_json::Value> {
+    let file_path = PathBuf::from(base_path);
+    let json_file = file_path.join(format!("{}.json", op_name));
+    if json_file.exists() {
+        let data_str = fs::read_to_string(&json_file).unwrap_or_default();
+        let data_json = serde_json::from_str(&data_str).unwrap_or(serde_json::Value::Null);
+        return Some(data_json);
+    }
+    let jgd_file = file_path.join(format!("{}.jgd", op_name));
+    if jgd_file.exists() {
+        let data_json = generate_jgd_from_file(&jgd_file).unwrap_or(serde_json::Value::Null);
+        return Some(data_json);
+    }
+    None
+}
+
+/// Build a GraphQL JSON response from serde_json::Value
+fn response_from_json(data_json: serde_json::Value) -> Json<GQLResponse> {
+    let mut response = GQLResponse::default();
+    response.data = async_graphql::Value::from_json(data_json).unwrap_or(async_graphql::Value::Null);
+    Json(response)
+}
 
 /// Parse the raw GraphQL request into an AST document
 fn parse_request_ast(req: &GQLRequest) -> Result<Document<String>, GQLError> {
@@ -315,7 +340,7 @@ async fn execute_graphql_operations(
 
 // -------------------------------------------------------------------------------
 
-pub fn create_graphql_route(app: &mut App, route: &str, is_protected: bool, delay: Option<u16>) {
+pub fn create_graphql_route(app: &mut App, route: &str, path: OsString, is_protected: bool, delay: Option<u16>) {
     // POST /graphql handler: parse, validate, and execute GraphQL manually
     let db = app.db.clone();
     let router = post(move |Json(req): Json<GQLRequest>| {
@@ -323,7 +348,7 @@ pub fn create_graphql_route(app: &mut App, route: &str, is_protected: bool, dela
         async move {
             delay.sleep_thread();
 
-            // Parse request into AST
+            // 1) Parse request into AST
             let doc = match parse_request_ast(&req) {
                 Err(err) => {
                     let mut response = GQLResponse::default();
@@ -332,8 +357,22 @@ pub fn create_graphql_route(app: &mut App, route: &str, is_protected: bool, dela
                 }
                 Ok(d) => d,
             };
+            // 2) Static operation override: return matching .json or .jgd file if present
+            if let Some(op_name) = doc.definitions.iter().filter_map(|def| {
+                if let Definition::Operation(OperationDefinition::Query(q)) = def {
+                    q.name.clone()
+                } else if let Definition::Operation(OperationDefinition::Mutation(m)) = def {
+                    m.name.clone()
+                } else {
+                    None
+                }
+            }).next() {
+                if let Some(data_json) = load_static_data(&path, &op_name) {
+                    return response_from_json(data_json);
+                }
+            }
 
-            // Validate referenced collections exist in Fosk database
+            // 3) Validate referenced collections exist in Fosk database
             if let Err(err) = validate_request_ast(&doc, &db) {
                 let mut response = GQLResponse::default();
                 response.errors = vec![ServerError::new(err.message, None)];
@@ -361,6 +400,14 @@ pub fn create_graphql_route(app: &mut App, route: &str, is_protected: bool, dela
 }
 
 pub fn load_folder_collections(app: &mut App, path: OsString) -> Result<(), Error> {
+    let mut path = path.clone();
+    path.push(COLLECTIONS_FOLDER);
+
+    if !fs::exists(&path)? {
+        println!("Folder Collections doesn't exist for GraphQL routes");
+        return Ok(());
+    }
+
     fs::read_dir(path)?
         .filter_map(Result::ok)
         .filter(|file| is_jgd(&file.file_name()) || is_json(&file.file_name()))
@@ -418,9 +465,10 @@ pub fn build_graphql_routes(app: &mut App, config: &RouteGraphQL) {
     let route = &config.route;
     let is_protected = config.is_protected;
     let delay = config.delay;
+    let path = config.path.clone();
 
     create_graphiql_route(app);
-    create_graphql_route(app, route, is_protected, delay);
+    create_graphql_route(app, route, path, is_protected, delay);
 }
 
 // Unit tests for GraphQL helper functions
