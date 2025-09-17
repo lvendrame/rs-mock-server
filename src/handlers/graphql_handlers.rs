@@ -50,8 +50,8 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
             .collect::<String>()
     }
 
-    // Start building schema with Query root (no Mutation since none defined)
-    let mut schema = Schema::build("Query", None, None);
+    // Start building schema with Query root and Mutation root
+    let mut schema = Schema::build("Query", Some("Mutation"), None);
 
     // Register JSON scalar
     schema = schema.register(async_graphql::dynamic::Type::Scalar(Scalar::new("JSON")));
@@ -145,7 +145,39 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
             })
         }));
     }
+    // Register Query root
     schema = schema.register(query);
+    // Build root Mutation type: CRUD operations per collection
+    let mut mutation = Object::new("Mutation");
+    for (_raw, _field, type_name) in &registered {
+        // createX(input: JSON!): X
+        let create_name = format!("create{}", type_name);
+        mutation = mutation.field(
+            Field::new(&create_name, TypeRef::named_nn(type_name), move |_ctx| {
+                FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
+            })
+            .argument(async_graphql::dynamic::InputValue::new("input", TypeRef::named_nn("JSON")))
+        );
+        // updateX(id: String!, input: JSON!): X
+        let update_name = format!("update{}", type_name);
+        mutation = mutation.field(
+            Field::new(&update_name, TypeRef::named_nn(type_name), move |_ctx| {
+                FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
+            })
+            .argument(async_graphql::dynamic::InputValue::new("id", TypeRef::named_nn("String")))
+            .argument(async_graphql::dynamic::InputValue::new("input", TypeRef::named_nn("JSON")))
+        );
+        // deleteX(id: String!): Boolean
+        let delete_name = format!("delete{}", type_name);
+        mutation = mutation.field(
+            Field::new(&delete_name, TypeRef::named_nn("Boolean"), move |_ctx| {
+                FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Boolean(false))) })
+            })
+            .argument(async_graphql::dynamic::InputValue::new("id", TypeRef::named_nn("String")))
+        );
+    }
+    // Register Mutation root
+    schema = schema.register(mutation);
 
 
     // // Attach Fosk DB as schema data
@@ -463,16 +495,17 @@ fn execute_operation(db: &Db, result: &mut serde_json::Map<String, serde_json::V
                     if let Some(id) = id_val {
                         let partial = serde_json::Value::Object(update_map.clone());
                         let updated = collection.update_partial(&id, partial).unwrap_or(serde_json::Value::Null);
-                        // Expand nested selections
-                        let mut item = updated;
-                        let mut paths = Vec::new();
-                        collect_expansion_paths(&f.selection_set, "", &mut paths);
-                        for path in paths {
-                            item = collection.expand_row(&item, &path, db);
-                        }
-                        // Filter fields
-                        let filtered = filter_value(item, &f.selection_set);
-                        result.insert(field_name.to_string(), filtered);
+                        // // Expand nested selections
+                        // let mut item = updated;
+                        // let mut paths = Vec::new();
+                        // collect_expansion_paths(&f.selection_set, "", &mut paths);
+                        // for path in paths {
+                        //     item = collection.expand_row(&item, &path, db);
+                        // }
+                        // // Filter fields
+                        // let filtered = filter_value(item, &f.selection_set);
+                        // result.insert(field_name.to_string(), filtered);
+                        result.insert(field_name.to_string(), updated);
                     } else {
                         result.insert(field_name.to_string(), serde_json::Value::Null);
                     }
