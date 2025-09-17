@@ -1,14 +1,20 @@
 use std::{ffi::OsString, fs, io::Error, path::PathBuf, str::FromStr};
 
 use async_graphql::{
-    Error as GQLError, Request as GQLRequest, Response as GQLResponse, ServerError,
+    dynamic::{Scalar, Schema, Object, Field, TypeRef, FieldFuture},
     http::GraphiQLSource,
+    Error as GQLError,
+    Request as GQLRequest,
+    Response as GQLResponse,
+    Value as GValue,
+    ServerError,
 };
+use std::sync::Arc;
 use axum::{
     extract::Json,
     routing::{get, post},
 };
-use fosk::Db;
+use fosk::{Db, JsonPrimitive};
 use graphql_parser::query::{Definition, Document, OperationDefinition, Selection, parse_query, Value as GqlValue};
 use serde_json;
 
@@ -19,13 +25,199 @@ use crate::{
     handlers::{SleepThread, is_jgd, is_json},
     route_builder::{RouteRegistrator, route_graphql::RouteGraphQL},
 };
+use std::collections::{HashSet, HashMap};
 
 pub const COLLECTIONS_FOLDER: &str = "/collections";
 
+/// Build a dynamic Async-GraphQL Schema from Fosk collections
+pub fn build_dynamic_schema(db: &Db) -> Schema {
+    // Helper to convert snake_case to PascalCase for GraphQL type names
+    fn pascal_case(s: &str) -> String {
+        // Sanitize: replace any non-alphanumeric with underscore
+        let sanitized: String = s.chars()
+            .map(|c| if c.is_alphanumeric() { c } else { '_' })
+            .collect();
+        // Join parts by underscores and uppercase each
+        sanitized.split('_')
+            .filter(|part| !part.is_empty())
+            .map(|part| {
+                let mut chars = part.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                }
+            })
+            .collect::<String>()
+    }
+
+    // Start building schema with Query root (no Mutation since none defined)
+    let mut schema = Schema::build("Query", None, None);
+
+    // Register JSON scalar
+    schema = schema.register(async_graphql::dynamic::Type::Scalar(Scalar::new("JSON")));
+
+    // Register object types for each collection and track raw, sanitized field names, and type names
+    let mut registered: Vec<(String, String, String)> = Vec::new();
+    for raw in db.list_collections() {
+        if let Some(def) = db.schema_with_refs_of(&raw) {
+            // Create valid GraphQL field name by replacing non-alphanumeric with '_'
+            let field_name: String = raw.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+            // Convert original name to PascalCase for type name
+            let type_name = pascal_case(&raw);
+            // Track (raw, field, type)
+            registered.push((raw.clone(), field_name.clone(), type_name.clone()));
+            // Build object type
+            let mut obj = Object::new(type_name.clone());
+            // Primitive fields for this type
+            for (field, info) in &def.fields {
+                let gql_type = match info.ty {
+                    JsonPrimitive::String => TypeRef::named_nn("String"),
+                    JsonPrimitive::Int => TypeRef::named_nn("Int"),
+                    JsonPrimitive::Float => TypeRef::named_nn("Float"),
+                    JsonPrimitive::Bool => TypeRef::named_nn("Boolean"),
+                    _ => TypeRef::named_nn("JSON"),
+                };
+                let field_name = field.clone();
+                obj = obj.field(Field::new(field_name.clone(), gql_type, move |ctx| {
+                    let key = field_name.clone();
+                    FieldFuture::new(async move {
+                        let parent = ctx.parent_value.try_downcast_ref::<serde_json::Value>().unwrap();
+                        let val = parent.get(&key).cloned().unwrap_or(serde_json::Value::Null);
+                        Ok(Some(GValue::from_json(val).unwrap_or(GValue::Null)))
+                    })
+                }));
+            }
+            // Gather unique relation fields (outbound and inbound)
+            let mut rel_map: std::collections::HashMap<String, String> = HashMap::new();
+            for outbound in def.outbound_refs.values() {
+                // Skip self-referencing relations
+                if outbound.collection.as_str() == raw.as_str() {
+                    continue;
+                }
+                let name = outbound.collection.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>();
+                let typ = pascal_case(&outbound.collection);
+                rel_map.entry(name).or_insert(typ);
+            }
+            for inbound in def.inbound_refs.values() {
+                // Skip self-referencing relations
+                if inbound.ref_collection.as_str() == raw.as_str() {
+                    continue;
+                }
+                let name = inbound.ref_collection.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>();
+                let typ = pascal_case(&inbound.ref_collection);
+                rel_map.entry(name).or_insert(typ);
+            }
+            // Add relation fields, avoiding duplicates and conflicts with primitive fields
+            for (rel_name, rel_type) in rel_map {
+                // Skip if primitive field with same name exists
+                if def.fields.contains_key(&rel_name) {
+                    continue;
+                }
+                obj = obj.field(Field::new(rel_name.clone(), TypeRef::named_nn_list_nn(&rel_type), move |_ctx| {
+                    FieldFuture::new(async move { Ok(Some(GValue::List(Vec::new()))) })
+                }));
+            }
+            // Register this object type
+            schema = schema.register(obj);
+        }
+    }
+
+    // Build root Query type: list all items for registered collections
+    let mut query = Object::new("Query");
+    let mut q_fields: HashSet<String> = HashSet::new();
+    for (raw, field, type_name) in &registered {
+        // Skip duplicate field names
+        if !q_fields.insert(field.clone()) {
+            continue;
+        }
+        let list_type = TypeRef::named_nn_list_nn(type_name);
+        let coll_name = raw.clone();
+        let field_key = field.clone();
+        query = query.field(Field::new(field_key.clone(), list_type, move |ctx| {
+            let db = ctx.data::<Arc<Db>>().unwrap().clone();
+            let coll_name = coll_name.clone();
+            FieldFuture::new(async move {
+                let coll = db.get(&coll_name).unwrap();
+                let items: Vec<GValue> = coll.get_all().into_iter()
+                    .map(|item| GValue::from_json(item).unwrap_or(GValue::Null))
+                    .collect();
+                Ok(Some(GValue::List(items)))
+            })
+        }));
+    }
+    schema = schema.register(query);
+
+
+    // // Attach Fosk DB as schema data
+    // schema.data(app.db.clone()).finish()
+    schema.finish().unwrap()
+}
+
+
+pub fn build_graphql_schemas_from_existing_collections(app: &App) -> String {
+    // Helper to uppercase first letter of collection/type names
+    fn capitalize(s: &str) -> String {
+        let mut c = s.chars();
+        match c.next() {
+            None => String::new(),
+            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        }
+    }
+
+    let collections = app.db.list_collections();
+    let mut s = String::new();
+    // Declare JSON scalar for arbitrary fields
+    s.push_str("scalar JSON\n\n");
+    for collection_name in &collections {
+        if let Some(def) = app.db.schema_with_refs_of(collection_name) {
+            let type_name = capitalize(collection_name);
+            s.push_str(&format!("type {} {{\n", type_name));
+            // Define fields
+            for (field_name, field_info) in &def.fields {
+                // Map Fosk JsonPrimitive to GraphQL types
+                let gql_type = match field_info.ty {
+                    JsonPrimitive::String => "String",
+                    JsonPrimitive::Int => "Int",
+                    JsonPrimitive::Float => "Float",
+                    JsonPrimitive::Bool => "Boolean",
+                    _ => "JSON",
+                };
+                let nullable = if field_info.nullable { "" } else { "!" };
+                s.push_str(&format!("  {}: {}{}\n", field_name, gql_type, nullable));
+            }
+            // Outbound relations (references from this type to others)
+            for outbound in def.outbound_refs.values() {
+                let ref_type = capitalize(&outbound.ref_collection);
+                s.push_str(&format!("  {}: [{}]!\n", outbound.column, ref_type));
+            }
+            // Inbound relations (references from other types to this one)
+            for inbound in def.inbound_refs.values() {
+                let ref_type = capitalize(&inbound.collection);
+                s.push_str(&format!("  {}: [{}]!\n", inbound.column, ref_type));
+            }
+            s.push_str("}\n\n");
+        }
+    }
+    s
+}
+
 pub fn create_graphiql_route(app: &mut App) {
-    let router =
-        get(async || axum::response::Html(GraphiQLSource::build().endpoint("/graphql").finish()));
+    // Serve GraphiQL IDE
+    let router = get(async || axum::response::Html(
+        GraphiQLSource::build()
+            .endpoint("/graphql")
+            .finish()
+    ));
     app.push_route("/graphiql", router, None, false, None);
+}
+
+/// Serve GraphQL schema as SDL
+pub fn create_schema_route(app: &mut App) {
+    let sdl = build_graphql_schemas_from_existing_collections(app);
+    let router = get(move || async move {
+        axum::response::Html(format!("<pre>{}</pre>", sdl))
+    });
+    app.push_route("/schema", router, Some("GET"), false, None);
 }
 
 /// Attempt to load static operation data from .json or .jgd file
@@ -341,11 +533,23 @@ async fn execute_graphql_operations(
 // -------------------------------------------------------------------------------
 
 pub fn create_graphql_route(app: &mut App, route: &str, path: OsString, is_protected: bool, delay: Option<u16>) {
-    // POST /graphql handler: parse, validate, and execute GraphQL manually
+    // Prepare dynamic schema for introspection
     let db = app.db.clone();
+    // Build and store dynamic schema for GraphiQL introspection
+    // build_dynamic_schema already returns a finished Schema
     let router = post(move |Json(req): Json<GQLRequest>| {
         let db = db.clone();
         async move {
+            // Introspection queries (__schema or __type)
+            let query_str = req.query.clone();
+            if query_str.contains("__schema") || query_str.contains("__type") {
+                // Build a fresh request for introspection and attach DB
+                let int_req = async_graphql::Request::new(query_str).data(db.clone());
+                let dyn_schema = build_dynamic_schema(&db);
+                let resp = dyn_schema.execute(int_req).await;
+                return Json(resp);
+            }
+
             delay.sleep_thread();
 
             // 1) Parse request into AST
@@ -461,6 +665,9 @@ pub fn build_graphql_routes(app: &mut App, config: &RouteGraphQL) {
     if let Err(error) = result {
         println!("Error to load GraphQL collections. Details: {}", error);
     }
+
+    // Expose SDL for GraphQL schema
+    create_schema_route(app);
 
     let route = &config.route;
     let is_protected = config.is_protected;

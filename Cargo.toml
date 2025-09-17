@@ -45,7 +45,8 @@ jgd-rs = "0.2.1"
 notify = "8.2.0"
 toml = "0.9.6"
 async-graphql = { version = "7.0.17", features = ["dynamic-schema"]}
- graphql-parser = "0.4"
+async-graphql-axum = "7.0.17"
+graphql-parser = "0.4"
 
 [dev-dependencies]
 tempfile = "3.22.0"
