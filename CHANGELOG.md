@@ -214,6 +214,20 @@
 * feat: execute graphql mutations (Luis Vendrame)
 * chore: filter parameters in graphql queries (Luis Vendrame)
 
+## 0.6.10 (2025-09-17)
+
+* feat: provide GraphQL schema (Luis Vendrame)
+
+## 0.6.10 (2025-09-17)
+
+* chore: show all fields on mutations (Luis Vendrame)
+* chore: add mutations to the GraphQL schema (Luis Vendrame)
+
+## 0.6.11 (2025-09-17)
+
+* docs: update GraphQL documentation (Luis Vendrame)
+* refactor: graphql build schema and execute operations (Luis Vendrame)
+
 ## Unreleased
 
 

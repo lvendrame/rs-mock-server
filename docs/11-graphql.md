@@ -14,6 +14,16 @@ When a `graphql` folder is detected in the mocks directory, the server:
 
 Static overrides (JSON or JGD files) take precedence over dynamic execution. If a query or mutation is named, the server will first check for a matching `<operationName>.json` or `<operationName>.jgd` file and return its content directly (for JGD files, it generates dynamic mock data based on the definition).
 
+## GraphiQL Introspection
+
+The GraphiQL IDE is fed by a dynamic schema constructed from the currently loaded collections. This means:
+
+-   All collections under `mocks/graphql/collections` (and any other routes that populate the Fosk database) appear in the GraphiQL sidebar with the inferred fields and relations.
+-   Relations inferred by rs-mock-server (for example `orders` → `order_items` → `products`) are surfaced as nested object lists, so you can explore available joins directly in the documentation panel.
+-   CRUD mutations (`create<Collection>`, `update<Collection>`, `delete<Collection>`) are auto-generated per collection, and GraphiQL lists the expected arguments and return types for each of them.
+
+Open `http://localhost:<port>/graphiql` and use the Docs panel to confirm which collections, relations, and mutations are currently available.
+
 ## Folder Layout
 
 ```
