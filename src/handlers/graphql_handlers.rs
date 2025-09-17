@@ -31,14 +31,21 @@ pub const COLLECTIONS_FOLDER: &str = "/collections";
 
 /// Build a dynamic Async-GraphQL Schema from Fosk collections
 pub fn build_dynamic_schema(db: &Db) -> Schema {
-    // Helper to convert snake_case to PascalCase for GraphQL type names
-    fn pascal_case(s: &str) -> String {
-        // Sanitize: replace any non-alphanumeric with underscore
-        let sanitized: String = s.chars()
+    struct CollectionMeta {
+        raw: String,
+        field: String,
+        type_name: String,
+    }
+
+    fn sanitize(name: &str) -> String {
+        name.chars()
             .map(|c| if c.is_alphanumeric() { c } else { '_' })
-            .collect();
-        // Join parts by underscores and uppercase each
-        sanitized.split('_')
+            .collect()
+    }
+
+    fn pascal_case(name: &str) -> String {
+        sanitize(name)
+            .split('_')
             .filter(|part| !part.is_empty())
             .map(|part| {
                 let mut chars = part.chars();
@@ -50,235 +57,230 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
             .collect::<String>()
     }
 
-    // Start building schema with Query root and Mutation root
-    let mut schema = Schema::build("Query", Some("Mutation"), None);
+    fn output_field_type(primitive: &JsonPrimitive) -> TypeRef {
+        match primitive {
+            JsonPrimitive::String => TypeRef::named_nn("String"),
+            JsonPrimitive::Int => TypeRef::named_nn("Int"),
+            JsonPrimitive::Float => TypeRef::named_nn("Float"),
+            JsonPrimitive::Bool => TypeRef::named_nn("Boolean"),
+            _ => TypeRef::named_nn("JSON"),
+        }
+    }
 
-    // Register JSON scalar
+    fn input_field_type(primitive: &JsonPrimitive) -> TypeRef {
+        match primitive {
+            JsonPrimitive::String => TypeRef::named("String"),
+            JsonPrimitive::Int => TypeRef::named("Int"),
+            JsonPrimitive::Float => TypeRef::named("Float"),
+            JsonPrimitive::Bool => TypeRef::named("Boolean"),
+            _ => TypeRef::named("JSON"),
+        }
+    }
+
+    fn relation_fields(def: &fosk::SchemaWithRefs, raw: &str) -> HashMap<String, String> {
+        let mut rel_map = HashMap::new();
+        for outbound in def.outbound_refs.values() {
+            if outbound.collection.as_str() == raw {
+                continue;
+            }
+            let name = sanitize(&outbound.collection);
+            let typ = pascal_case(&outbound.collection);
+            rel_map.entry(name).or_insert(typ);
+        }
+        for inbound in def.inbound_refs.values() {
+            if inbound.ref_collection.as_str() == raw {
+                continue;
+            }
+            let name = sanitize(&inbound.ref_collection);
+            let typ = pascal_case(&inbound.ref_collection);
+            rel_map.entry(name).or_insert(typ);
+        }
+        rel_map
+    }
+
+    fn build_object(def: &fosk::SchemaWithRefs, meta: &CollectionMeta) -> Object {
+        let mut obj = Object::new(meta.type_name.clone());
+
+        for (field, info) in &def.fields {
+            let field_name = field.clone();
+            let gql_type = output_field_type(&info.ty);
+            obj = obj.field(Field::new(field_name.clone(), gql_type, move |ctx| {
+                let key = field_name.clone();
+                FieldFuture::new(async move {
+                    let parent = ctx
+                        .parent_value
+                        .try_downcast_ref::<serde_json::Value>()
+                        .unwrap();
+                    let val = parent.get(&key).cloned().unwrap_or(serde_json::Value::Null);
+                    Ok(Some(GValue::from_json(val).unwrap_or(GValue::Null)))
+                })
+            }));
+        }
+
+        for (rel_name, rel_type) in relation_fields(def, &meta.raw) {
+            if def.fields.contains_key(&rel_name) {
+                continue;
+            }
+            obj = obj.field(Field::new(
+                rel_name.clone(),
+                TypeRef::named_nn_list_nn(&rel_type),
+                move |_ctx| FieldFuture::new(async move { Ok(Some(GValue::List(Vec::new()))) }),
+            ));
+        }
+
+        obj
+    }
+
+    fn build_query(collections: &[CollectionMeta]) -> Object {
+        let mut query = Object::new("Query");
+        let mut seen = HashSet::new();
+
+        for meta in collections {
+            if !seen.insert(meta.field.clone()) {
+                continue;
+            }
+
+            let field_name = meta.field.clone();
+            let coll_name = meta.raw.clone();
+            let type_name = meta.type_name.clone();
+
+            query = query.field(Field::new(
+                field_name,
+                TypeRef::named_nn_list_nn(&type_name),
+                move |ctx| {
+                    let db = ctx.data::<Arc<Db>>().unwrap().clone();
+                    let coll_name = coll_name.clone();
+                    FieldFuture::new(async move {
+                        let coll = db.get(&coll_name).unwrap();
+                        let items: Vec<GValue> = coll
+                            .get_all()
+                            .into_iter()
+                            .map(|item| GValue::from_json(item).unwrap_or(GValue::Null))
+                            .collect();
+                        Ok(Some(GValue::List(items)))
+                    })
+                },
+            ));
+        }
+
+        query
+    }
+
+    fn id_input_type(def: &fosk::SchemaWithRefs, id_key: &str) -> TypeRef {
+        def.fields
+            .get(id_key)
+            .map(|info| match info.ty {
+                JsonPrimitive::Int => TypeRef::named_nn("Int"),
+                _ => TypeRef::named_nn("String"),
+            })
+            .unwrap_or_else(|| TypeRef::named_nn("String"))
+    }
+
+    fn build_create_field(
+        type_name: &str,
+        def: &fosk::SchemaWithRefs,
+        id_key: &str,
+        id_type: IdType,
+    ) -> Field {
+        let field_name = format!("create{}", type_name);
+        let mut field = Field::new(field_name, TypeRef::named_nn(type_name), move |_ctx| {
+            FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
+        });
+
+        if id_type == IdType::None {
+            field = field.argument(async_graphql::dynamic::InputValue::new(
+                id_key,
+                id_input_type(def, id_key),
+            ));
+        }
+
+        for (f_name, info) in &def.fields {
+            if f_name == id_key {
+                continue;
+            }
+            field = field.argument(async_graphql::dynamic::InputValue::new(
+                f_name,
+                input_field_type(&info.ty),
+            ));
+        }
+
+        field
+    }
+
+    fn build_update_field(type_name: &str, def: &fosk::SchemaWithRefs, id_key: &str) -> Field {
+        let field_name = format!("update{}", type_name);
+        let mut field = Field::new(field_name, TypeRef::named_nn(type_name), move |_ctx| {
+            FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
+        });
+
+        field = field.argument(async_graphql::dynamic::InputValue::new(
+            id_key,
+            id_input_type(def, id_key),
+        ));
+
+        for (f_name, info) in &def.fields {
+            if f_name == id_key {
+                continue;
+            }
+            field = field.argument(async_graphql::dynamic::InputValue::new(
+                f_name,
+                input_field_type(&info.ty),
+            ));
+        }
+
+        field
+    }
+
+    fn build_delete_field(type_name: &str, def: &fosk::SchemaWithRefs, id_key: &str) -> Field {
+        let field_name = format!("delete{}", type_name);
+        Field::new(field_name, TypeRef::named_nn("Boolean"), move |_ctx| {
+            FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Boolean(false))) })
+        })
+        .argument(async_graphql::dynamic::InputValue::new(
+            id_key,
+            id_input_type(def, id_key),
+        ))
+    }
+
+    let mut schema = Schema::build("Query", Some("Mutation"), None);
     schema = schema.register(async_graphql::dynamic::Type::Scalar(Scalar::new("JSON")));
 
-    // Register object types for each collection and track raw, sanitized field names, and type names
-    let mut registered: Vec<(String, String, String)> = Vec::new();
+    let mut collections = Vec::new();
     for raw in db.list_collections() {
         if let Some(def) = db.schema_with_refs_of(&raw) {
-            // Create valid GraphQL field name by replacing non-alphanumeric with '_'
-            let field_name: String = raw.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
-            // Convert original name to PascalCase for type name
-            let type_name = pascal_case(&raw);
-            // Track (raw, field, type)
-            registered.push((raw.clone(), field_name.clone(), type_name.clone()));
-            // Build object type
-            let mut obj = Object::new(type_name.clone());
-            // Primitive fields for this type
-            for (field, info) in &def.fields {
-                let gql_type = match info.ty {
-                    JsonPrimitive::String => TypeRef::named_nn("String"),
-                    JsonPrimitive::Int => TypeRef::named_nn("Int"),
-                    JsonPrimitive::Float => TypeRef::named_nn("Float"),
-                    JsonPrimitive::Bool => TypeRef::named_nn("Boolean"),
-                    _ => TypeRef::named_nn("JSON"),
-                };
-                let field_name = field.clone();
-                obj = obj.field(Field::new(field_name.clone(), gql_type, move |ctx| {
-                    let key = field_name.clone();
-                    FieldFuture::new(async move {
-                        let parent = ctx.parent_value.try_downcast_ref::<serde_json::Value>().unwrap();
-                        let val = parent.get(&key).cloned().unwrap_or(serde_json::Value::Null);
-                        Ok(Some(GValue::from_json(val).unwrap_or(GValue::Null)))
-                    })
-                }));
-            }
-            // Gather unique relation fields (outbound and inbound)
-            let mut rel_map: std::collections::HashMap<String, String> = HashMap::new();
-            for outbound in def.outbound_refs.values() {
-                // Skip self-referencing relations
-                if outbound.collection.as_str() == raw.as_str() {
-                    continue;
-                }
-                let name = outbound.collection.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>();
-                let typ = pascal_case(&outbound.collection);
-                rel_map.entry(name).or_insert(typ);
-            }
-            for inbound in def.inbound_refs.values() {
-                // Skip self-referencing relations
-                if inbound.ref_collection.as_str() == raw.as_str() {
-                    continue;
-                }
-                let name = inbound.ref_collection.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>();
-                let typ = pascal_case(&inbound.ref_collection);
-                rel_map.entry(name).or_insert(typ);
-            }
-            // Add relation fields, avoiding duplicates and conflicts with primitive fields
-            for (rel_name, rel_type) in rel_map {
-                // Skip if primitive field with same name exists
-                if def.fields.contains_key(&rel_name) {
-                    continue;
-                }
-                obj = obj.field(Field::new(rel_name.clone(), TypeRef::named_nn_list_nn(&rel_type), move |_ctx| {
-                    FieldFuture::new(async move { Ok(Some(GValue::List(Vec::new()))) })
-                }));
-            }
-            // Register this object type
-            schema = schema.register(obj);
+            let meta = CollectionMeta {
+                raw: raw.clone(),
+                field: sanitize(&raw),
+                type_name: pascal_case(&raw),
+            };
+            let object = build_object(&def, &meta);
+            schema = schema.register(object);
+            collections.push(meta);
         }
     }
 
-    // Build root Query type: list all items for registered collections
-    let mut query = Object::new("Query");
-    let mut q_fields: HashSet<String> = HashSet::new();
-    for (raw, field, type_name) in &registered {
-        // Skip duplicate field names
-        if !q_fields.insert(field.clone()) {
-            continue;
-        }
-        let list_type = TypeRef::named_nn_list_nn(type_name);
-        let coll_name = raw.clone();
-        let field_key = field.clone();
-        query = query.field(Field::new(field_key.clone(), list_type, move |ctx| {
-            let db = ctx.data::<Arc<Db>>().unwrap().clone();
-            let coll_name = coll_name.clone();
-            FieldFuture::new(async move {
-                let coll = db.get(&coll_name).unwrap();
-                let items: Vec<GValue> = coll.get_all().into_iter()
-                    .map(|item| GValue::from_json(item).unwrap_or(GValue::Null))
-                    .collect();
-                Ok(Some(GValue::List(items)))
-            })
-        }));
-    }
-    // Register Query root
-    schema = schema.register(query);
-    // Build root Mutation type: CRUD operations per collection
+    schema = schema.register(build_query(&collections));
+
     let mut mutation = Object::new("Mutation");
-    for raw in db.list_collections() {
-        if let Some(def) = db.schema_with_refs_of(&raw) {
-            let type_name = pascal_case(&raw);
-            // Get config for id field
-            let coll = db.get(&raw).unwrap();
-            let config = coll.get_config();
-            let id_key = config.id_key.clone();
-            // Determine GraphQL input types per field
-            // Create mutation: createType(field1: Type1, field2: Type2, ...): Type
-            let create_name = format!("create{}", type_name);
-            let mut create_field = Field::new(&create_name, TypeRef::named_nn(&type_name), move |_ctx| {
-                FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
-            });
-            for (f_name, info) in &def.fields {
-                if f_name == &id_key {
-                    // If id_type is None, require client to provide id
-                    if config.id_type == IdType::None {
-                        let id_arg = if let JsonPrimitive::Int = info.ty {
-                            TypeRef::named_nn("Int")
-                        } else {
-                            TypeRef::named_nn("String")
-                        };
-                        create_field = create_field.argument(async_graphql::dynamic::InputValue::new(f_name, id_arg));
-                    }
-                    continue;
-                }
-                let gql_in = match info.ty {
-                    JsonPrimitive::String => TypeRef::named("String"),
-                    JsonPrimitive::Int => TypeRef::named("Int"),
-                    JsonPrimitive::Float => TypeRef::named("Float"),
-                    JsonPrimitive::Bool => TypeRef::named("Boolean"),
-                    _ => TypeRef::named("JSON"),
-                };
-                create_field = create_field.argument(async_graphql::dynamic::InputValue::new(f_name, gql_in));
+    for meta in &collections {
+        if let Some(def) = db.schema_with_refs_of(&meta.raw) {
+            if let Some(coll) = db.get(&meta.raw) {
+                let config = coll.get_config();
+                let id_key = config.id_key.clone();
+                mutation = mutation.field(build_create_field(
+                    &meta.type_name,
+                    &def,
+                    &id_key,
+                    config.id_type,
+                ));
+                mutation = mutation.field(build_update_field(&meta.type_name, &def, &id_key));
+                mutation = mutation.field(build_delete_field(&meta.type_name, &def, &id_key));
             }
-            mutation = mutation.field(create_field);
-            // Update mutation: updateType(id: IDType!, field1: Type1, ...): Type
-            let update_name = format!("update{}", type_name);
-            let mut update_field = Field::new(&update_name, TypeRef::named_nn(&type_name), move |_ctx| {
-                FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
-            })
-            .argument(async_graphql::dynamic::InputValue::new(&id_key,
-                if let JsonPrimitive::Int = def.fields[&id_key].ty {
-                    TypeRef::named_nn("Int")
-                } else {
-                    TypeRef::named_nn("String")
-                }
-            ));
-            for (f_name, info) in &def.fields {
-                if f_name == &id_key { continue; }
-                let gql_in = match info.ty {
-                    JsonPrimitive::String => TypeRef::named("String"),
-                    JsonPrimitive::Int => TypeRef::named("Int"),
-                    JsonPrimitive::Float => TypeRef::named("Float"),
-                    JsonPrimitive::Bool => TypeRef::named("Boolean"),
-                    _ => TypeRef::named("JSON"),
-                };
-                update_field = update_field.argument(async_graphql::dynamic::InputValue::new(f_name, gql_in));
-            }
-            mutation = mutation.field(update_field);
-            // Delete mutation: deleteType(id: IDType!): Boolean
-            let delete_name = format!("delete{}", type_name);
-            let delete_field = Field::new(&delete_name, TypeRef::named_nn("Boolean"), move |_ctx| {
-                FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Boolean(false))) })
-            })
-            .argument(async_graphql::dynamic::InputValue::new(&id_key,
-                if let JsonPrimitive::Int = def.fields[&id_key].ty {
-                    TypeRef::named_nn("Int")
-                } else {
-                    TypeRef::named_nn("String")
-                }
-            ));
-            mutation = mutation.field(delete_field);
         }
     }
-    // Register Mutation root
+
     schema = schema.register(mutation);
-
-
-    // // Attach Fosk DB as schema data
-    // schema.data(app.db.clone()).finish()
     schema.finish().unwrap()
-}
-
-
-pub fn build_graphql_schemas_from_existing_collections(app: &App) -> String {
-    // Helper to uppercase first letter of collection/type names
-    fn capitalize(s: &str) -> String {
-        let mut c = s.chars();
-        match c.next() {
-            None => String::new(),
-            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-        }
-    }
-
-    let collections = app.db.list_collections();
-    let mut s = String::new();
-    // Declare JSON scalar for arbitrary fields
-    s.push_str("scalar JSON\n\n");
-    for collection_name in &collections {
-        if let Some(def) = app.db.schema_with_refs_of(collection_name) {
-            let type_name = capitalize(collection_name);
-            s.push_str(&format!("type {} {{\n", type_name));
-            // Define fields
-            for (field_name, field_info) in &def.fields {
-                // Map Fosk JsonPrimitive to GraphQL types
-                let gql_type = match field_info.ty {
-                    JsonPrimitive::String => "String",
-                    JsonPrimitive::Int => "Int",
-                    JsonPrimitive::Float => "Float",
-                    JsonPrimitive::Bool => "Boolean",
-                    _ => "JSON",
-                };
-                let nullable = if field_info.nullable { "" } else { "!" };
-                s.push_str(&format!("  {}: {}{}\n", field_name, gql_type, nullable));
-            }
-            // Outbound relations (references from this type to others)
-            for outbound in def.outbound_refs.values() {
-                let ref_type = capitalize(&outbound.ref_collection);
-                s.push_str(&format!("  {}: [{}]!\n", outbound.column, ref_type));
-            }
-            // Inbound relations (references from other types to this one)
-            for inbound in def.inbound_refs.values() {
-                let ref_type = capitalize(&inbound.collection);
-                s.push_str(&format!("  {}: [{}]!\n", inbound.column, ref_type));
-            }
-            s.push_str("}\n\n");
-        }
-    }
-    s
 }
 
 pub fn create_graphiql_route(app: &mut App) {
@@ -289,15 +291,6 @@ pub fn create_graphiql_route(app: &mut App) {
             .finish()
     ));
     app.push_route("/graphiql", router, None, false, None);
-}
-
-/// Serve GraphQL schema as SDL
-pub fn create_schema_route(app: &mut App) {
-    let sdl = build_graphql_schemas_from_existing_collections(app);
-    let router = get(move || async move {
-        axum::response::Html(format!("<pre>{}</pre>", sdl))
-    });
-    app.push_route("/schema", router, Some("GET"), false, None);
 }
 
 /// Attempt to load static operation data from .json or .jgd file
@@ -400,8 +393,48 @@ fn collect_expansion_paths(selection_set: &graphql_parser::query::SelectionSet<S
     }
 }
 
+fn expansion_paths(selection_set: &graphql_parser::query::SelectionSet<String>) -> Vec<String> {
+    let mut paths = Vec::new();
+    collect_expansion_paths(selection_set, "", &mut paths);
+    paths
+}
+
+fn expand_list_with_selection(
+    collection: &Arc<fosk::DbCollection>,
+    items: Vec<serde_json::Value>,
+    selection_set: &graphql_parser::query::SelectionSet<String>,
+    db: &Db,
+) -> Vec<serde_json::Value> {
+    let mut expanded_items = items;
+    for path in expansion_paths(selection_set) {
+        expanded_items = collection.expand_list(expanded_items, &path, db);
+    }
+
+    expanded_items
+        .into_iter()
+        .map(|item| filter_value(item, selection_set))
+        .collect()
+}
+
+fn expand_row_with_selection(
+    collection: &Arc<fosk::DbCollection>,
+    item: serde_json::Value,
+    selection_set: &graphql_parser::query::SelectionSet<String>,
+    db: &Db,
+) -> serde_json::Value {
+    let mut expanded_item = item;
+    for path in expansion_paths(selection_set) {
+        expanded_item = collection.expand_row(&expanded_item, &path, db);
+    }
+
+    filter_value(expanded_item, selection_set)
+}
+
 // Helper to filter JSON values based on selection set
-fn filter_value(value: serde_json::Value, selection_set: &graphql_parser::query::SelectionSet<String>) -> serde_json::Value {
+fn filter_value(
+    value: serde_json::Value,
+    selection_set: &graphql_parser::query::SelectionSet<String>,
+) -> serde_json::Value {
     match value {
         serde_json::Value::Object(mut map) => {
             let mut new_map = serde_json::Map::new();
@@ -436,159 +469,172 @@ fn graphql_value_to_json(val: &GqlValue<String>) -> serde_json::Value {
 }
 
 // Updated execute_query to respect GraphQL arguments for filtering
- fn execute_query(db: &Db, result: &mut serde_json::Map<String, serde_json::Value>, q: &graphql_parser::query::Query<'_, String>) {
-     for sel in &q.selection_set.items {
-         if let Selection::Field(f) = sel {
-             let field_name = f.name.as_str();
+fn execute_query(
+    db: &Db,
+    result: &mut serde_json::Map<String, serde_json::Value>,
+    query: &graphql_parser::query::Query<'_, String>,
+) {
+    fn should_skip_field(name: &str) -> bool {
+        name.starts_with("__")
+    }
 
-             // Skip introspection fields
-             if field_name.starts_with("__") {
-                 continue;
-             }
+    fn fetch_collection_items(
+        db: &Db,
+        collection: &Arc<fosk::DbCollection>,
+        field_name: &str,
+        field: &graphql_parser::query::Field<'_, String>,
+    ) -> Vec<serde_json::Value> {
+        if field.arguments.is_empty() {
+            return collection.get_all();
+        }
 
-             // Execute query on collection
-             if let Some(collection) = db.get(field_name) {
-                 // Retrieve items based on GraphQL arguments
-                 // Default id key, adjust if custom
-                 let id_key = collection.get_config().id_key;
-                 let mut items = if f.arguments.is_empty() {
-                     collection.get_all()
-                } else if f.arguments.len() == 1 && f.arguments[0].0 == id_key {
-                    // Single ID lookup
-                    let arg_val = graphql_value_to_json(&f.arguments[0].1);
-                    if let Some(item) = collection.get(arg_val.as_str().unwrap_or("")) {
-                         vec![item]
-                     } else {
-                         vec![]
-                     }
-                 } else {
-                     // Build simple SQL for multiple args or non-id key arg
-                     let mut clauses = Vec::new();
-                     let mut args_json = Vec::new();
-                     for (name, val) in &f.arguments {
-                         clauses.push(format!("{} = ?", name));
-                         args_json.push(graphql_value_to_json(val));
-                     }
-                     let sql = format!("SELECT * FROM {} WHERE {}", field_name, clauses.join(" AND "));
-                     db.query_with_args(&sql, serde_json::Value::Array(args_json))
-                         .unwrap_or_default()
-                 };
+        let id_key = collection.get_config().id_key;
+        if field.arguments.len() == 1 && field.arguments[0].0 == id_key {
+            let arg_val = graphql_value_to_json(&field.arguments[0].1);
+            if let Some(item) = collection.get(arg_val.as_str().unwrap_or("")) {
+                return vec![item];
+            }
+            return Vec::new();
+        }
 
-                 // Expand nested lists
-                 let mut paths = Vec::new();
-                 collect_expansion_paths(&f.selection_set, "", &mut paths);
-                 for path in paths {
-                     items = collection.expand_list(items, &path, db);
-                 }
+        let mut clauses = Vec::new();
+        let mut args_json = Vec::new();
+        for (name, val) in &field.arguments {
+            clauses.push(format!("{} = ?", name));
+            args_json.push(graphql_value_to_json(val));
+        }
 
-                 // Filter fields based on selection
-                 let filtered: Vec<serde_json::Value> = items.into_iter().map(|item| {
-                     filter_value(item, &f.selection_set)
-                 }).collect();
+        let sql = format!(
+            "SELECT * FROM {} WHERE {}",
+            field_name,
+            clauses.join(" AND ")
+        );
+        db.query_with_args(&sql, serde_json::Value::Array(args_json))
+            .unwrap_or_default()
+    }
 
-                 result.insert(field_name.to_string(), serde_json::Value::Array(filtered));
-             } else {
-                 result.insert(field_name.to_string(), serde_json::Value::Null);
-             }
-         }
-     }
+    for sel in &query.selection_set.items {
+        if let Selection::Field(field) = sel {
+            if should_skip_field(field.name.as_str()) {
+                continue;
+            }
+
+            let field_name = field.name.as_str();
+            let value = db
+                .get(field_name)
+                .map(|collection| {
+                    let items = fetch_collection_items(db, &collection, field_name, field);
+                    let filtered =
+                        expand_list_with_selection(&collection, items, &field.selection_set, db);
+                    serde_json::Value::Array(filtered)
+                })
+                .unwrap_or(serde_json::Value::Null);
+
+            result.insert(field.name.clone(), value);
+        }
+    }
 }
 
-fn execute_operation(db: &Db, result: &mut serde_json::Map<String, serde_json::Value>, m: &graphql_parser::query::Mutation<'_, String>) {
-    for sel in &m.selection_set.items {
-        if let Selection::Field(f) = sel {
-            let field_name = f.name.as_str();
+fn execute_operation(
+    db: &Db,
+    result: &mut serde_json::Map<String, serde_json::Value>,
+    mutation: &graphql_parser::query::Mutation<'_, String>,
+) {
+    fn json_value_to_id(value: serde_json::Value) -> Option<String> {
+        match value {
+            serde_json::Value::Number(number) => number.as_u64().map(|n| n.to_string()),
+            serde_json::Value::String(text) => Some(text),
+            _ => None,
+        }
+    }
 
-            // Handle create mutations
-            if let Some(collection_name) = field_name.strip_prefix("create") {
-                if let Some(collection) = db.get(collection_name) {
-                    // Build new item from GraphQL arguments
-                    let mut new_map = serde_json::Map::new();
-                    for (arg_name, arg_val) in &f.arguments {
-                        new_map.insert(arg_name.clone(), graphql_value_to_json(arg_val));
-                    }
-                    let new_item = serde_json::Value::Object(new_map.clone());
-                    // Add to collection (auto-generates id if configured)
-                    let created = collection.add(new_item.clone()).unwrap_or(new_item.clone());
-                    // Expand nested selections
-                    let mut item = created;
-                    let mut paths = Vec::new();
-                    collect_expansion_paths(&f.selection_set, "", &mut paths);
-                    for path in paths {
-                        item = collection.expand_row(&item, &path, db);
-                    }
-                    // Filter fields
-                    let filtered = filter_value(item, &f.selection_set);
-                    result.insert(field_name.to_string(), filtered);
+    fn handle_create(
+        db: &Db,
+        collection_name: &str,
+        field: &graphql_parser::query::Field<'_, String>,
+    ) -> serde_json::Value {
+        if let Some(collection) = db.get(collection_name) {
+            let mut new_map = serde_json::Map::new();
+            for (arg_name, arg_val) in &field.arguments {
+                new_map.insert(arg_name.clone(), graphql_value_to_json(arg_val));
+            }
+            let new_item = serde_json::Value::Object(new_map);
+            let created = collection.add(new_item.clone()).unwrap_or(new_item);
+            expand_row_with_selection(&collection, created, &field.selection_set, db)
+        } else {
+            serde_json::Value::Null
+        }
+    }
+
+    fn handle_update(
+        db: &Db,
+        collection_name: &str,
+        field: &graphql_parser::query::Field<'_, String>,
+    ) -> serde_json::Value {
+        if let Some(collection) = db.get(collection_name) {
+            let id_key = collection.get_config().id_key;
+            let mut id_value = None;
+            let mut update_map = serde_json::Map::new();
+            for (arg_name, arg_val) in &field.arguments {
+                let json_val = graphql_value_to_json(arg_val);
+                if arg_name == &id_key {
+                    id_value = json_value_to_id(json_val);
                 } else {
-                    result.insert(field_name.to_string(), serde_json::Value::Null);
+                    update_map.insert(arg_name.clone(), json_val);
                 }
             }
-            // Handle update mutations
-            else if let Some(collection_name) = field_name.strip_prefix("update") {
-                if let Some(collection) = db.get(collection_name) {
-                    // Determine id key and parse arguments
-                    let id_key = collection.get_config().id_key;
-                    let mut id_val = None;
-                    let mut update_map = serde_json::Map::new();
-                    for (arg_name, arg_val) in &f.arguments {
-                        let json_val = graphql_value_to_json(arg_val);
-                        if arg_name == &id_key {
-                            id_val = match json_val {
-                                serde_json::Value::Number(number) => Some(number.as_u64().unwrap().to_string()),
-                                serde_json::Value::String(value) => Some(value),
-                                _ => None,
-                            };
-                        } else {
-                            update_map.insert(arg_name.clone(), json_val);
-                        }
-                    }
-                    // Perform update if id provided
-                    if let Some(id) = id_val {
-                        let partial = serde_json::Value::Object(update_map.clone());
-                        let updated = collection.update_partial(&id, partial).unwrap_or(serde_json::Value::Null);
-                        // // Expand nested selections
-                        // let mut item = updated;
-                        // let mut paths = Vec::new();
-                        // collect_expansion_paths(&f.selection_set, "", &mut paths);
-                        // for path in paths {
-                        //     item = collection.expand_row(&item, &path, db);
-                        // }
-                        // // Filter fields
-                        // let filtered = filter_value(item, &f.selection_set);
-                        // result.insert(field_name.to_string(), filtered);
-                        result.insert(field_name.to_string(), updated);
-                    } else {
-                        result.insert(field_name.to_string(), serde_json::Value::Null);
-                    }
-                }
+
+            if let Some(id) = id_value {
+                let partial = serde_json::Value::Object(update_map);
+                collection
+                    .update_partial(&id, partial)
+                    .unwrap_or(serde_json::Value::Null)
+            } else {
+                serde_json::Value::Null
             }
-            // Handle delete mutations
-            else if let Some(collection_name) = field_name.strip_prefix("delete") {
-                if let Some(collection) = db.get(collection_name) {
-                    // Determine id key and parse id argument
-                    let id_key = collection.get_config().id_key;
-                    let id_val = f.arguments.iter()
-                        .find(|(name, _)| name == &id_key)
-                        .and_then(|(_, val)| graphql_value_to_json(val).as_str().map(String::from));
-                    // Perform delete if id provided
-                    if let Some(id) = id_val {
-                        let deleted = collection.delete(&id).unwrap_or(serde_json::Value::Null);
-                        // Expand nested selections
-                        let mut item = deleted;
-                        let mut paths = Vec::new();
-                        collect_expansion_paths(&f.selection_set, "", &mut paths);
-                        for path in paths {
-                            item = collection.expand_row(&item, &path, db);
-                        }
-                        // Filter fields
-                        let filtered = filter_value(item, &f.selection_set);
-                        result.insert(field_name.to_string(), filtered);
-                    } else {
-                        result.insert(field_name.to_string(), serde_json::Value::Null);
-                    }
-                }
+        } else {
+            serde_json::Value::Null
+        }
+    }
+
+    fn handle_delete(
+        db: &Db,
+        collection_name: &str,
+        field: &graphql_parser::query::Field<'_, String>,
+    ) -> serde_json::Value {
+        if let Some(collection) = db.get(collection_name) {
+            let id_key = collection.get_config().id_key;
+            let id_value = field
+                .arguments
+                .iter()
+                .find(|(name, _)| name == &id_key)
+                .and_then(|(_, val)| json_value_to_id(graphql_value_to_json(val)));
+
+            if let Some(id) = id_value {
+                let deleted = collection.delete(&id).unwrap_or(serde_json::Value::Null);
+                expand_row_with_selection(&collection, deleted, &field.selection_set, db)
+            } else {
+                serde_json::Value::Null
             }
+        } else {
+            serde_json::Value::Null
+        }
+    }
+
+    for sel in &mutation.selection_set.items {
+        if let Selection::Field(field) = sel {
+            let field_name = field.name.as_str();
+            let value = if let Some(collection_name) = field_name.strip_prefix("create") {
+                handle_create(db, collection_name, field)
+            } else if let Some(collection_name) = field_name.strip_prefix("update") {
+                handle_update(db, collection_name, field)
+            } else if let Some(collection_name) = field_name.strip_prefix("delete") {
+                handle_delete(db, collection_name, field)
+            } else {
+                serde_json::Value::Null
+            };
+
+            result.insert(field.name.clone(), value);
         }
     }
 }
@@ -750,9 +796,6 @@ pub fn build_graphql_routes(app: &mut App, config: &RouteGraphQL) {
     if let Err(error) = result {
         println!("Error to load GraphQL collections. Details: {}", error);
     }
-
-    // Expose SDL for GraphQL schema
-    create_schema_route(app);
 
     let route = &config.route;
     let is_protected = config.is_protected;
