@@ -14,7 +14,7 @@ use axum::{
     extract::Json,
     routing::{get, post},
 };
-use fosk::{Db, JsonPrimitive};
+use fosk::{Db, IdType, JsonPrimitive};
 use graphql_parser::query::{Definition, Document, OperationDefinition, Selection, parse_query, Value as GqlValue};
 use serde_json;
 
@@ -149,32 +149,80 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
     schema = schema.register(query);
     // Build root Mutation type: CRUD operations per collection
     let mut mutation = Object::new("Mutation");
-    for (_raw, _field, type_name) in &registered {
-        // createX(input: JSON!): X
-        let create_name = format!("create{}", type_name);
-        mutation = mutation.field(
-            Field::new(&create_name, TypeRef::named_nn(type_name), move |_ctx| {
+    for raw in db.list_collections() {
+        if let Some(def) = db.schema_with_refs_of(&raw) {
+            let type_name = pascal_case(&raw);
+            // Get config for id field
+            let coll = db.get(&raw).unwrap();
+            let config = coll.get_config();
+            let id_key = config.id_key.clone();
+            // Determine GraphQL input types per field
+            // Create mutation: createType(field1: Type1, field2: Type2, ...): Type
+            let create_name = format!("create{}", type_name);
+            let mut create_field = Field::new(&create_name, TypeRef::named_nn(&type_name), move |_ctx| {
+                FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
+            });
+            for (f_name, info) in &def.fields {
+                if f_name == &id_key {
+                    // If id_type is None, require client to provide id
+                    if config.id_type == IdType::None {
+                        let id_arg = if let JsonPrimitive::Int = info.ty {
+                            TypeRef::named_nn("Int")
+                        } else {
+                            TypeRef::named_nn("String")
+                        };
+                        create_field = create_field.argument(async_graphql::dynamic::InputValue::new(f_name, id_arg));
+                    }
+                    continue;
+                }
+                let gql_in = match info.ty {
+                    JsonPrimitive::String => TypeRef::named("String"),
+                    JsonPrimitive::Int => TypeRef::named("Int"),
+                    JsonPrimitive::Float => TypeRef::named("Float"),
+                    JsonPrimitive::Bool => TypeRef::named("Boolean"),
+                    _ => TypeRef::named("JSON"),
+                };
+                create_field = create_field.argument(async_graphql::dynamic::InputValue::new(f_name, gql_in));
+            }
+            mutation = mutation.field(create_field);
+            // Update mutation: updateType(id: IDType!, field1: Type1, ...): Type
+            let update_name = format!("update{}", type_name);
+            let mut update_field = Field::new(&update_name, TypeRef::named_nn(&type_name), move |_ctx| {
                 FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
             })
-            .argument(async_graphql::dynamic::InputValue::new("input", TypeRef::named_nn("JSON")))
-        );
-        // updateX(id: String!, input: JSON!): X
-        let update_name = format!("update{}", type_name);
-        mutation = mutation.field(
-            Field::new(&update_name, TypeRef::named_nn(type_name), move |_ctx| {
-                FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Null)) })
-            })
-            .argument(async_graphql::dynamic::InputValue::new("id", TypeRef::named_nn("String")))
-            .argument(async_graphql::dynamic::InputValue::new("input", TypeRef::named_nn("JSON")))
-        );
-        // deleteX(id: String!): Boolean
-        let delete_name = format!("delete{}", type_name);
-        mutation = mutation.field(
-            Field::new(&delete_name, TypeRef::named_nn("Boolean"), move |_ctx| {
+            .argument(async_graphql::dynamic::InputValue::new(&id_key,
+                if let JsonPrimitive::Int = def.fields[&id_key].ty {
+                    TypeRef::named_nn("Int")
+                } else {
+                    TypeRef::named_nn("String")
+                }
+            ));
+            for (f_name, info) in &def.fields {
+                if f_name == &id_key { continue; }
+                let gql_in = match info.ty {
+                    JsonPrimitive::String => TypeRef::named("String"),
+                    JsonPrimitive::Int => TypeRef::named("Int"),
+                    JsonPrimitive::Float => TypeRef::named("Float"),
+                    JsonPrimitive::Bool => TypeRef::named("Boolean"),
+                    _ => TypeRef::named("JSON"),
+                };
+                update_field = update_field.argument(async_graphql::dynamic::InputValue::new(f_name, gql_in));
+            }
+            mutation = mutation.field(update_field);
+            // Delete mutation: deleteType(id: IDType!): Boolean
+            let delete_name = format!("delete{}", type_name);
+            let delete_field = Field::new(&delete_name, TypeRef::named_nn("Boolean"), move |_ctx| {
                 FieldFuture::new(async move { Ok::<_, GQLError>(Some(GValue::Boolean(false))) })
             })
-            .argument(async_graphql::dynamic::InputValue::new("id", TypeRef::named_nn("String")))
-        );
+            .argument(async_graphql::dynamic::InputValue::new(&id_key,
+                if let JsonPrimitive::Int = def.fields[&id_key].ty {
+                    TypeRef::named_nn("Int")
+                } else {
+                    TypeRef::named_nn("String")
+                }
+            ));
+            mutation = mutation.field(delete_field);
+        }
     }
     // Register Mutation root
     schema = schema.register(mutation);
@@ -486,7 +534,11 @@ fn execute_operation(db: &Db, result: &mut serde_json::Map<String, serde_json::V
                     for (arg_name, arg_val) in &f.arguments {
                         let json_val = graphql_value_to_json(arg_val);
                         if arg_name == &id_key {
-                            id_val = json_val.as_str().map(String::from);
+                            id_val = match json_val {
+                                serde_json::Value::Number(number) => Some(number.as_u64().unwrap().to_string()),
+                                serde_json::Value::String(value) => Some(value),
+                                _ => None,
+                            };
                         } else {
                             update_map.insert(arg_name.clone(), json_val);
                         }
