@@ -228,6 +228,10 @@
 * docs: update GraphQL documentation (Luis Vendrame)
 * refactor: graphql build schema and execute operations (Luis Vendrame)
 
+## 0.6.12 (2025-09-22)
+
+* chore: update fosk version (Luis Vendrame)
+
 ## Unreleased
 
 
