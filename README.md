@@ -12,11 +12,19 @@ It works by scanning a directory and mapping its structure directly to API route
 
 ### Installation
 
-```bash
-# Install from crates.io
-cargo install rs-mock-server
+**Option 1: Install from crates.io (recommended)**
 
-# Or build from source
+```bash
+cargo install rs-mock-server
+```
+
+**Option 2: Download pre-built binary**
+
+Visit the [GitHub Releases page](https://github.com/lvendrame/rs-mock-server/releases) and download the appropriate binary for your platform (Linux, macOS, Windows). No Rust installation required.
+
+**Option 3: Build from source**
+
+```bash
 git clone https://github.com/lvendrame/rs-mock-server.git
 cd rs-mock-server && cargo build --release
 ```
