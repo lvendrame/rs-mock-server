@@ -70,7 +70,7 @@ Example `get.toml` with all fields:
 ```toml
 [route]
 delay = 100                  # artificial delay in milliseconds
-remap = "/api/new-path".     # rewrite path. It will rewrite the whole path, so be aware about collision names and use it carefully
+remap = "/api/new-path"      # rewrite path. It will rewrite the whole path, so be aware about collision names and use it carefully
 protect = true               # require authentication for this route
 ```
 

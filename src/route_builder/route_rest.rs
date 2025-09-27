@@ -1,4 +1,4 @@
-use std::{ffi::OsString};
+use std::ffi::OsString;
 
 use fosk::IdType;
 use once_cell::sync::Lazy;
@@ -7,18 +7,16 @@ use regex::Regex;
 use crate::{
     app::App,
     handlers::build_rest_routes,
-    route_builder::{route_params::RouteParams, PrintRoute, Route, RouteGenerator}
+    route_builder::{PrintRoute, Route, RouteGenerator, route_params::RouteParams},
 };
 
-static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^(\$)?rest(\{(.+)\})?$").unwrap()
-});
+static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\$)?rest(\{(.+)\})?$").unwrap());
 
 const ELEMENT_IS_PROTECTED: usize = 1;
 const ELEMENT_DESCRIPTOR: usize = 3;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct  RouteRest {
+pub struct RouteRest {
     pub path: OsString,
     pub route: String,
     pub id_key: String,
@@ -38,11 +36,19 @@ impl RouteRest {
         collection_name: String,
         delay: Option<u16>,
     ) -> Self {
-        Self { route, path, id_key, id_type, is_protected, collection_name, delay }
+        Self {
+            route,
+            path,
+            id_key,
+            id_type,
+            is_protected,
+            collection_name,
+            delay,
+        }
     }
 
     fn get_rest_options(descriptor: &str) -> (&str, IdType) {
-        let parts: Vec<&str> = descriptor.split(':').collect();
+        let parts: Vec<&str> = descriptor.split('-').collect();
 
         if parts.len() == 1 {
             // Single value like "uuid", "int", "id", "_id"
@@ -82,7 +88,7 @@ impl RouteRest {
             let descriptor = if let Some(pattern) = captures.get(ELEMENT_DESCRIPTOR) {
                 pattern.as_str()
             } else {
-                "id:uuid"
+                "id-uuid"
             };
 
             let (id_key, id_type) = Self::get_rest_options(descriptor);
@@ -91,10 +97,9 @@ impl RouteRest {
             let id_type = collection_config.id_type.unwrap_or(id_type);
 
             let route = route_config.remap.unwrap_or(route_params.full_route);
-            let collection_name = collection_config.name.unwrap_or_else(|| {
-                route.split('/').next_back().unwrap().to_string()
-            });
-
+            let collection_name = collection_config
+                .name
+                .unwrap_or_else(|| route.split('/').next_back().unwrap().to_string());
 
             let route_rest = Self {
                 path: route_params.file_path,
@@ -138,16 +143,22 @@ mod tests {
         let file_path = dir.join(filename);
         File::create(&file_path).unwrap();
         let mut entries = dir.read_dir().unwrap();
-        entries.find(|entry| {
-            entry.as_ref().unwrap().file_name() == filename
-        }).unwrap().unwrap()
+        entries
+            .find(|entry| entry.as_ref().unwrap().file_name() == filename)
+            .unwrap()
+            .unwrap()
     }
 
     #[test]
     fn test_try_parse_basic_rest_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest.json");
-        let route_params = RouteParams::new("/api/users", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/users",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -168,7 +179,12 @@ mod tests {
     fn test_try_parse_protected_rest_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "$rest.json");
-        let route_params = RouteParams::new("/api/admin", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/admin",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -187,7 +203,12 @@ mod tests {
     fn test_try_parse_rest_with_none_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{none}.json");
-        let route_params = RouteParams::new("/api/products", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/products",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -206,7 +227,12 @@ mod tests {
     fn test_try_parse_rest_with_uuid_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{uuid}.json");
-        let route_params = RouteParams::new("/api/products", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/products",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -225,7 +251,12 @@ mod tests {
     fn test_try_parse_rest_with_int_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{int}.json");
-        let route_params = RouteParams::new("/api/orders", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/orders",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -244,7 +275,12 @@ mod tests {
     fn test_try_parse_rest_with_custom_id_key() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{_id}.json");
-        let route_params = RouteParams::new("/api/documents", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/documents",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -262,8 +298,13 @@ mod tests {
     #[test]
     fn test_try_parse_rest_with_id_key_and_type() {
         let temp_dir = TempDir::new().unwrap();
-        let entry = create_test_file(temp_dir.path(), "rest{_id:int}.json");
-        let route_params = RouteParams::new("/api/items", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let entry = create_test_file(temp_dir.path(), "rest{_id-int}.json");
+        let route_params = RouteParams::new(
+            "/api/items",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -281,8 +322,13 @@ mod tests {
     #[test]
     fn test_try_parse_rest_with_custom_key_uuid_type() {
         let temp_dir = TempDir::new().unwrap();
-        let entry = create_test_file(temp_dir.path(), "rest{user_id:uuid}.json");
-        let route_params = RouteParams::new("/api/profiles", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let entry = create_test_file(temp_dir.path(), "rest{user_id-uuid}.json");
+        let route_params = RouteParams::new(
+            "/api/profiles",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -300,8 +346,13 @@ mod tests {
     #[test]
     fn test_try_parse_protected_rest_with_descriptor() {
         let temp_dir = TempDir::new().unwrap();
-        let entry = create_test_file(temp_dir.path(), "$rest{id:int}.json");
-        let route_params = RouteParams::new("/api/secure", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let entry = create_test_file(temp_dir.path(), "$rest{id-int}.json");
+        let route_params = RouteParams::new(
+            "/api/secure",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -320,7 +371,12 @@ mod tests {
     fn test_try_parse_inherited_protection() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest.json");
-        let route_params = RouteParams::new("/api/admin", &entry, Config::default().with_protect(true), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/admin",
+            &entry,
+            Config::default().with_protect(true),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -338,8 +394,13 @@ mod tests {
     #[test]
     fn test_try_parse_invalid_type_defaults_to_uuid() {
         let temp_dir = TempDir::new().unwrap();
-        let entry = create_test_file(temp_dir.path(), "rest{id:invalid}.json");
-        let route_params = RouteParams::new("/api/test", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let entry = create_test_file(temp_dir.path(), "rest{id-invalid}.json");
+        let route_params = RouteParams::new(
+            "/api/test",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -357,8 +418,13 @@ mod tests {
     #[test]
     fn test_try_parse_malformed_descriptor_uses_defaults() {
         let temp_dir = TempDir::new().unwrap();
-        let entry = create_test_file(temp_dir.path(), "rest{id:uuid:extra}.json");
-        let route_params = RouteParams::new("/api/malformed", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let entry = create_test_file(temp_dir.path(), "rest{id-uuid-extra}.json");
+        let route_params = RouteParams::new(
+            "/api/malformed",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -377,7 +443,12 @@ mod tests {
     fn test_try_parse_non_rest_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "config.json");
-        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -393,7 +464,12 @@ mod tests {
     fn test_try_parse_partial_rest_match() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "restaurant.json");
-        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -409,16 +485,21 @@ mod tests {
     fn test_try_parse_complex_descriptor_formats() {
         let temp_dir = TempDir::new().unwrap();
         let test_cases = vec![
-            ("rest{company_id:none}.json", "company_id", IdType::None),
-            ("rest{product_id:int}.json", "product_id", IdType::Int),
-            ("rest{order_uuid:uuid}.json", "order_uuid", IdType::Uuid),
-            ("rest{user_pk:int}.json", "user_pk", IdType::Int),
-            ("rest{document_id:uuid}.json", "document_id", IdType::Uuid),
+            ("rest{company_id-none}.json", "company_id", IdType::None),
+            ("rest{product_id-int}.json", "product_id", IdType::Int),
+            ("rest{order_uuid-uuid}.json", "order_uuid", IdType::Uuid),
+            ("rest{user_pk-int}.json", "user_pk", IdType::Int),
+            ("rest{document_id-uuid}.json", "document_id", IdType::Uuid),
         ];
 
         for (filename, expected_key, expected_type) in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/api/complex", &entry, Config::default().with_protect(false), &ConfigStore::default());
+            let route_params = RouteParams::new(
+                "/api/complex",
+                &entry,
+                Config::default().with_protect(false),
+                &ConfigStore::default(),
+            );
             let result = RouteRest::try_parse(route_params);
 
             match result {
@@ -436,8 +517,13 @@ mod tests {
     #[test]
     fn test_try_parse_nested_route_paths() {
         let temp_dir = TempDir::new().unwrap();
-        let entry = create_test_file(temp_dir.path(), "rest{id:int}.json");
-        let route_params = RouteParams::new("/api/v1/users/profile", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let entry = create_test_file(temp_dir.path(), "rest{id-int}.json");
+        let route_params = RouteParams::new(
+            "/api/v1/users/profile",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -456,7 +542,12 @@ mod tests {
     fn test_try_parse_file_path_preservation() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest.json");
-        let route_params = RouteParams::new("/api/data", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/data",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteRest::try_parse(route_params);
 
@@ -475,25 +566,43 @@ mod tests {
         assert_eq!(RouteRest::get_rest_options("uuid"), ("id", IdType::Uuid));
         assert_eq!(RouteRest::get_rest_options("int"), ("id", IdType::Int));
         assert_eq!(RouteRest::get_rest_options("_id"), ("_id", IdType::Uuid));
-        assert_eq!(RouteRest::get_rest_options("user_id"), ("user_id", IdType::Uuid));
+        assert_eq!(
+            RouteRest::get_rest_options("user_id"),
+            ("user_id", IdType::Uuid)
+        );
     }
 
     #[test]
     fn test_get_rest_options_key_type_pairs() {
-        assert_eq!(RouteRest::get_rest_options("id:none"), ("id", IdType::None));
-        assert_eq!(RouteRest::get_rest_options("id:uuid"), ("id", IdType::Uuid));
-        assert_eq!(RouteRest::get_rest_options("id:int"), ("id", IdType::Int));
-        assert_eq!(RouteRest::get_rest_options("_id:none"), ("_id", IdType::None));
-        assert_eq!(RouteRest::get_rest_options("_id:uuid"), ("_id", IdType::Uuid));
-        assert_eq!(RouteRest::get_rest_options("user_id:int"), ("user_id", IdType::Int));
+        assert_eq!(RouteRest::get_rest_options("id-none"), ("id", IdType::None));
+        assert_eq!(RouteRest::get_rest_options("id-uuid"), ("id", IdType::Uuid));
+        assert_eq!(RouteRest::get_rest_options("id-int"), ("id", IdType::Int));
+        assert_eq!(
+            RouteRest::get_rest_options("_id-none"),
+            ("_id", IdType::None)
+        );
+        assert_eq!(
+            RouteRest::get_rest_options("_id-uuid"),
+            ("_id", IdType::Uuid)
+        );
+        assert_eq!(
+            RouteRest::get_rest_options("user_id-int"),
+            ("user_id", IdType::Int)
+        );
     }
 
     #[test]
     fn test_get_rest_options_invalid_formats() {
         // Invalid type should default to UUID
-        assert_eq!(RouteRest::get_rest_options("id:invalid"), ("id", IdType::Uuid));
+        assert_eq!(
+            RouteRest::get_rest_options("id-invalid"),
+            ("id", IdType::Uuid)
+        );
 
         // Too many parts should use defaults
-        assert_eq!(RouteRest::get_rest_options("id:uuid:extra"), ("id", IdType::Uuid));
+        assert_eq!(
+            RouteRest::get_rest_options("id-uuid-extra"),
+            ("id", IdType::Uuid)
+        );
     }
 }

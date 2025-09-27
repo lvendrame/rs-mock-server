@@ -75,7 +75,7 @@ echo '[{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]' > mocks/api/users/
 -   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
 -   🗄️ **SQL Routes**: Use `.sql` files to create GET endpoints that execute SQL queries against the in-memory database and return results as JSON.
--   🗄️ **GraphQL**: Create your GraphQL queries and mutations, also load collections to load data.
+-   ⚛️ **GraphQL**: Create your GraphQL queries and mutations, also load collections to load data.
 
 ---
 

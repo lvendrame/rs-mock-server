@@ -27,12 +27,12 @@ The `{params}` in the filename configures the ID field behavior, and the file ex
 | `rest{int}.jgd`       | `id`   | Integer | Dynamic JGD generation | Integer IDs starting from 1 with generated data                 |
 | `rest{_id}.json`      | `_id`  | UUID    | Static JSON array      | Custom ID field name with UUID and static data                  |
 | `rest{_id}.jgd`       | `_id`  | UUID    | Dynamic JGD generation | Custom ID field name with UUID and generated data               |
-| `rest{_id:none}.json` | `_id`  | None    | Static JSON array      | Custom ID field name with explicit None type and static data    |
-| `rest{_id:none}.jgd`  | `_id`  | None    | Dynamic JGD generation | Custom ID field name with explicit None type and generated data |
-| `rest{_id:uuid}.json` | `_id`  | UUID    | Static JSON array      | Custom ID field name with explicit UUID type and static data    |
-| `rest{_id:uuid}.jgd`  | `_id`  | UUID    | Dynamic JGD generation | Custom ID field name with explicit UUID type and generated data |
-| `rest{_id:int}.json`  | `_id`  | Integer | Static JSON array      | Custom ID field name with integer type and static data          |
-| `rest{_id:int}.jgd`   | `_id`  | Integer | Dynamic JGD generation | Custom ID field name with integer type and generated data       |
+| `rest{_id-none}.json` | `_id`  | None    | Static JSON array      | Custom ID field name with explicit None type and static data    |
+| `rest{_id-none}.jgd`  | `_id`  | None    | Dynamic JGD generation | Custom ID field name with explicit None type and generated data |
+| `rest{_id-uuid}.json` | `_id`  | UUID    | Static JSON array      | Custom ID field name with explicit UUID type and static data    |
+| `rest{_id-uuid}.jgd`  | `_id`  | UUID    | Dynamic JGD generation | Custom ID field name with explicit UUID type and generated data |
+| `rest{_id-int}.json`  | `_id`  | Integer | Static JSON array      | Custom ID field name with integer type and static data          |
+| `rest{_id-int}.jgd`   | `_id`  | Integer | Dynamic JGD generation | Custom ID field name with integer type and generated data       |
 
 ## Generated Endpoints
 
@@ -158,7 +158,7 @@ The JSON file should contain an array of objects, where each object represents a
 ]
 ```
 
-**Example: `rest{_id:int}.json` (integer IDs)**
+**Example: `rest{_id-int}.json` (integer IDs)**
 
 ```json
 [
@@ -179,7 +179,7 @@ The JSON file should contain an array of objects, where each object represents a
 
 When using `rest.jgd` files, the server generates dynamic fake data using JGD (JSON Generation Definition) and uses it as initial data for the REST API.
 
-**Example: `rest{_id:int}.jgd`**
+**Example: `rest{_id-int}.jgd`**
 
 ```jgd
 {

@@ -232,6 +232,10 @@
 
 * chore: update fosk version (Luis Vendrame)
 
+## 0.6.13 (2025-09-27)
+
+* fix: change rest params separator to support windows path (Luis Vendrame)
+
 ## Unreleased
 
 
