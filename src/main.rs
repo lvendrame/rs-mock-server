@@ -1,20 +1,20 @@
 use clap::Parser;
 use notify::{RecursiveMode, Watcher};
-use tokio::sync::Mutex;
-use std::{path::Path, sync::Arc};
 use std::time::{Duration, Instant};
+use std::{path::Path, sync::Arc};
+use tokio::sync::Mutex;
 use tokio::{signal, sync::mpsc};
 use tokio_util::sync::CancellationToken;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::app::App;
 use crate::route_builder::config::{Config, ServerConfig};
 
-pub mod route_builder;
-pub mod handlers;
 pub mod app;
+pub mod handlers;
 pub mod link;
 pub mod pages;
+pub mod route_builder;
 pub mod upload_configuration;
 
 const DEFAULT_PORT: u16 = 4520;
@@ -74,15 +74,25 @@ async fn run_app_session(config: Config) -> SessionResult {
         }
     });
 
-    tracing::info!("RS-MOCK-SERVER started. Watching for file changes in '{}'...", app_arc.lock().await.get_folder());
+    tracing::info!(
+        "RS-MOCK-SERVER started. Watching for file changes in '{}'...",
+        app_arc.lock().await.get_folder()
+    );
 
     let (tx, mut rx) = mpsc::channel(1);
     let last_send_time = Arc::new(Mutex::new(Instant::now() - Duration::from_millis(1000)));
     let debounce_duration = Duration::from_millis(300);
 
-    let mut watcher = notify::recommended_watcher(
-        move |res: Result<notify::Event, notify::Error>| {
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
             if let Ok(event) = res {
+                match event.kind {
+                    notify::EventKind::Create(_) => println!("Event: Create"),
+                    notify::EventKind::Modify(_) => println!("Event: Modify"),
+                    notify::EventKind::Remove(_) => println!("Event: Remove"),
+                    _ => return,
+                }
+
                 for path in &event.paths {
                     if is_upload_folder(path.to_str().unwrap()) {
                         // For upload folders, only allow modify events for folders, skip all file events
@@ -91,7 +101,15 @@ async fn run_app_session(config: Config) -> SessionResult {
                         }
                     }
                 }
-                println!("event {:?}", event.paths.iter().map(|f|f.to_str().unwrap_or("")).collect::<Vec<&str>>().join("|"));
+                println!(
+                    "event {:?}",
+                    event
+                        .paths
+                        .iter()
+                        .map(|f| f.to_str().unwrap_or(""))
+                        .collect::<Vec<&str>>()
+                        .join("|")
+                );
 
                 // Simple debouncing - only send if enough time has passed since last send
                 let now = std::time::Instant::now();
@@ -102,10 +120,15 @@ async fn run_app_session(config: Config) -> SessionResult {
                     let _ = tx.blocking_send(());
                 }
             }
-        }
-    ).unwrap();
+        })
+        .unwrap();
 
-    watcher.watch(Path::new(&app_arc.lock().await.get_folder()), RecursiveMode::Recursive).unwrap();
+    watcher
+        .watch(
+            Path::new(&app_arc.lock().await.get_folder()),
+            RecursiveMode::Recursive,
+        )
+        .unwrap();
 
     let result = tokio::select! {
         _ = main_logic => {
@@ -144,7 +167,7 @@ async fn main() {
             Err(err) => {
                 println!("Error: {}", err);
                 return;
-            },
+            }
         }
     } else {
         Config {
