@@ -318,7 +318,7 @@ fn response_from_json(data_json: serde_json::Value) -> Json<GQLResponse> {
 }
 
 /// Parse the raw GraphQL request into an AST document
-fn parse_request_ast(req: &GQLRequest) -> Result<Document<String>, GQLError> {
+fn parse_request_ast(req: &GQLRequest) -> Result<Document<'_, String>, GQLError> {
     parse_query::<String>(&req.query)
         .map_err(|e| GQLError::new(format!("GraphQL syntax error: {}", e)))
 }
