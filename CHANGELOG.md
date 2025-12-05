@@ -243,3 +243,7 @@
 ## 0.6.15 (2025-12-04)
 
 -   chore: remove warnings, update dependencies (Luis Vendrame)
+
+## 0.6.16 (2025-12-05)
+
+-   fix: bug to load app without collections when building references (Luis Vendrame)

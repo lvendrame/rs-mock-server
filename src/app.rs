@@ -1,22 +1,37 @@
-use std::{cell::RefCell, ffi::OsString, io::Write, sync::{Arc, Mutex, RwLock}};
+use std::{
+    cell::RefCell,
+    ffi::OsString,
+    io::Write,
+    sync::{Arc, Mutex, RwLock},
+};
 
 use axum::{
-    middleware, response::IntoResponse, routing::{get, MethodRouter, Route}, Router
+    Router, middleware,
+    response::IntoResponse,
+    routing::{MethodRouter, Route, get},
 };
 use fosk::Db;
-use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode};
+use http::{HeaderMap, HeaderValue, StatusCode, header::CONTENT_TYPE};
 use terminal_link::Link;
 use tokio::net::TcpListener;
-use tower::{layer::util::{Identity, Stack}, Layer, ServiceBuilder};
-use tower_http::{cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer};
+use tower::{
+    Layer, ServiceBuilder,
+    layer::util::{Identity, Stack},
+};
+use tower_http::{
+    cors::CorsLayer, normalize_path::NormalizePathLayer, services::ServeDir, trace::TraceLayer,
+};
 
 use crate::{
+    DEFAULT_FOLDER, DEFAULT_PORT,
     handlers::{create_collections_routes, make_auth_middleware},
     pages::Pages,
-    route_builder::{config::{Config, ServerConfig},
-    route_manager::RouteManager, RouteGenerator, RouteRegistrator},
+    route_builder::{
+        RouteGenerator, RouteRegistrator,
+        config::{Config, ServerConfig},
+        route_manager::RouteManager,
+    },
     upload_configuration::UploadConfiguration,
-    DEFAULT_FOLDER, DEFAULT_PORT
 };
 
 #[derive(Default)]
@@ -55,22 +70,34 @@ impl Default for App {
             }),
             ..Default::default()
         };
-        App { router, pages, uploads_configurations, db, server_config }
+        App {
+            router,
+            pages,
+            uploads_configurations,
+            db,
+            server_config,
+        }
     }
 }
 
 impl App {
-
     pub fn new(server_config: Config) -> Self {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
         let uploads_configurations = vec![];
         let db = Db::new_arc();
-        App { router, pages, uploads_configurations, db, server_config }
+        App {
+            router,
+            pages,
+            uploads_configurations,
+            db,
+            server_config,
+        }
     }
 
     pub fn get_folder(&self) -> String {
-        self.server_config.server
+        self.server_config
+            .server
             .as_ref()
             .unwrap_or(&ServerConfig::default())
             .folder
@@ -79,7 +106,8 @@ impl App {
     }
 
     pub fn get_port(&self) -> u16 {
-        self.server_config.server
+        self.server_config
+            .server
             .as_ref()
             .unwrap_or(&ServerConfig::default())
             .port
@@ -87,9 +115,8 @@ impl App {
     }
 
     pub fn push_uploads_config(&mut self, uploads_path: String, clean_uploads: bool) {
-        self.uploads_configurations.push(
-            UploadConfiguration::new(uploads_path, clean_uploads)
-        );
+        self.uploads_configurations
+            .push(UploadConfiguration::new(uploads_path, clean_uploads));
     }
 
     fn get_router(&self) -> Router {
@@ -101,50 +128,72 @@ impl App {
         let _old_route = self.router.replace(new_router);
     }
 
-    pub fn route(&mut self, path: &str, router: MethodRouter<()>, method: Option<&str>, options: Option<&[String]>) {
+    pub fn route(
+        &mut self,
+        path: &str,
+        router: MethodRouter<()>,
+        method: Option<&str>,
+        options: Option<&[String]>,
+    ) {
         let new_router = self.get_router().route(path, router);
 
         self.replace_router(new_router);
 
         if let Some(method) = method {
-            self.pages.lock().unwrap().push_link(method.to_string(), path.to_string(), options.unwrap_or(&Vec::<String>::new()));
+            self.pages.lock().unwrap().push_link(
+                method.to_string(),
+                path.to_string(),
+                options.unwrap_or(&Vec::<String>::new()),
+            );
         }
     }
 
-    pub fn try_add_auth_middleware_layer(&mut self, router: MethodRouter, is_protected: bool) -> MethodRouter {
+    pub fn try_add_auth_middleware_layer(
+        &mut self,
+        router: MethodRouter,
+        is_protected: bool,
+    ) -> MethodRouter {
         if !is_protected {
             return router;
         }
 
         let shared_info = GLOBAL_SHARED_INFO.read().unwrap();
         if let Some(token_collection) = &self.db.get(&shared_info.token_collection) {
-            return router.layer(
-                middleware::from_fn(make_auth_middleware(token_collection, &shared_info.jwt_secret, &shared_info.auth_cookie_name))
-            )
+            return router.layer(middleware::from_fn(make_auth_middleware(
+                token_collection,
+                &shared_info.jwt_secret,
+                &shared_info.auth_cookie_name,
+            )));
         }
         router
     }
 
     fn build_dyn_routes(&mut self) {
         let dir = self.get_folder();
-        RouteManager::from_dir(&dir, Some(self.server_config.clone()))
-            .make_routes(self);
+        RouteManager::from_dir(&dir, Some(self.server_config.clone())).make_routes(self);
     }
 
     fn build_home_route(&mut self) {
         let pages = Arc::clone(&self.pages);
 
-        self
-            .route("/", get(|| async move {
+        self.route(
+            "/",
+            get(|| async move {
                 let body = pages.lock().unwrap().render_index();
                 let mut headers = HeaderMap::new();
                 headers.insert(CONTENT_TYPE, HeaderValue::from_str("text/html").unwrap());
-                headers.insert("Cache-Control", HeaderValue::from_str("no-cache, no-store, must-revalidate").unwrap());
+                headers.insert(
+                    "Cache-Control",
+                    HeaderValue::from_str("no-cache, no-store, must-revalidate").unwrap(),
+                );
                 headers.insert("Pragma", HeaderValue::from_str("no-cache").unwrap());
                 headers.insert("Expires", HeaderValue::from_str("0").unwrap());
 
                 (headers, body).into_response()
-            }), None, None);
+            }),
+            None,
+            None,
+        );
     }
 
     fn build_cors_layer<L>(
@@ -159,26 +208,22 @@ impl App {
         let enable = server_config.enable_cors.unwrap_or(true);
         let allowed_origin = server_config.allowed_origin;
 
-        service_builder.option_layer(
-            enable.then(|| {
-                if let Some(allowed_origin) = allowed_origin {
-                    CorsLayer::very_permissive()
-                        .allow_origin(allowed_origin.parse::<HeaderValue>().unwrap())
-                } else {
-                    CorsLayer::very_permissive()
-                }
-            })
-        )
+        service_builder.option_layer(enable.then(|| {
+            if let Some(allowed_origin) = allowed_origin {
+                CorsLayer::very_permissive()
+                    .allow_origin(allowed_origin.parse::<HeaderValue>().unwrap())
+            } else {
+                CorsLayer::very_permissive()
+            }
+        }))
     }
 
     fn build_middlewares(&mut self) {
-        let service_builder = ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http());
+        let service_builder = ServiceBuilder::new().layer(TraceLayer::new_for_http());
 
         let service_builder = self.build_cors_layer(service_builder);
 
-        let service_builder = service_builder
-            .layer(NormalizePathLayer::trim_trailing_slash());
+        let service_builder = service_builder.layer(NormalizePathLayer::trim_trailing_slash());
 
         let new_router = self.get_router().layer(service_builder);
 
@@ -195,26 +240,23 @@ impl App {
     }
 
     pub fn build_public_router(&mut self, file_name: String, path: String) {
-        let  public_end_point = if let Some((_, to)) = file_name.split_once('-') {
+        let public_end_point = if let Some((_, to)) = file_name.split_once('-') {
             to
         } else {
             "public"
         };
 
         let static_files = ServeDir::new(path);
-        let new_router = self.router.take().nest_service(
-            &format!("/{}", public_end_point),
-            static_files
-        );
+        let new_router = self
+            .router
+            .take()
+            .nest_service(&format!("/{}", public_end_point), static_files);
         self.replace_router(new_router);
     }
 
     pub fn build_public_router_v2(&mut self, path: &OsString, route: &str) {
         let static_files = ServeDir::new(path);
-        let new_router = self.router.take().nest_service(
-            route,
-            static_files
-        );
+        let new_router = self.router.take().nest_service(route, static_files);
         self.replace_router(new_router);
     }
 
@@ -225,10 +267,12 @@ impl App {
     pub fn build_collections_references(&mut self) {
         let collections = self.db.list_collections();
 
-        for i in 0..collections.len() - 1 {
-            for j in i+1..collections.len() {
-                self.db.infer_reference(&collections[i], &collections[j]);
-                self.db.infer_reference(&collections[j], &collections[i]);
+        if collections.len() > 1 {
+            for i in 0..collections.len() - 1 {
+                for j in i + 1..collections.len() {
+                    self.db.infer_reference(&collections[i], &collections[j]);
+                    self.db.infer_reference(&collections[j], &collections[i]);
+                }
             }
         }
     }
@@ -296,7 +340,14 @@ impl App {
 }
 
 impl RouteRegistrator for App {
-    fn push_route(&mut self, path: &str, router: MethodRouter, method: Option<&str>, is_protected: bool, options: Option<&[String]>) {
+    fn push_route(
+        &mut self,
+        path: &str,
+        router: MethodRouter,
+        method: Option<&str>,
+        is_protected: bool,
+        options: Option<&[String]>,
+    ) {
         let router = self.try_add_auth_middleware_layer(router, is_protected);
 
         self.route(path, router, method, options);
