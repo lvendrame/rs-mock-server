@@ -1,6 +1,6 @@
 # Makefile for rs-mock-server
 
-.PHONY: help test test-watch build run clean clippy fmt fmt-check setup-hooks install-hooks
+.PHONY: help test test-watch build run clean clippy fmt fmt-check coverage setup-hooks install-hooks
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  clippy       - Run Clippy linter"
 	@echo "  fmt          - Format code"
 	@echo "  fmt-check    - Check code formatting"
+	@echo "  coverage     - Run tests with function coverage threshold"
 	@echo "  setup-hooks  - Install Git pre-commit hooks"
 	@echo "  check-all    - Run all checks (tests, clippy, formatting)"
 
@@ -56,6 +57,10 @@ fmt:
 fmt-check:
 	@echo "📝 Checking code formatting..."
 	cargo fmt --all -- --check
+
+coverage:
+	@echo "📊 Running coverage..."
+	cargo llvm-cov --workspace --summary-only --ignore-filename-regex 'src/(main|handlers/graphql_handlers)\.rs' --fail-under-functions 95
 
 # Git hooks setup
 setup-hooks:

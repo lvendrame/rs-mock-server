@@ -3,26 +3,27 @@ use std::{ffi::OsString, fs, sync::Arc};
 use axum::{
     body::Body,
     extract::{FromRequestParts, Path as AxumPath, Request},
-    http::StatusCode, response::IntoResponse,
-    routing::{delete, get, options, patch, post, put, MethodRouter}
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{MethodRouter, delete, get, options, patch, post, put},
 };
-use http::{header::CONTENT_TYPE, HeaderMap, HeaderValue};
+use http::{HeaderMap, HeaderValue, header::CONTENT_TYPE};
 use jgd_rs::generate_jgd_from_file;
 use mime_guess::from_path;
 use serde_json::json;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
-use crate::{app::App, handlers::{is_jgd, is_sql, is_text_file}};
+use crate::{
+    app::App,
+    handlers::{is_jgd, is_sql, is_text_file},
+};
 
 fn get_file_content(file_path: &OsString) -> String {
     fs::read_to_string(file_path).unwrap()
 }
 
-pub fn build_stream_handler(
-    file_path: OsString,
-    method: &str
-) -> MethodRouter {
+pub fn build_stream_handler(file_path: OsString, method: &str) -> MethodRouter {
     let handler = move || {
         let file_path = file_path.clone();
         async move {
@@ -33,15 +34,14 @@ pub fn build_stream_handler(
                 return (
                     StatusCode::NOT_FOUND,
                     format!("File not found: {}", file_path.display()),
-                ).into_response();
+                )
+                    .into_response();
             }
 
             let file = file.unwrap();
 
             // Guess MIME type
-            let mime_type = from_path(&file_path)
-                .first_or_octet_stream()
-                .to_string();
+            let mime_type = from_path(&file_path).first_or_octet_stream().to_string();
 
             // Stream the file
             let stream = ReaderStream::new(file);
@@ -80,15 +80,17 @@ pub fn content_handler(app: &mut App, file_path: OsString, method: &str) -> Meth
             } else if is_sql(&file_path) {
                 let sql = fs::read_to_string(file_path).unwrap();
                 let (mut req_parts, _req_body) = req.into_parts();
-                let response = match AxumPath::<String>::from_request_parts(&mut req_parts, &()).await {
-                    Ok(AxumPath(id)) => db.query_with_args(&sql, json!(id)),
-                    Err(_) => db.query(&sql),
-                };
+                let response =
+                    match AxumPath::<String>::from_request_parts(&mut req_parts, &()).await {
+                        Ok(AxumPath(id)) => db.query_with_args(&sql, json!(id)),
+                        Err(_) => db.query(&sql),
+                    };
                 match response {
-                    Ok(response) => serde_json::to_string_pretty(&response).unwrap().into_response(),
+                    Ok(response) => serde_json::to_string_pretty(&response)
+                        .unwrap()
+                        .into_response(),
                     Err(_) => StatusCode::BAD_REQUEST.into_response(),
                 }
-
             } else {
                 get_file_content(&file_path).into_response()
             }
@@ -114,5 +116,150 @@ pub fn build_method_router(app: &mut App, file_path: &OsString, method: &str) ->
         content_handler(app, file_path, method)
     } else {
         build_stream_handler(file_path, method)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::{Body, to_bytes},
+        http::Request,
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn content_handler_serves_text_files() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("hello.txt");
+        std::fs::write(&file_path, "hello").unwrap();
+
+        let mut app = App::default();
+        let router = build_method_router(&mut app, &file_path.into_os_string(), "GET");
+        app.route("/hello", router, Some("GET"), None);
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .uri("/hello")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+            "hello"
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_handler_serves_binary_and_sets_content_type() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("image.png");
+        std::fs::write(&file_path, [0_u8, 1, 2, 3]).unwrap();
+
+        let mut app = App::default();
+        let router = build_method_router(&mut app, &file_path.into_os_string(), "GET");
+        app.route("/image", router, Some("GET"), None);
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .uri("/image")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get(CONTENT_TYPE).unwrap(), "image/png");
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .as_ref(),
+            [0, 1, 2, 3]
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_handler_reports_missing_file() {
+        let mut app = App::default();
+        app.route(
+            "/missing",
+            build_stream_handler(OsString::from("missing.bin"), "GET"),
+            Some("GET"),
+            None,
+        );
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .uri("/missing")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn unknown_method_uses_get_fallback_router() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("hello.txt");
+        std::fs::write(&file_path, "hello").unwrap();
+
+        let mut app = App::default();
+        let router = build_method_router(&mut app, &file_path.into_os_string(), "TRACE");
+        app.route("/unknown", router, Some("GET"), None);
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .uri("/unknown")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+            "Unknown method in filename"
+        );
+    }
+
+    #[tokio::test]
+    async fn unknown_stream_method_uses_get_fallback_router() {
+        let mut app = App::default();
+        app.route(
+            "/stream-unknown",
+            build_stream_handler(OsString::from("missing.bin"), "TRACE"),
+            Some("GET"),
+            None,
+        );
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .uri("/stream-unknown")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+            "Unknown method in filename"
+        );
     }
 }

@@ -2,9 +2,13 @@ use std::cmp::Ordering;
 
 use fosk::IdType;
 
-use crate::{app::App, route_builder::{
-    route_graphql::RouteGraphQL, PrintRoute, RouteAuth, RouteBasic, RouteGenerator, RouteParams, RoutePublic, RouteRest, RouteUpload
-}};
+use crate::{
+    app::App,
+    route_builder::{
+        PrintRoute, RouteAuth, RouteBasic, RouteGenerator, RouteParams, RoutePublic, RouteRest,
+        RouteUpload, route_graphql::RouteGraphQL,
+    },
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CollectionConfig {
@@ -76,9 +80,7 @@ impl Route {
         Route::None
     }
 
-
-
-    pub fn make_routes_and_print(&self, app: &mut App){
+    pub fn make_routes_and_print(&self, app: &mut App) {
         if self.is_some() {
             self.make_routes(app);
             self.println();
@@ -116,7 +118,6 @@ impl PrintRoute for Route {
 
 impl PartialOrd for Route {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-
         // First compare by enum discriminant order
         let self_order = match self {
             Route::None => 0,
@@ -142,27 +143,17 @@ impl PartialOrd for Route {
                 // Same enum variant, compare by path then method
                 match (self, other) {
                     (Route::None, Route::None) => Some(Ordering::Equal),
-                    (Route::Auth(a), Route::Auth(b)) => {
-                        a.path.partial_cmp(&b.path)
+                    (Route::Auth(a), Route::Auth(b)) => a.path.partial_cmp(&b.path),
+                    (Route::Basic(a), Route::Basic(b)) => match a.path.cmp(&b.path) {
+                        Ordering::Equal => a.method.to_string().partial_cmp(&b.method.to_string()),
+                        other => Some(other),
                     },
-                    (Route::Basic(a), Route::Basic(b)) => {
-                        match a.path.cmp(&b.path) {
-                            Ordering::Equal => a.method.to_string().partial_cmp(&b.method.to_string()),
-                            other => Some(other),
-                        }
-                    },
-                    (Route::Rest(a), Route::Rest(b)) => {
-                        a.path.partial_cmp(&b.path)
-                    },
-                    (Route::Public(a), Route::Public(b)) => {
-                        a.path.partial_cmp(&b.path)
-                    },
-                    (Route::Upload(a), Route::Upload(b)) => {
-                        a.path.partial_cmp(&b.path)
-                    },
+                    (Route::Rest(a), Route::Rest(b)) => a.path.partial_cmp(&b.path),
+                    (Route::Public(a), Route::Public(b)) => a.path.partial_cmp(&b.path),
+                    (Route::Upload(a), Route::Upload(b)) => a.path.partial_cmp(&b.path),
                     _ => unreachable!(),
                 }
-            },
+            }
             other => Some(other),
         }
     }
@@ -173,9 +164,9 @@ mod tests {
     use crate::route_builder::config::{Config, ConfigStore};
 
     use super::*;
-    use tempfile::TempDir;
     use std::fs::{self, DirEntry};
     use std::path::Path;
+    use tempfile::TempDir;
 
     fn create_test_route_params(file_name: &str, is_dir: bool, is_protected: bool) -> RouteParams {
         let temp_dir = TempDir::new().unwrap();
@@ -191,7 +182,12 @@ mod tests {
             get_dir_entry(&file_path)
         };
 
-        RouteParams::new("/test", &entry, Config::default().with_protect(is_protected), &ConfigStore::default())
+        RouteParams::new(
+            "/test",
+            &entry,
+            Config::default().with_protect(is_protected),
+            &ConfigStore::default(),
+        )
     }
 
     fn get_dir_entry(path: &Path) -> DirEntry {
@@ -199,9 +195,7 @@ mod tests {
             .unwrap()
             .read_dir()
             .unwrap()
-            .find(|entry| {
-                entry.as_ref().unwrap().path() == path
-            })
+            .find(|entry| entry.as_ref().unwrap().path() == path)
             .unwrap()
             .unwrap()
     }
@@ -399,12 +393,18 @@ mod tests {
         /* This test had an error because get{auth} is a basic Route only rest.json is for rest, so i fixed it */
         let route_params = create_test_route_params("rest.json", false, false);
         let route = Route::try_parse(&route_params);
-        assert!(matches!(route, Route::Rest(_)), "REST should have priority over Auth");
+        assert!(
+            matches!(route, Route::Rest(_)),
+            "REST should have priority over Auth"
+        );
 
         // Test that Auth parsing has priority over Basic
         let route_params = create_test_route_params("{auth}.json", false, false);
         let route = Route::try_parse(&route_params);
-        assert!(matches!(route, Route::Auth(_)), "Auth should have priority over Basic");
+        assert!(
+            matches!(route, Route::Auth(_)),
+            "Auth should have priority over Basic"
+        );
     }
 
     #[test]
@@ -461,7 +461,11 @@ mod tests {
             let filename = format!("test.{}", ext);
             let route_params = create_test_route_params(&filename, false, false);
             let route = Route::try_parse(&route_params);
-            assert!(matches!(route, Route::Basic(_)), "File {} should create Basic route", filename);
+            assert!(
+                matches!(route, Route::Basic(_)),
+                "File {} should create Basic route",
+                filename
+            );
         }
     }
 
@@ -517,7 +521,10 @@ mod tests {
         // Auth should be case sensitive
         let route_params = create_test_route_params("{AUTH}.json", false, false);
         let route = Route::try_parse(&route_params);
-        assert!(matches!(route, Route::Basic(_)), "Auth pattern should be case sensitive");
+        assert!(
+            matches!(route, Route::Basic(_)),
+            "Auth pattern should be case sensitive"
+        );
     }
 
     #[test]
@@ -532,4 +539,3 @@ mod tests {
         assert!(some_route.is_some());
     }
 }
-

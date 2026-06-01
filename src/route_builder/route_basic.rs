@@ -4,15 +4,18 @@ use http::Method;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{handlers::build_method_router, route_builder::{method_from_str, route_params::RouteParams, PrintRoute, Route, RouteGenerator, RouteRegistrator}};
+use crate::{
+    handlers::build_method_router,
+    route_builder::{
+        PrintRoute, Route, RouteGenerator, RouteRegistrator, method_from_str,
+        route_params::RouteParams,
+    },
+};
 
-static RE_FILE_METHODS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^(\$)?(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap()
-});
+static RE_FILE_METHODS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^(\$)?(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap());
 
-static RE_FILE_PARAM: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^(\$)?(.+?)(\{(.+)\})$").unwrap()
-});
+static RE_FILE_PARAM: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\$)?(.+?)(\{(.+)\})$").unwrap());
 
 const ELEMENT_IS_PROTECTED: usize = 1;
 const ELEMENT_METHOD: usize = 2;
@@ -27,7 +30,7 @@ pub enum SubRoute {
     None,
     Id,
     Range(u32, u32),
-    Static(String)
+    Static(String),
 }
 
 impl SubRoute {
@@ -41,12 +44,11 @@ impl SubRoute {
             return Self::Id;
         }
 
-        if pattern.contains('-') {
-            if let Some((start_str, end_str)) = pattern.split_once('-') {
-                if let (Ok(start), Ok(end)) = (start_str.parse::<u32>(), end_str.parse::<u32>()) {
-                    return Self::Range(start, end);
-                }
-            }
+        if pattern.contains('-')
+            && let Some((start_str, end_str)) = pattern.split_once('-')
+            && let (Ok(start), Ok(end)) = (start_str.parse::<u32>(), end_str.parse::<u32>())
+        {
+            return Self::Range(start, end);
         }
 
         Self::Static(pattern.to_string())
@@ -78,7 +80,12 @@ impl RouteBasic {
         let config = route_params.config.clone();
         let route_config = config.route.clone().unwrap_or_default();
 
-        let is_protected = route_params.config.route.unwrap_or_default().protect.unwrap_or(false);
+        let is_protected = route_params
+            .config
+            .route
+            .unwrap_or_default()
+            .protect
+            .unwrap_or(false);
         if let Some(captures) = RE_FILE_METHODS.captures(&route_params.file_stem) {
             let is_protected = is_protected || captures.get(ELEMENT_IS_PROTECTED).is_some();
             let method = captures.get(ELEMENT_METHOD).unwrap().as_str();
@@ -87,8 +94,7 @@ impl RouteBasic {
             let route_basic = Self {
                 path: route_params.file_path,
                 method: method_from_str(method),
-                route: route_config.remap
-                    .unwrap_or(route_params.full_route),
+                route: route_config.remap.unwrap_or(route_params.full_route),
                 sub_route: SubRoute::from(pattern),
                 is_protected,
             };
@@ -104,7 +110,8 @@ impl RouteBasic {
             let route_basic = Self {
                 path: route_params.file_path,
                 method: Method::GET,
-                route: route_config.remap
+                route: route_config
+                    .remap
                     .unwrap_or(format!("{}/{}", route_params.full_route, route)),
                 sub_route: SubRoute::from(param),
                 is_protected,
@@ -116,8 +123,10 @@ impl RouteBasic {
         let route_basic = Self {
             path: route_params.file_path,
             method: Method::GET,
-            route: route_config.remap
-                .unwrap_or(format!("{}/{}", route_params.full_route, route_params.file_stem)),
+            route: route_config.remap.unwrap_or(format!(
+                "{}/{}",
+                route_params.full_route, route_params.file_stem
+            )),
             sub_route: SubRoute::None,
             is_protected,
         };
@@ -134,26 +143,25 @@ impl RouteGenerator for RouteBasic {
             SubRoute::None => {
                 let router = build_method_router(app, &self.path, method);
                 app.push_route(&self.route, router, Some(method), self.is_protected, None);
-            },
+            }
             SubRoute::Id => {
                 let route_path = format!("{}/{}", self.route, "{id}");
                 let router = build_method_router(app, &self.path, method);
                 app.push_route(&route_path, router, Some(method), self.is_protected, None);
-            },
+            }
             SubRoute::Range(start, end) => {
                 for i in *start..=*end {
                     let route_path = format!("{}/{}", self.route, i);
                     let router = build_method_router(app, &self.path, method);
                     app.push_route(&route_path, router, Some(method), self.is_protected, None);
                 }
-            },
+            }
             SubRoute::Static(end_point) => {
                 let route_path = format!("{}/{}", self.route, end_point);
                 let router = build_method_router(app, &self.path, method);
                 app.push_route(&route_path, router, Some(method), self.is_protected, None);
-            },
+            }
         }
-
     }
 }
 
@@ -181,16 +189,22 @@ mod tests {
         let file_path = dir.join(filename);
         File::create(&file_path).unwrap();
         let mut entries = dir.read_dir().unwrap();
-        entries.find(|entry| {
-            entry.as_ref().unwrap().file_name() == filename
-        }).unwrap().unwrap()
+        entries
+            .find(|entry| entry.as_ref().unwrap().file_name() == filename)
+            .unwrap()
+            .unwrap()
     }
 
     #[test]
     fn test_try_parse_get_method() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get.json");
-        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -209,7 +223,12 @@ mod tests {
     fn test_try_parse_post_method() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "post.json");
-        let route_params = RouteParams::new("/api/users", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/users",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -228,7 +247,12 @@ mod tests {
     fn test_try_parse_protected_method() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "$put.json");
-        let route_params = RouteParams::new("/api/data", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/data",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -247,7 +271,12 @@ mod tests {
     fn test_try_parse_method_with_id_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get{id}.json");
-        let route_params = RouteParams::new("/api/items", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/items",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -266,7 +295,12 @@ mod tests {
     fn test_try_parse_method_with_range_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "delete{1-5}.json");
-        let route_params = RouteParams::new("/api/resources", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/resources",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -285,7 +319,12 @@ mod tests {
     fn test_try_parse_method_with_static_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "patch{admin}.json");
-        let route_params = RouteParams::new("/api/config", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/config",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -304,7 +343,12 @@ mod tests {
     fn test_try_parse_protected_with_descriptor() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "$options{special}.json");
-        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/auth",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -312,7 +356,10 @@ mod tests {
             Route::Basic(route_basic) => {
                 assert_eq!(route_basic.method, Method::OPTIONS);
                 assert_eq!(route_basic.route, "/api/auth");
-                assert_eq!(route_basic.sub_route, SubRoute::Static("special".to_string()));
+                assert_eq!(
+                    route_basic.sub_route,
+                    SubRoute::Static("special".to_string())
+                );
                 assert!(route_basic.is_protected);
             }
             _ => panic!("Expected Route::Basic"),
@@ -323,7 +370,12 @@ mod tests {
     fn test_try_parse_inherited_protection() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get.json");
-        let route_params = RouteParams::new("/api/secure", &entry, Config::default().with_protect(true), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/secure",
+            &entry,
+            Config::default().with_protect(true),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -352,12 +404,21 @@ mod tests {
 
         for (filename, expected_method) in methods {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/api/test", &entry, Config::default().with_protect(false), &ConfigStore::default());
+            let route_params = RouteParams::new(
+                "/api/test",
+                &entry,
+                Config::default().with_protect(false),
+                &ConfigStore::default(),
+            );
             let result = RouteBasic::try_parse(route_params);
 
             match result {
                 Route::Basic(route_basic) => {
-                    assert_eq!(route_basic.method, expected_method, "Failed for {}", filename);
+                    assert_eq!(
+                        route_basic.method, expected_method,
+                        "Failed for {}",
+                        filename
+                    );
                 }
                 _ => panic!("Expected Route::Basic for {}", filename),
             }
@@ -368,7 +429,12 @@ mod tests {
     fn test_try_parse_non_method_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "config.json");
-        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -388,7 +454,12 @@ mod tests {
     fn test_try_parse_complex_range() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get{10-20}.json");
-        let route_params = RouteParams::new("/api/pages", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/pages",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -407,7 +478,12 @@ mod tests {
     fn test_try_parse_file_path_preservation() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get.json");
-        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -426,7 +502,12 @@ mod tests {
     fn test_try_parse_static_route_simple() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "users.json");
-        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -445,7 +526,12 @@ mod tests {
     fn test_try_parse_static_route_with_protection() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "admin.json");
-        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(true), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(true),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -473,7 +559,12 @@ mod tests {
 
         for (filename, expected_stem) in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/files", &entry, Config::default().with_protect(false), &ConfigStore::default());
+            let route_params = RouteParams::new(
+                "/files",
+                &entry,
+                Config::default().with_protect(false),
+                &ConfigStore::default(),
+            );
             let result = RouteBasic::try_parse(route_params);
 
             match result {
@@ -500,7 +591,12 @@ mod tests {
 
         for (filename, expected_stem) in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/resources", &entry, Config::default().with_protect(false), &ConfigStore::default());
+            let route_params = RouteParams::new(
+                "/resources",
+                &entry,
+                Config::default().with_protect(false),
+                &ConfigStore::default(),
+            );
             let result = RouteBasic::try_parse(route_params);
 
             match result {
@@ -519,7 +615,12 @@ mod tests {
     fn test_try_parse_static_route_nested_paths() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "statistics.json");
-        let route_params = RouteParams::new("/api/v1/reports", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/v1/reports",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -538,7 +639,12 @@ mod tests {
     fn test_try_parse_static_route_with_empty_parent() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "index.html");
-        let route_params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -557,7 +663,12 @@ mod tests {
     fn test_try_parse_static_route_no_extension() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "readme");
-        let route_params = RouteParams::new("/docs", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/docs",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 
@@ -578,7 +689,12 @@ mod tests {
 
         // Method files should still work as before
         let method_entry = create_test_file(temp_dir.path(), "get.json");
-        let method_params = RouteParams::new("/api", &method_entry, Config::default().with_protect(false), &ConfigStore::default());
+        let method_params = RouteParams::new(
+            "/api",
+            &method_entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
         let method_result = RouteBasic::try_parse(method_params);
 
         match method_result {
@@ -592,7 +708,12 @@ mod tests {
 
         // Non-method files should create static routes
         let static_entry = create_test_file(temp_dir.path(), "getconfig.json");
-        let static_params = RouteParams::new("/api", &static_entry, Config::default().with_protect(false), &ConfigStore::default());
+        let static_params = RouteParams::new(
+            "/api",
+            &static_entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
         let static_result = RouteBasic::try_parse(static_params);
 
         match static_result {
@@ -609,7 +730,12 @@ mod tests {
     fn test_try_parse_static_route_file_path_preservation() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "metadata.json");
-        let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteBasic::try_parse(route_params);
 

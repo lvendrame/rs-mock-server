@@ -1,4 +1,7 @@
-use std::{ffi::{OsStr, OsString}, fs::DirEntry};
+use std::{
+    ffi::{OsStr, OsString},
+    fs::DirEntry,
+};
 
 use crate::route_builder::config::{Config, ConfigStore};
 
@@ -15,15 +18,24 @@ pub struct RouteParams {
 }
 
 impl RouteParams {
-    pub fn new(parent_route: &str, entry: &DirEntry, config: Config, config_store: &ConfigStore) -> Self {
+    pub fn new(
+        parent_route: &str,
+        entry: &DirEntry,
+        config: Config,
+        config_store: &ConfigStore,
+    ) -> Self {
         let mut effective_config = config.clone();
         let parent_route = parent_route.to_string();
         let file_name = entry.file_name().to_string_lossy().to_string();
         let file_stem = file_name.split('.').next().unwrap_or("").to_string();
-        let file_extension = entry.path().extension().and_then(OsStr::to_str).unwrap_or_default().to_string();
+        let file_extension = entry
+            .path()
+            .extension()
+            .and_then(OsStr::to_str)
+            .unwrap_or_default()
+            .to_string();
 
         let is_dir = entry.file_type().unwrap().is_dir();
-
 
         let full_route = if is_dir {
             let config_store = ConfigStore::try_from_dir(entry.path().to_str().unwrap())
@@ -100,13 +112,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get.json");
 
-        let params = RouteParams::new("/api/users", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api/users",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api/users");
         assert_eq!(params.full_route, "/api/users");
         assert_eq!(params.file_name, "get.json");
         assert_eq!(params.file_stem, "get");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(!params.is_dir);
     }
 
@@ -115,13 +139,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "$get.json");
 
-        let params = RouteParams::new("/api/users", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api/users",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api/users");
         assert_eq!(params.full_route, "/api/users");
         assert_eq!(params.file_name, "$get.json");
         assert_eq!(params.file_stem, "$get");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true)); // Protection is determined by parent context
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        ); // Protection is determined by parent context
         assert!(!params.is_dir);
     }
 
@@ -130,13 +166,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get.json");
 
-        let params = RouteParams::new("/api/users", &entry, Config::default().with_protect(true), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api/users",
+            &entry,
+            Config::default().with_protect(true),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api/users");
         assert_eq!(params.full_route, "/api/users");
         assert_eq!(params.file_name, "get.json");
         assert_eq!(params.file_stem, "get");
-        assert!(params.config.route.unwrap_or_default().protect.unwrap_or(false)); // Inherited from parent
+        assert!(
+            params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(false)
+        ); // Inherited from parent
         assert!(!params.is_dir);
     }
 
@@ -145,13 +193,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "products");
 
-        let params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api");
         assert_eq!(params.full_route, "/api/products");
         assert_eq!(params.file_name, "products");
         assert_eq!(params.file_stem, "products");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(params.is_dir);
     }
 
@@ -160,13 +220,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "$admin");
 
-        let params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api");
         assert_eq!(params.full_route, "/api/admin"); // $ is stripped from route
         assert_eq!(params.file_name, "$admin");
         assert_eq!(params.file_stem, "$admin");
-        assert!(params.config.route.unwrap_or_default().protect.unwrap_or(false));
+        assert!(
+            params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(false)
+        );
         assert!(params.is_dir);
     }
 
@@ -175,13 +247,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.json");
 
-        let params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api/auth",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api/auth");
         assert_eq!(params.full_route, "/api/auth");
         assert_eq!(params.file_name, "{auth}.json");
         assert_eq!(params.file_stem, "{auth}");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(!params.is_dir);
     }
 
@@ -190,13 +274,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "rest{_id:int}.json");
 
-        let params = RouteParams::new("/api/products", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api/products",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api/products");
         assert_eq!(params.full_route, "/api/products");
         assert_eq!(params.file_name, "rest{_id:int}.json");
         assert_eq!(params.file_stem, "rest{_id:int}");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(!params.is_dir);
     }
 
@@ -205,13 +301,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}");
 
-        let params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api");
         assert_eq!(params.full_route, "/api/{upload}");
         assert_eq!(params.file_name, "{upload}");
         assert_eq!(params.file_stem, "{upload}");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(params.is_dir);
     }
 
@@ -220,13 +328,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "{upload}{temp}-docs");
 
-        let params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api");
         assert_eq!(params.full_route, "/api/{upload}{temp}-docs");
         assert_eq!(params.file_name, "{upload}{temp}-docs");
         assert_eq!(params.file_stem, "{upload}{temp}-docs");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(params.is_dir);
     }
 
@@ -235,13 +355,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "index.json");
 
-        let params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "");
         assert_eq!(params.full_route, "");
         assert_eq!(params.file_name, "index.json");
         assert_eq!(params.file_stem, "index");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(!params.is_dir);
     }
 
@@ -250,13 +382,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "api");
 
-        let params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "");
         assert_eq!(params.full_route, "/api");
         assert_eq!(params.file_name, "api");
         assert_eq!(params.file_stem, "api");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(params.is_dir);
     }
 
@@ -265,13 +409,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get{id}.json");
 
-        let params = RouteParams::new("/api/users", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api/users",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api/users");
         assert_eq!(params.full_route, "/api/users");
         assert_eq!(params.file_name, "get{id}.json");
         assert_eq!(params.file_stem, "get{id}");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(!params.is_dir);
     }
 
@@ -280,13 +436,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "get{1-5}.json");
 
-        let params = RouteParams::new("/api/products", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let params = RouteParams::new(
+            "/api/products",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         assert_eq!(params.parent_route, "/api/products");
         assert_eq!(params.full_route, "/api/products");
         assert_eq!(params.file_name, "get{1-5}.json");
         assert_eq!(params.file_stem, "get{1-5}");
-        assert!(!params.config.route.unwrap_or_default().protect.unwrap_or(true));
+        assert!(
+            !params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(true)
+        );
         assert!(!params.is_dir);
     }
 
@@ -295,13 +463,25 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_dir(temp_dir.path(), "$admin");
 
-        let params = RouteParams::new("/api", &entry, Config::default().with_protect(true), &ConfigStore::default()); // Already protected parent
+        let params = RouteParams::new(
+            "/api",
+            &entry,
+            Config::default().with_protect(true),
+            &ConfigStore::default(),
+        ); // Already protected parent
 
         assert_eq!(params.parent_route, "/api");
         assert_eq!(params.full_route, "/api/admin");
         assert_eq!(params.file_name, "$admin");
         assert_eq!(params.file_stem, "$admin");
-        assert!(params.config.route.unwrap_or_default().protect.unwrap_or(false)); // Inherited protection
+        assert!(
+            params
+                .config
+                .route
+                .unwrap_or_default()
+                .protect
+                .unwrap_or(false)
+        ); // Inherited protection
         assert!(params.is_dir);
     }
 
@@ -322,9 +502,18 @@ mod tests {
 
         for (filename, expected_stem) in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let params = RouteParams::new("/test", &entry, Config::default().with_protect(false), &ConfigStore::default());
+            let params = RouteParams::new(
+                "/test",
+                &entry,
+                Config::default().with_protect(false),
+                &ConfigStore::default(),
+            );
 
-            assert_eq!(params.file_stem, expected_stem, "Failed for filename: {}", filename);
+            assert_eq!(
+                params.file_stem, expected_stem,
+                "Failed for filename: {}",
+                filename
+            );
         }
     }
 }

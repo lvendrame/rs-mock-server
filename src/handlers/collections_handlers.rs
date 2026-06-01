@@ -1,8 +1,15 @@
 use std::sync::Arc;
 
-use axum::{extract::{Json, Multipart, Path as AxumPath}, response::IntoResponse, routing::{get, post}};
+use axum::{
+    extract::{Json, Multipart, Path as AxumPath},
+    response::IntoResponse,
+    routing::{get, post},
+};
 use fosk::{DbCollection, FieldInfo, JsonPrimitive, SchemaWithRefs};
-use http::{header::{CONTENT_DISPOSITION, CONTENT_TYPE}, HeaderMap, HeaderValue, StatusCode};
+use http::{
+    HeaderMap, HeaderValue, StatusCode,
+    header::{CONTENT_DISPOSITION, CONTENT_TYPE},
+};
 use mime_guess::from_ext;
 use serde_json::{Map, Value};
 
@@ -27,12 +34,14 @@ fn field_info_to_json(field_info: &FieldInfo) -> Value {
 }
 
 fn reference_to_json(s_ref: fosk::ReferenceColumn) -> Value {
-
     let mut j_ref: Map<String, Value> = Map::new();
 
     j_ref.insert("collection".to_string(), Value::String(s_ref.collection));
     j_ref.insert("column".to_string(), Value::String(s_ref.column));
-    j_ref.insert("ref_collection".to_string(), Value::String(s_ref.ref_collection));
+    j_ref.insert(
+        "ref_collection".to_string(),
+        Value::String(s_ref.ref_collection),
+    );
     j_ref.insert("ref_column".to_string(), Value::String(s_ref.ref_column));
 
     Value::Object(j_ref)
@@ -62,96 +71,89 @@ fn schema_to_json(schema: &SchemaWithRefs) -> Value {
     Value::Object(j_map)
 }
 
-pub fn create_all_collections_info_route(
-    app: &mut App,
-) {
+pub fn create_all_collections_info_route(app: &mut App) {
     let collection_route = format!("{}/collections", MOCK_SERVER_ROUTE);
 
     // POST /resource/login - auth
     let db = app.db.clone();
 
-    let create_router = get(move || {
-        async move {
-            let mut j_collections: Map<String, Value> = Map::new();
-            let collections = db.list_collections();
-            for collection in collections {
-                let schema = db.schema_with_refs_of(&collection);
-                if let Some(schema) = schema {
-                    j_collections.insert(collection, schema_to_json(&schema));
-                }
-            }
-            Json(Value::Object(j_collections)).into_response()
-        }
-
-    });
-    app.route(&collection_route, create_router, Some("GET"), None);
-}
-
-fn create_collection_info_route(
-    app: &mut App,
-) {
-    let collection_route = format!("{}/collections/{{name}}", MOCK_SERVER_ROUTE);
-
-    let db = app.db.clone();
-
-    let create_router = get(move |AxumPath(name): AxumPath<String>| {
-        async move {
-            let schema = db.schema_with_refs_of(&name);
+    let create_router = get(move || async move {
+        let mut j_collections: Map<String, Value> = Map::new();
+        let collections = db.list_collections();
+        for collection in collections {
+            let schema = db.schema_with_refs_of(&collection);
             if let Some(schema) = schema {
-                Json(schema_to_json(&schema)).into_response()
-            } else {
-                StatusCode::NOT_FOUND.into_response()
+                j_collections.insert(collection, schema_to_json(&schema));
             }
         }
-
+        Json(Value::Object(j_collections)).into_response()
     });
     app.route(&collection_route, create_router, Some("GET"), None);
 }
 
-fn create_collection_load_from_file(
-    app: &mut App,
-) {
+fn create_collection_info_route(app: &mut App) {
     let collection_route = format!("{}/collections/{{name}}", MOCK_SERVER_ROUTE);
 
     let db = app.db.clone();
 
-    let create_router = post(async move |AxumPath(name): AxumPath<String>, mut multipart: Multipart| {
-        if let Some(field) = multipart.next_field().await.unwrap() {
-            // let field_name = field.name().unwrap_or("file").to_string();
-            // let file_name = field.file_name()
-            //     .map(|name| name.to_string())
-            //     .unwrap_or_else(|| "collection.json".to_string());
-
-            let data = field.bytes().await.unwrap();
-
-            let result: Result<Value, serde_json::Error> = serde_json::from_slice(&data);
-
-            let Ok(json) = result else {
-                return StatusCode::BAD_REQUEST.into_response();
-            };
-
-            let collection = match db.get(&name) {
-                Some(collection) => collection,
-                None => db.create(&name),
-            };
-
-            let response = collection.load_from_json(json, false);
-
-            if let Err(err) = response {
-                return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response()
-            }
-
-            return StatusCode::OK.into_response()
+    let create_router = get(move |AxumPath(name): AxumPath<String>| async move {
+        let schema = db.schema_with_refs_of(&name);
+        if let Some(schema) = schema {
+            Json(schema_to_json(&schema)).into_response()
+        } else {
+            StatusCode::NOT_FOUND.into_response()
         }
-
-        StatusCode::BAD_REQUEST.into_response()
     });
-    app.route(&collection_route, create_router, Some("POST"), Some(&["upload".to_string()]));
+    app.route(&collection_route, create_router, Some("GET"), None);
 }
 
-fn create_db_load_from_file(
-    app: &mut App,
-) {
+fn create_collection_load_from_file(app: &mut App) {
+    let collection_route = format!("{}/collections/{{name}}", MOCK_SERVER_ROUTE);
+
+    let db = app.db.clone();
+
+    let create_router = post(
+        async move |AxumPath(name): AxumPath<String>, mut multipart: Multipart| {
+            if let Some(field) = multipart.next_field().await.unwrap() {
+                // let field_name = field.name().unwrap_or("file").to_string();
+                // let file_name = field.file_name()
+                //     .map(|name| name.to_string())
+                //     .unwrap_or_else(|| "collection.json".to_string());
+
+                let data = field.bytes().await.unwrap();
+
+                let result: Result<Value, serde_json::Error> = serde_json::from_slice(&data);
+
+                let Ok(json) = result else {
+                    return StatusCode::BAD_REQUEST.into_response();
+                };
+
+                let collection = match db.get(&name) {
+                    Some(collection) => collection,
+                    None => db.create(&name),
+                };
+
+                let response = collection.load_from_json(json, false);
+
+                if let Err(err) = response {
+                    return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response();
+                }
+
+                return StatusCode::OK.into_response();
+            }
+
+            StatusCode::BAD_REQUEST.into_response()
+        },
+    );
+    app.route(
+        &collection_route,
+        create_router,
+        Some("POST"),
+        Some(&["upload".to_string()]),
+    );
+}
+
+fn create_db_load_from_file(app: &mut App) {
     let collection_route = format!("{}/collections", MOCK_SERVER_ROUTE);
 
     let db = app.db.clone();
@@ -174,20 +176,23 @@ fn create_db_load_from_file(
             let response = db.load_from_json(json, false);
 
             if let Err(err) = response {
-                return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response()
+                return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response();
             }
 
-            return StatusCode::OK.into_response()
+            return StatusCode::OK.into_response();
         }
 
         StatusCode::BAD_REQUEST.into_response()
     });
-    app.route(&collection_route, create_router, Some("POST"), Some(&["upload".to_string()]));
+    app.route(
+        &collection_route,
+        create_router,
+        Some("POST"),
+        Some(&["upload".to_string()]),
+    );
 }
 
-fn create_collection_download(
-    app: &mut App,
-) {
+fn create_collection_download(app: &mut App) {
     let collection_route = format!("{}/collections/{{name}}/download", MOCK_SERVER_ROUTE);
 
     let db = app.db.clone();
@@ -205,30 +210,27 @@ fn create_collection_download(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         };
 
-        let mime_type = from_ext("json")
-                        .first_or_octet_stream()
-                        .to_string();
+        let mime_type = from_ext("json").first_or_octet_stream().to_string();
 
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_str(&mime_type).unwrap());
 
         headers.insert(
             CONTENT_DISPOSITION,
-            HeaderValue::from_str(&format!(
-                "attachment; filename=\"{}.json\"",
-                name
-            ))
-            .unwrap(),
+            HeaderValue::from_str(&format!("attachment; filename=\"{}.json\"", name)).unwrap(),
         );
 
         (headers, contents).into_response()
     });
-    app.route(&collection_route, create_router, Some("GET"), Some(&["download".to_string()]));
+    app.route(
+        &collection_route,
+        create_router,
+        Some("GET"),
+        Some(&["download".to_string()]),
+    );
 }
 
-fn create_db_download(
-    app: &mut App,
-) {
+fn create_db_download(app: &mut App) {
     let collection_route = format!("{}/collections/download", MOCK_SERVER_ROUTE);
 
     // POST /resource/login - auth
@@ -242,33 +244,198 @@ fn create_db_download(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         };
 
-        let mime_type = from_ext("json")
-                        .first_or_octet_stream()
-                        .to_string();
+        let mime_type = from_ext("json").first_or_octet_stream().to_string();
 
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_str(&mime_type).unwrap());
 
         headers.insert(
             CONTENT_DISPOSITION,
-            HeaderValue::from_str(
-                "attachment; filename=\"collections.json\""
-            )
-            .unwrap(),
+            HeaderValue::from_str("attachment; filename=\"collections.json\"").unwrap(),
         );
 
         (headers, contents).into_response()
     });
-    app.route(&collection_route, create_router, Some("GET"), Some(&["download".to_string()]));
+    app.route(
+        &collection_route,
+        create_router,
+        Some("GET"),
+        Some(&["download".to_string()]),
+    );
 }
 
-pub fn create_collections_routes(
-    app: &mut App,
-) {
+pub fn create_collections_routes(app: &mut App) {
     create_all_collections_info_route(app);
     create_collection_info_route(app);
     create_collection_load_from_file(app);
     create_db_load_from_file(app);
     create_collection_download(app);
     create_db_download(app);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::{Body, to_bytes},
+        http::{Method, Request, header::CONTENT_TYPE},
+    };
+    use serde_json::json;
+    use tower::ServiceExt;
+
+    fn multipart_json(body: &str) -> Request<Body> {
+        let boundary = "BOUNDARY";
+        let multipart = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"data.json\"\r\nContent-Type: application/json\r\n\r\n{body}\r\n--{boundary}--\r\n"
+        );
+        Request::builder()
+            .method(Method::POST)
+            .header(
+                CONTENT_TYPE,
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(Body::from(multipart))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn collection_routes_expose_schema_load_and_download() {
+        let mut app = App::default();
+        let users = app.db.create("users");
+        users
+            .load_from_json(json!([{"id":"1","name":"Ada"}]), false)
+            .unwrap();
+        create_collections_routes(&mut app);
+        let router = app.take_router_for_test();
+
+        let all = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/mock-server/collections")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(all.status(), StatusCode::OK);
+        let all_body: Value =
+            serde_json::from_slice(&to_bytes(all.into_body(), usize::MAX).await.unwrap()).unwrap();
+        assert!(all_body.get("users").is_some());
+
+        let one = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/mock-server/collections/users")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(one.status(), StatusCode::OK);
+
+        let missing = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/mock-server/collections/missing")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
+        let download = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/mock-server/collections/users/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(download.status(), StatusCode::OK);
+        assert_eq!(
+            download.headers().get(CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+
+        let db_download = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/mock-server/collections/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(db_download.status(), StatusCode::OK);
+
+        let load_collection = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/mock-server/collections/projects")
+                    .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+                    .body(multipart_json(r#"[{"id":"p1","name":"Mock"}]"#).into_body())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(load_collection.status(), StatusCode::OK);
+
+        let load_db = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/mock-server/collections")
+                    .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+                    .body(multipart_json(r#"{"teams":[{"id":"t1"}]}"#).into_body())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(load_db.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn collection_upload_routes_reject_bad_json_and_empty_multipart() {
+        let mut app = App::default();
+        create_collections_routes(&mut app);
+        let router = app.take_router_for_test();
+
+        let bad_json = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/mock-server/collections/users")
+                    .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+                    .body(multipart_json("not-json").into_body())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bad_json.status(), StatusCode::BAD_REQUEST);
+
+        let empty = "--BOUNDARY--\r\n";
+        let empty_upload = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/mock-server/collections")
+                    .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+                    .body(Body::from(empty))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(empty_upload.status(), StatusCode::BAD_REQUEST);
+    }
 }

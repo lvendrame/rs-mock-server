@@ -1,22 +1,21 @@
 use std::{ffi::OsString, fs, io::Error, path::PathBuf, str::FromStr};
 
 use async_graphql::{
-    dynamic::{Scalar, Schema, Object, Field, TypeRef, FieldFuture},
-    http::GraphiQLSource,
-    Error as GQLError,
-    Request as GQLRequest,
-    Response as GQLResponse,
+    Error as GQLError, Request as GQLRequest, Response as GQLResponse, ServerError,
     Value as GValue,
-    ServerError,
+    dynamic::{Field, FieldFuture, Object, Scalar, Schema, TypeRef},
+    http::GraphiQLSource,
 };
-use std::sync::Arc;
 use axum::{
     extract::Json,
     routing::{get, post},
 };
 use fosk::{Db, IdType, JsonPrimitive};
-use graphql_parser::query::{Definition, Document, OperationDefinition, Selection, parse_query, Value as GqlValue};
+use graphql_parser::query::{
+    Definition, Document, OperationDefinition, Selection, Value as GqlValue, parse_query,
+};
 use serde_json;
+use std::sync::Arc;
 
 use jgd_rs::generate_jgd_from_file;
 
@@ -25,7 +24,7 @@ use crate::{
     handlers::{SleepThread, is_jgd, is_json},
     route_builder::{RouteRegistrator, route_graphql::RouteGraphQL},
 };
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
 pub const COLLECTIONS_FOLDER: &str = "/collections";
 
@@ -263,19 +262,19 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
 
     let mut mutation = Object::new("Mutation");
     for meta in &collections {
-        if let Some(def) = db.schema_with_refs_of(&meta.raw) {
-            if let Some(coll) = db.get(&meta.raw) {
-                let config = coll.get_config();
-                let id_key = config.id_key.clone();
-                mutation = mutation.field(build_create_field(
-                    &meta.type_name,
-                    &def,
-                    &id_key,
-                    config.id_type,
-                ));
-                mutation = mutation.field(build_update_field(&meta.type_name, &def, &id_key));
-                mutation = mutation.field(build_delete_field(&meta.type_name, &def, &id_key));
-            }
+        if let Some(def) = db.schema_with_refs_of(&meta.raw)
+            && let Some(coll) = db.get(&meta.raw)
+        {
+            let config = coll.get_config();
+            let id_key = config.id_key.clone();
+            mutation = mutation.field(build_create_field(
+                &meta.type_name,
+                &def,
+                &id_key,
+                config.id_type,
+            ));
+            mutation = mutation.field(build_update_field(&meta.type_name, &def, &id_key));
+            mutation = mutation.field(build_delete_field(&meta.type_name, &def, &id_key));
         }
     }
 
@@ -285,11 +284,8 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
 
 pub fn create_graphiql_route(app: &mut App) {
     // Serve GraphiQL IDE
-    let router = get(async || axum::response::Html(
-        GraphiQLSource::build()
-            .endpoint("/graphql")
-            .finish()
-    ));
+    let router =
+        get(async || axum::response::Html(GraphiQLSource::build().endpoint("/graphql").finish()));
     app.push_route("/graphiql", router, None, false, None);
 }
 
@@ -313,7 +309,8 @@ fn load_static_data(base_path: &OsString, op_name: &str) -> Option<serde_json::V
 /// Build a GraphQL JSON response from serde_json::Value
 fn response_from_json(data_json: serde_json::Value) -> Json<GQLResponse> {
     let mut response = GQLResponse::default();
-    response.data = async_graphql::Value::from_json(data_json).unwrap_or(async_graphql::Value::Null);
+    response.data =
+        async_graphql::Value::from_json(data_json).unwrap_or(async_graphql::Value::Null);
     Json(response)
 }
 
@@ -365,7 +362,11 @@ fn validate_request_ast(doc: &Document<String>, db: &Db) -> Result<(), GQLError>
 }
 
 // Helper to collect expansion paths for nested selections
-fn collect_expansion_paths(selection_set: &graphql_parser::query::SelectionSet<String>, prefix: &str, paths: &mut Vec<String>) {
+fn collect_expansion_paths(
+    selection_set: &graphql_parser::query::SelectionSet<String>,
+    prefix: &str,
+    paths: &mut Vec<String>,
+) {
     for sel in &selection_set.items {
         if let Selection::Field(f) = sel {
             // Only process if this field has nested selections
@@ -453,11 +454,11 @@ fn filter_value(
             }
             serde_json::Value::Object(new_map)
         }
-        serde_json::Value::Array(arr) => {
-            serde_json::Value::Array(
-                arr.into_iter().map(|elem| filter_value(elem, selection_set)).collect()
-            )
-        }
+        serde_json::Value::Array(arr) => serde_json::Value::Array(
+            arr.into_iter()
+                .map(|elem| filter_value(elem, selection_set))
+                .collect(),
+        ),
         _ => value,
     }
 }
@@ -663,7 +664,13 @@ async fn execute_graphql_operations(
 
 // -------------------------------------------------------------------------------
 
-pub fn create_graphql_route(app: &mut App, route: &str, path: OsString, is_protected: bool, delay: Option<u16>) {
+pub fn create_graphql_route(
+    app: &mut App,
+    route: &str,
+    path: OsString,
+    is_protected: bool,
+    delay: Option<u16>,
+) {
     // Prepare dynamic schema for introspection
     let db = app.db.clone();
     // Build and store dynamic schema for GraphiQL introspection
@@ -693,18 +700,22 @@ pub fn create_graphql_route(app: &mut App, route: &str, path: OsString, is_prote
                 Ok(d) => d,
             };
             // 2) Static operation override: return matching .json or .jgd file if present
-            if let Some(op_name) = doc.definitions.iter().filter_map(|def| {
-                if let Definition::Operation(OperationDefinition::Query(q)) = def {
-                    q.name.clone()
-                } else if let Definition::Operation(OperationDefinition::Mutation(m)) = def {
-                    m.name.clone()
-                } else {
-                    None
-                }
-            }).next() {
-                if let Some(data_json) = load_static_data(&path, &op_name) {
-                    return response_from_json(data_json);
-                }
+            if let Some(op_name) = doc
+                .definitions
+                .iter()
+                .filter_map(|def| {
+                    if let Definition::Operation(OperationDefinition::Query(q)) = def {
+                        q.name.clone()
+                    } else if let Definition::Operation(OperationDefinition::Mutation(m)) = def {
+                        m.name.clone()
+                    } else {
+                        None
+                    }
+                })
+                .next()
+                && let Some(data_json) = load_static_data(&path, &op_name)
+            {
+                return response_from_json(data_json);
             }
 
             // 3) Validate referenced collections exist in Fosk database
@@ -810,8 +821,27 @@ pub fn build_graphql_routes(app: &mut App, config: &RouteGraphQL) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{
+        body::{Body, to_bytes},
+        http::{Method, Request, header::CONTENT_TYPE},
+    };
     use graphql_parser::parse_query;
     use graphql_parser::query::{Definition, OperationDefinition};
+    use serde_json::{Value, json};
+    use tower::ServiceExt;
+
+    fn graphql_request(query: &str) -> Request<Body> {
+        Request::builder()
+            .method(Method::POST)
+            .uri("/graphql")
+            .header(CONTENT_TYPE, "application/json")
+            .body(Body::from(json!({ "query": query }).to_string()))
+            .unwrap()
+    }
+
+    async fn response_json(response: axum::response::Response) -> Value {
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+    }
 
     #[test]
     fn test_collect_expansion_paths_only_full_paths() {
@@ -827,6 +857,227 @@ mod tests {
                 collect_expansion_paths(&f_orders.selection_set, "", &mut paths);
             }
         }
-        assert_eq!(paths, vec!["order_items.products"], "collect_expansion_paths should only include full nested paths");
+        assert_eq!(
+            paths,
+            vec!["order_items.products"],
+            "collect_expansion_paths should only include full nested paths"
+        );
+    }
+
+    #[tokio::test]
+    async fn graphql_routes_load_collections_and_execute_queries() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let collections = temp_dir.path().join("collections");
+        std::fs::create_dir(&collections).unwrap();
+        std::fs::write(
+            collections.join("Users.json"),
+            r#"[{"id":"1","name":"Ada","active":true,"score":1.5,"age":42,"ignored":"x"}]"#,
+        )
+        .unwrap();
+
+        let mut app = App::default();
+        let config = RouteGraphQL::new(
+            temp_dir.path().as_os_str().to_os_string(),
+            "/graphql".to_string(),
+            false,
+            None,
+        );
+        build_graphql_routes(&mut app, &config);
+
+        let router = app.take_router_for_test();
+        let graphiql = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/graphiql")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(graphiql.status(), http::StatusCode::OK);
+
+        let query = router
+            .clone()
+            .oneshot(graphql_request(
+                r#"query { Users { id name active score age } }"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(query.status(), http::StatusCode::OK);
+        let body = response_json(query).await;
+        assert_eq!(body["data"]["Users"][0]["name"], "Ada");
+        assert!(body["data"]["Users"][0].get("ignored").is_none());
+
+        let by_id = router
+            .clone()
+            .oneshot(graphql_request(r#"query { Users(id: "1") { id name } }"#))
+            .await
+            .unwrap();
+        assert_eq!(response_json(by_id).await["data"]["Users"][0]["id"], "1");
+
+        let filtered = router
+            .clone()
+            .oneshot(graphql_request(
+                r#"query { Users(name: "Ada") { id name } }"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(
+            response_json(filtered).await["data"]["Users"][0]["name"],
+            "Ada"
+        );
+
+        let unknown = router
+            .clone()
+            .oneshot(graphql_request(r#"query { Missing { id } }"#))
+            .await
+            .unwrap();
+        assert!(
+            response_json(unknown).await["errors"][0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("Unknown collection")
+        );
+
+        let invalid = router
+            .clone()
+            .oneshot(graphql_request("query {"))
+            .await
+            .unwrap();
+        assert!(
+            response_json(invalid).await["errors"][0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("GraphQL syntax error")
+        );
+
+        let introspection = router
+            .oneshot(graphql_request(
+                r#"query { __schema { queryType { name } } }"#,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(
+            response_json(introspection).await["data"]["__schema"]["queryType"]["name"],
+            "Query"
+        );
+    }
+
+    #[tokio::test]
+    async fn graphql_static_operations_and_mutations_are_supported() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let collections = temp_dir.path().join("collections");
+        std::fs::create_dir(&collections).unwrap();
+        std::fs::write(
+            collections.join("Users.json"),
+            r#"[{"id":"1","name":"Ada"}]"#,
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.path().join("StaticUsers.json"),
+            r#"{"users":[{"id":"static"}]}"#,
+        )
+        .unwrap();
+
+        let mut app = App::default();
+        let config = RouteGraphQL::new(
+            temp_dir.path().as_os_str().to_os_string(),
+            "/graphql".to_string(),
+            false,
+            None,
+        );
+        build_graphql_routes(&mut app, &config);
+        let router = app.take_router_for_test();
+
+        let static_response = router
+            .clone()
+            .oneshot(graphql_request(r#"query StaticUsers { Missing { id } }"#))
+            .await
+            .unwrap();
+        assert_eq!(
+            response_json(static_response).await["data"]["users"][0]["id"],
+            "static"
+        );
+
+        let created = router
+            .clone()
+            .oneshot(graphql_request(
+                r#"mutation { createUsers(id: "2", name: "Grace") { id name } }"#,
+            ))
+            .await
+            .unwrap();
+        let created_body = response_json(created).await;
+        assert_eq!(created_body["data"]["createUsers"]["name"], "Grace");
+        let created_id = created_body["data"]["createUsers"]["id"].as_str().unwrap();
+
+        let updated = router
+            .clone()
+            .oneshot(graphql_request(&format!(
+                r#"mutation {{ updateUsers(id: "{created_id}", name: "Hopper") {{ id name }} }}"#
+            )))
+            .await
+            .unwrap();
+        assert_eq!(
+            response_json(updated).await["data"]["updateUsers"]["name"],
+            "Hopper"
+        );
+
+        let deleted = router
+            .clone()
+            .oneshot(graphql_request(&format!(
+                r#"mutation {{ deleteUsers(id: "{created_id}") {{ id name }} }}"#
+            )))
+            .await
+            .unwrap();
+        assert_eq!(
+            response_json(deleted).await["data"]["deleteUsers"]["id"],
+            created_id
+        );
+
+        let missing_update_id = router
+            .clone()
+            .oneshot(graphql_request(
+                r#"mutation { updateUsers(name: "Nobody") { id name } }"#,
+            ))
+            .await
+            .unwrap();
+        assert!(response_json(missing_update_id).await["data"]["updateUsers"].is_null());
+
+        let unknown_mutation = router
+            .oneshot(graphql_request(
+                r#"mutation { createMissing(id: "1") { id } }"#,
+            ))
+            .await
+            .unwrap();
+        assert!(
+            response_json(unknown_mutation).await["errors"][0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("Unknown collection")
+        );
+    }
+
+    #[test]
+    fn graphql_helpers_handle_static_data_and_value_conversion() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("Known.json"), r#"{"ok":true}"#).unwrap();
+
+        assert_eq!(
+            load_static_data(&temp_dir.path().as_os_str().to_os_string(), "Known").unwrap()["ok"],
+            true
+        );
+        assert!(load_static_data(&temp_dir.path().as_os_str().to_os_string(), "Missing").is_none());
+
+        let req = GQLRequest::new("query { __schema { queryType { name } } }");
+        let doc = parse_request_ast(&req).unwrap();
+        let db = Db::new_arc();
+        assert!(validate_request_ast(&doc, &db).is_ok());
+
+        let gql_value = GqlValue::String("text".to_string());
+        assert_eq!(
+            graphql_value_to_json(&gql_value),
+            Value::String("text".to_string())
+        );
     }
 }

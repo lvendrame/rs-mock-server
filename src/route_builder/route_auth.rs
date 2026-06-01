@@ -7,12 +7,12 @@ use regex::Regex;
 use crate::{
     app::App,
     handlers::build_auth_routes,
-    route_builder::{route_params::RouteParams, CollectionConfig, PrintRoute, Route, RouteGenerator}
+    route_builder::{
+        CollectionConfig, PrintRoute, Route, RouteGenerator, route_params::RouteParams,
+    },
 };
 
-static RE_FILE_AUTH: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^\{auth\}$").unwrap()
-});
+static RE_FILE_AUTH: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\{auth\}$").unwrap());
 
 static ID_FIELD: &str = "id";
 static TOKEN_FIELD: &str = "token";
@@ -30,7 +30,7 @@ pub static LOGOUT_ENDPOINT: &str = "/logout";
 pub static USERS_ENDPOINT: &str = "/users";
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct  RouteAuth {
+pub struct RouteAuth {
     pub path: OsString,
     pub route: String,
     pub delay: Option<u16>,
@@ -63,8 +63,12 @@ impl RouteAuth {
                 route: route.clone(),
                 delay: route_config.delay,
                 login_endpoint: auth_config.login_endpoint.unwrap_or(LOGIN_ENDPOINT.into()),
-                logout_endpoint: auth_config.logout_endpoint.unwrap_or(LOGOUT_ENDPOINT.into()),
-                users_route: auth_config.users_route.unwrap_or(format!("{}{}", route, USERS_ENDPOINT)),
+                logout_endpoint: auth_config
+                    .logout_endpoint
+                    .unwrap_or(LOGOUT_ENDPOINT.into()),
+                users_route: auth_config
+                    .users_route
+                    .unwrap_or(format!("{}{}", route, USERS_ENDPOINT)),
                 token_collection: CollectionConfig {
                     name: token_coll_config.name.unwrap_or(TOKEN_COLLECTION.into()),
                     id_key: token_coll_config.id_key.unwrap_or(TOKEN_FIELD.into()),
@@ -98,19 +102,25 @@ impl RouteGenerator for RouteAuth {
 
 impl PrintRoute for RouteAuth {
     fn println(&self) {
-        println!("✔️ Built AUTH route for {}{}", self.route, self.login_endpoint);
-        println!("✔️ Built logout routes for {}{}", self.route, self.logout_endpoint);
+        println!(
+            "✔️ Built AUTH route for {}{}",
+            self.route, self.login_endpoint
+        );
+        println!(
+            "✔️ Built logout routes for {}{}",
+            self.route, self.logout_endpoint
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::route_builder::config::{Config, ConfigStore};
+    use crate::route_builder::route_params::RouteParams;
     use std::fs::{self, File};
     use std::path::Path;
     use tempfile::TempDir;
-    use crate::route_builder::config::{Config, ConfigStore};
-    use crate::route_builder::route_params::RouteParams;
 
     fn create_test_file(dir: &Path, filename: &str) -> std::fs::DirEntry {
         let file_path = dir.join(filename);
@@ -129,7 +139,12 @@ mod tests {
     fn test_try_parse_with_valid_auth_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.json");
-        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/auth",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -143,10 +158,60 @@ mod tests {
     }
 
     #[test]
+    fn test_make_routes_and_print_delegate_to_auth_builder() {
+        let temp_dir = TempDir::new().unwrap();
+        let auth_file = temp_dir.path().join("{auth}.json");
+        std::fs::write(
+            &auth_file,
+            r#"[{"id":"1","username":"ada","password":"secret","roles":"admin"}]"#,
+        )
+        .unwrap();
+        let route_auth = RouteAuth {
+            path: auth_file.into_os_string(),
+            route: "/auth-test".to_string(),
+            delay: None,
+            login_endpoint: "/login".to_string(),
+            logout_endpoint: "/logout".to_string(),
+            users_route: "/auth-test/users".to_string(),
+            token_collection: CollectionConfig {
+                name: "auth_test_tokens".to_string(),
+                id_key: "token".to_string(),
+                id_type: IdType::None,
+            },
+            user_collection: CollectionConfig {
+                name: "auth_test_users".to_string(),
+                id_key: "id".to_string(),
+                id_type: IdType::None,
+            },
+            username_field: "username".to_string(),
+            password_field: "password".to_string(),
+            roles_field: "roles".to_string(),
+            jwt_secret: "secret".to_string(),
+            cookie_name: "auth_token".to_string(),
+            encrypt_password: false,
+        };
+        let mut app = App::default();
+        route_auth.make_routes(&mut app);
+        route_auth.println();
+        assert!(
+            app.pages
+                .lock()
+                .unwrap()
+                .render_index()
+                .contains("/auth-test/login")
+        );
+    }
+
+    #[test]
     fn test_try_parse_with_auth_file_different_extension() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.txt");
-        let route_params = RouteParams::new("/account", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/account",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -163,7 +228,12 @@ mod tests {
     fn test_try_parse_with_auth_file_no_extension() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}");
-        let route_params = RouteParams::new("/login", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/login",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -180,7 +250,12 @@ mod tests {
     fn test_try_parse_with_root_level_auth() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.json");
-        let route_params = RouteParams::new("", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -197,7 +272,12 @@ mod tests {
     fn test_try_parse_with_protected_auth_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}.json");
-        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(true), &ConfigStore::default()); // Protected context
+        let route_params = RouteParams::new(
+            "/api/auth",
+            &entry,
+            Config::default().with_protect(true),
+            &ConfigStore::default(),
+        ); // Protected context
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -214,7 +294,12 @@ mod tests {
     fn test_try_parse_with_invalid_auth_filename() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "auth.json");
-        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/auth",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -230,7 +315,12 @@ mod tests {
     fn test_try_parse_with_partial_auth_match() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "{auth}extra.json");
-        let route_params = RouteParams::new("/api/auth", &entry, Config::default().with_protect(false), &ConfigStore::default());
+        let route_params = RouteParams::new(
+            "/api/auth",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
 
         let result = RouteAuth::try_parse(route_params);
 
@@ -259,7 +349,12 @@ mod tests {
 
         for filename in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/api", &entry, Config::default().with_protect(false), &ConfigStore::default());
+            let route_params = RouteParams::new(
+                "/api",
+                &entry,
+                Config::default().with_protect(false),
+                &ConfigStore::default(),
+            );
 
             let result = RouteAuth::try_parse(route_params);
 
@@ -267,7 +362,10 @@ mod tests {
                 Route::None => {
                     // Expected for all invalid patterns
                 }
-                _ => panic!("Expected Route::None for filename '{}', got {:?}", filename, result),
+                _ => panic!(
+                    "Expected Route::None for filename '{}', got {:?}",
+                    filename, result
+                ),
             }
         }
     }
@@ -287,7 +385,12 @@ mod tests {
 
         for filename in test_cases {
             let entry = create_test_file(temp_dir.path(), filename);
-            let route_params = RouteParams::new("/api/test", &entry, Config::default().with_protect(false), &ConfigStore::default());
+            let route_params = RouteParams::new(
+                "/api/test",
+                &entry,
+                Config::default().with_protect(false),
+                &ConfigStore::default(),
+            );
 
             let result = RouteAuth::try_parse(route_params);
 
@@ -295,7 +398,10 @@ mod tests {
                 Route::None => {
                     // Expected - these should not match auth pattern
                 }
-                _ => panic!("Expected Route::None for filename '{}', got {:?}", filename, result),
+                _ => panic!(
+                    "Expected Route::None for filename '{}', got {:?}",
+                    filename, result
+                ),
             }
         }
     }

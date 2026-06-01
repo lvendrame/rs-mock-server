@@ -186,3 +186,15 @@ async fn main() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upload_folder_detection_matches_upload_marker() {
+        assert!(is_upload_folder("mocks/{upload}"));
+        assert!(is_upload_folder("mocks/${upload}{temp}"));
+        assert!(!is_upload_folder("mocks/uploads"));
+    }
+}

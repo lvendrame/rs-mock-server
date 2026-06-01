@@ -1,23 +1,23 @@
+pub mod config;
 pub mod route;
 pub mod route_auth;
 pub mod route_basic;
+pub mod route_graphql;
+pub mod route_manager;
+pub mod route_params;
 pub mod route_public;
 pub mod route_rest;
 pub mod route_upload;
-pub mod route_params;
-pub mod route_manager;
-pub mod route_graphql;
-pub mod config;
 
 use axum::routing::MethodRouter;
 use http::Method;
 pub use route::*;
 pub use route_auth::*;
 pub use route_basic::*;
+pub use route_params::*;
 pub use route_public::*;
 pub use route_rest::*;
 pub use route_upload::*;
-pub use route_params::*;
 
 use crate::app::App;
 
@@ -26,7 +26,14 @@ pub trait PrintRoute {
 }
 
 pub trait RouteRegistrator {
-    fn push_route(&mut self, path: &str, router: MethodRouter, method: Option<&str>, is_protected: bool, options: Option<&[String]>);
+    fn push_route(
+        &mut self,
+        path: &str,
+        router: MethodRouter,
+        method: Option<&str>,
+        is_protected: bool,
+        options: Option<&[String]>,
+    );
 }
 
 pub trait RouteGenerator {

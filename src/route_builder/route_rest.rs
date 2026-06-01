@@ -176,6 +176,26 @@ mod tests {
     }
 
     #[test]
+    fn test_make_routes_and_print_delegate_to_rest_builder() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("rest.json");
+        std::fs::write(&file_path, r#"[{"id":"1"}]"#).unwrap();
+        let route_rest = RouteRest::new(
+            "/items".to_string(),
+            file_path.into_os_string(),
+            "id".to_string(),
+            IdType::None,
+            false,
+            "items".to_string(),
+            None,
+        );
+        let mut app = App::default();
+        route_rest.make_routes(&mut app);
+        route_rest.println();
+        assert!(app.pages.lock().unwrap().render_index().contains("/items"));
+    }
+
+    #[test]
     fn test_try_parse_protected_rest_file() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "$rest.json");

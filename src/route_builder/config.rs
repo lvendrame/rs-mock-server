@@ -1,6 +1,9 @@
 //! Configuration module for the mock server, defining structures for loading and storing configuration from TOML files.
 
-use std::{collections::HashMap, fs::{self, DirEntry}};
+use std::{
+    collections::HashMap,
+    fs::{self, DirEntry},
+};
 
 use fosk::IdType;
 use serde::{Deserialize, Serialize};
@@ -127,11 +130,9 @@ impl TryFrom<&DirEntry> for Config {
     type Error = String;
 
     fn try_from(value: &DirEntry) -> Result<Self, Self::Error> {
-        let content = fs::read_to_string(value.path())
-            .map_err(|e| e.to_string())?;
+        let content = fs::read_to_string(value.path()).map_err(|e| e.to_string())?;
 
-        Config::try_from(content.as_str())
-            .map_err(|e| e.to_string())
+        Config::try_from(content.as_str()).map_err(|e| e.to_string())
     }
 }
 
@@ -141,17 +142,28 @@ pub struct ConfigStore {
 }
 
 impl ConfigStore {
-    pub fn try_from_dir(dir_path: &str) -> Result<Self,std::io::Error> {
+    pub fn try_from_dir(dir_path: &str) -> Result<Self, std::io::Error> {
         let mut store = Self::default();
-        fs::read_dir( dir_path)?
+        fs::read_dir(dir_path)?
             .filter_map(Result::ok)
             .filter(|file| is_toml(&file.file_name()))
             .for_each(|file| {
-                let key = file.path().as_path().file_stem().unwrap().to_string_lossy().to_ascii_lowercase();
+                let key = file
+                    .path()
+                    .as_path()
+                    .file_stem()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_ascii_lowercase();
                 match Config::try_from(&file) {
-                    Ok(config) => { store.map_configs.insert(key, config); },
-                    Err(err) =>
-                        println!("Unable to load the config file {:?} due the error {}.", file.file_name(), err),
+                    Ok(config) => {
+                        store.map_configs.insert(key, config);
+                    }
+                    Err(err) => println!(
+                        "Unable to load the config file {:?} due the error {}.",
+                        file.file_name(),
+                        err
+                    ),
                 }
             });
 
@@ -159,7 +171,9 @@ impl ConfigStore {
     }
 
     pub fn get(&self, key: &str) -> Option<Config> {
-        self.map_configs.get(key.to_ascii_lowercase().as_str()).cloned()
+        self.map_configs
+            .get(key.to_ascii_lowercase().as_str())
+            .cloned()
     }
 }
 
@@ -173,9 +187,9 @@ impl Config {
             Some(parent) => Self {
                 server: self.server.merge(parent.server),
                 route: self.route.merge(parent.route),
-                collection: self.collection,//.merge(parent.collection), don't merge collections
-                auth: self.auth, //.merge(parent.auth), don't merge auths
-                upload: self.upload, //.merge(parent.upload), don't merge upload
+                collection: self.collection, //.merge(parent.collection), don't merge collections
+                auth: self.auth,             //.merge(parent.auth), don't merge auths
+                upload: self.upload,         //.merge(parent.upload), don't merge upload
             },
             None => self,
         }
@@ -186,9 +200,9 @@ impl Config {
         Self {
             server: self.server.merge(parent.server),
             route: self.route.merge(parent.route),
-            collection: self.collection,//.merge(parent.collection), don't merge collections
-            auth: self.auth, //.merge(parent.auth), don't merge auths
-            upload: self.upload, //.merge(parent.upload), don't merge upload
+            collection: self.collection, //.merge(parent.collection), don't merge collections
+            auth: self.auth,             //.merge(parent.auth), don't merge auths
+            upload: self.upload,         //.merge(parent.upload), don't merge upload
         }
     }
 
@@ -230,9 +244,9 @@ impl Mergeable for Config {
         Self {
             server: self.server.merge(parent.server),
             route: self.route.merge(parent.route),
-            collection: self.collection,//.merge(parent.collection), don't merge collections
-            auth: self.auth, //.merge(parent.auth), don't merge auths
-            upload: self.upload, //.merge(parent.upload), don't merge upload
+            collection: self.collection, //.merge(parent.collection), don't merge collections
+            auth: self.auth,             //.merge(parent.auth), don't merge auths
+            upload: self.upload,         //.merge(parent.upload), don't merge upload
         }
     }
 }
@@ -249,9 +263,9 @@ impl Mergeable for Option<Config> {
             (Some(child), Some(parent)) => Some(Config {
                 server: child.server.merge(parent.server),
                 route: child.route.merge(parent.route),
-                collection: child.collection,//.merge(parent.collection), don't merge collections
-                auth: child.auth, //.merge(parent.auth), don't merge auths
-                upload: child.upload, //.merge(parent.upload), don't merge upload
+                collection: child.collection, //.merge(parent.collection), don't merge collections
+                auth: child.auth,             //.merge(parent.auth), don't merge auths
+                upload: child.upload,         //.merge(parent.upload), don't merge upload
             }),
         }
     }
@@ -285,7 +299,7 @@ impl Mergeable for Option<RouteConfig> {
             (Some(child), None) => Some(child),
             (Some(child), Some(parent)) => Some(RouteConfig {
                 delay: child.delay.merge(parent.delay),
-                remap: child.remap,//.merge(parent.remap),
+                remap: child.remap, //.merge(parent.remap),
                 protect: child.protect.merge(parent.protect),
             }),
         }
@@ -340,7 +354,7 @@ impl Mergeable for Option<UploadConfig> {
                 upload_endpoint: child.upload_endpoint.merge(parent.upload_endpoint),
                 download_endpoint: child.download_endpoint.merge(parent.download_endpoint),
                 list_files_endpoint: child.list_files_endpoint.merge(parent.list_files_endpoint),
-                temporary: child.temporary.merge(parent.temporary)
+                temporary: child.temporary.merge(parent.temporary),
             }),
         }
     }
@@ -376,8 +390,18 @@ mod tests {
 
     #[test]
     fn test_server_config_merge() {
-        let child = ServerConfig { port: Some(3000), folder: None, enable_cors: Some(false), allowed_origin: None };
-        let parent = ServerConfig { port: None, folder: Some("mocks".to_string()), enable_cors: Some(true), allowed_origin: Some("example.com".to_string()) };
+        let child = ServerConfig {
+            port: Some(3000),
+            folder: None,
+            enable_cors: Some(false),
+            allowed_origin: None,
+        };
+        let parent = ServerConfig {
+            port: None,
+            folder: Some("mocks".to_string()),
+            enable_cors: Some(true),
+            allowed_origin: Some("example.com".to_string()),
+        };
         let merged = Some(child.clone()).merge(Some(parent.clone())).unwrap();
         assert_eq!(merged.port, Some(3000));
         assert_eq!(merged.folder, Some("mocks".to_string()));
@@ -387,8 +411,16 @@ mod tests {
 
     #[test]
     fn test_route_config_merge() {
-        let child = RouteConfig { delay: None, remap: Some("/api".into()), protect: None };
-        let parent = RouteConfig { delay: Some(10), remap: None, protect: Some(true) };
+        let child = RouteConfig {
+            delay: None,
+            remap: Some("/api".into()),
+            protect: None,
+        };
+        let parent = RouteConfig {
+            delay: Some(10),
+            remap: None,
+            protect: Some(true),
+        };
         let merged = Some(child.clone()).merge(Some(parent.clone())).unwrap();
         assert_eq!(merged.delay, Some(10));
         assert_eq!(merged.remap, Some("/api".to_string()));
@@ -397,8 +429,16 @@ mod tests {
 
     #[test]
     fn test_collection_config_merge() {
-        let child = CollectionConfig { name: Some("child".into()), id_key: None, id_type: Some(IdType::Uuid) };
-        let parent = CollectionConfig { name: None, id_key: Some("id".into()), id_type: Some(IdType::Int) };
+        let child = CollectionConfig {
+            name: Some("child".into()),
+            id_key: None,
+            id_type: Some(IdType::Uuid),
+        };
+        let parent = CollectionConfig {
+            name: None,
+            id_key: Some("id".into()),
+            id_type: Some(IdType::Int),
+        };
         let merged = Some(child.clone()).merge(Some(parent.clone())).unwrap();
         assert_eq!(merged.name, Some("child".to_string()));
         assert_eq!(merged.id_key, Some("id".to_string()));
@@ -409,13 +449,21 @@ mod tests {
     fn test_auth_config_merge() {
         let child = AuthConfig {
             username_field: Some("user".into()),
-            token_collection: Some(CollectionConfig { name: Some("tok".into()), id_key: Some("t".into()), id_type: Some(IdType::Uuid) }),
+            token_collection: Some(CollectionConfig {
+                name: Some("tok".into()),
+                id_key: Some("t".into()),
+                id_type: Some(IdType::Uuid),
+            }),
             ..Default::default()
         };
         let parent = AuthConfig {
             username_field: Some("parent".into()),
             password_field: Some("pass".into()),
-            token_collection: Some(CollectionConfig { name: Some("parent_tok".into()), id_key: None, id_type: Some(IdType::Int) }),
+            token_collection: Some(CollectionConfig {
+                name: Some("parent_tok".into()),
+                id_key: None,
+                id_type: Some(IdType::Int),
+            }),
             ..Default::default()
         };
         let merged = Some(child.clone()).merge(Some(parent.clone())).unwrap();
@@ -429,8 +477,18 @@ mod tests {
 
     #[test]
     fn test_upload_config_merge() {
-        let child = UploadConfig { upload_endpoint: None, download_endpoint: Some("/dl".into()), list_files_endpoint: None, temporary: Some(true) };
-        let parent = UploadConfig { upload_endpoint: Some("/up".into()), download_endpoint: None, list_files_endpoint: Some("/list".into()), temporary: Some(false) };
+        let child = UploadConfig {
+            upload_endpoint: None,
+            download_endpoint: Some("/dl".into()),
+            list_files_endpoint: None,
+            temporary: Some(true),
+        };
+        let parent = UploadConfig {
+            upload_endpoint: Some("/up".into()),
+            download_endpoint: None,
+            list_files_endpoint: Some("/list".into()),
+            temporary: Some(false),
+        };
         let merged = Some(child.clone()).merge(Some(parent.clone())).unwrap();
         assert_eq!(merged.upload_endpoint, Some("/up".into()));
         assert_eq!(merged.download_endpoint, Some("/dl".into()));
@@ -440,25 +498,110 @@ mod tests {
 
     #[test]
     fn test_config_option_merge() {
-        let child = Config { server: Some(ServerConfig { port: Some(1), folder: None, enable_cors: None, allowed_origin: None }), route: None, collection: None, auth: None, upload: None };
-        let parent = Config { server: Some(ServerConfig { port: None, folder: Some("dir".into()), enable_cors: Some(true), allowed_origin: Some("o".into()) }), route: Some(RouteConfig { delay: Some(5), remap: None, protect: Some(false) }), collection: None, auth: None, upload: None };
+        let child = Config {
+            server: Some(ServerConfig {
+                port: Some(1),
+                folder: None,
+                enable_cors: None,
+                allowed_origin: None,
+            }),
+            route: None,
+            collection: None,
+            auth: None,
+            upload: None,
+        };
+        let parent = Config {
+            server: Some(ServerConfig {
+                port: None,
+                folder: Some("dir".into()),
+                enable_cors: Some(true),
+                allowed_origin: Some("o".into()),
+            }),
+            route: Some(RouteConfig {
+                delay: Some(5),
+                remap: None,
+                protect: Some(false),
+            }),
+            collection: None,
+            auth: None,
+            upload: None,
+        };
         let merged_opt = Some(child.clone()).merge(Some(parent.clone()));
         let merged = merged_opt.unwrap();
         let server = merged.server.unwrap();
         assert_eq!(server.port, Some(1));
         assert_eq!(server.folder, Some("dir".into()));
         assert_eq!(server.enable_cors, Some(true));
-        assert_eq!(merged.route, Some(RouteConfig { delay: Some(5), remap: None, protect: Some(false) }));
+        assert_eq!(
+            merged.route,
+            Some(RouteConfig {
+                delay: Some(5),
+                remap: None,
+                protect: Some(false)
+            })
+        );
     }
 
     #[test]
     fn test_config_merge_trait() {
-        let child = Config { server: None, route: Some(RouteConfig { delay: Some(2), remap: None, protect: None }), collection: None, auth: None, upload: None };
-        let parent = Config { server: None, route: Some(RouteConfig { delay: None, remap: Some("/p".into()), protect: Some(true) }), collection: None, auth: None, upload: None };
+        let child = Config {
+            server: None,
+            route: Some(RouteConfig {
+                delay: Some(2),
+                remap: None,
+                protect: None,
+            }),
+            collection: None,
+            auth: None,
+            upload: None,
+        };
+        let parent = Config {
+            server: None,
+            route: Some(RouteConfig {
+                delay: None,
+                remap: Some("/p".into()),
+                protect: Some(true),
+            }),
+            collection: None,
+            auth: None,
+            upload: None,
+        };
         let merged = child.merge(Some(parent));
         let route = merged.route.unwrap();
         assert_eq!(route.delay, Some(2));
         assert!(route.remap.is_none());
         assert_eq!(route.protect, Some(true));
+    }
+
+    #[test]
+    fn test_collection_builder_helpers_and_owned_merge() {
+        let config = Config::default()
+            .with_collection_name("users")
+            .with_id_key("_id")
+            .with_id_type(IdType::Int);
+        let collection = config.collection.as_ref().unwrap();
+        assert_eq!(collection.name.as_deref(), Some("users"));
+        assert_eq!(collection.id_key.as_deref(), Some("_id"));
+        assert_eq!(collection.id_type, Some(IdType::Int));
+
+        let parent = Config::default().with_protect(false);
+        let child = Config::default().with_protect(true);
+        let merged = <Config as Mergeable>::merge(child, parent);
+        assert_eq!(merged.route.unwrap().protect, Some(true));
+    }
+
+    #[test]
+    fn test_config_try_from_dir_entry() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("route.toml");
+        std::fs::write(&config_path, "[route]\nprotect = true\n").unwrap();
+        let entry = std::fs::read_dir(temp_dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| entry.path() == config_path)
+            .unwrap();
+
+        let config = Config::try_from(&entry).unwrap();
+        assert_eq!(config.route.unwrap().protect, Some(true));
     }
 }

@@ -123,6 +123,11 @@ impl App {
         self.router.take()
     }
 
+    #[cfg(test)]
+    pub(crate) fn take_router_for_test(&self) -> Router {
+        self.get_router()
+    }
+
     fn replace_router(&mut self, new_router: Router) {
         // _old_route object will be dropped (Axum uses builder pattern)
         let _old_route = self.router.replace(new_router);
@@ -351,5 +356,215 @@ impl RouteRegistrator for App {
         let router = self.try_add_auth_middleware_layer(router, is_protected);
 
         self.route(path, router, method, options);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::{Body, to_bytes},
+        http::{Method, Request},
+        routing::get,
+    };
+    use tower::ServiceExt;
+
+    fn config(folder: Option<&str>, port: Option<u16>) -> Config {
+        Config {
+            server: Some(ServerConfig {
+                folder: folder.map(str::to_string),
+                port,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn default_and_custom_config_values_are_resolved() {
+        let default_app = App::default();
+        assert_eq!(default_app.get_folder(), DEFAULT_FOLDER);
+        assert_eq!(default_app.get_port(), DEFAULT_PORT);
+
+        let custom_app = App::new(config(Some("fixtures"), Some(9876)));
+        assert_eq!(custom_app.get_folder(), "fixtures");
+        assert_eq!(custom_app.get_port(), 9876);
+    }
+
+    #[tokio::test]
+    async fn route_registers_page_link_and_serves_handler() {
+        let mut app = App::default();
+        app.route(
+            "/ping",
+            get(|| async { "pong" }),
+            Some("GET"),
+            Some(&["json".to_string()]),
+        );
+
+        let html = app.pages.lock().unwrap().render_index();
+        assert!(html.contains("/ping"));
+        assert!(html.contains("GET"));
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(Request::builder().uri("/ping").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+            "pong"
+        );
+    }
+
+    #[tokio::test]
+    async fn unprotected_auth_layer_returns_original_router() {
+        let mut app = App::default();
+        app.push_route("/open", get(|| async { "ok" }), Some("GET"), false, None);
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(Request::builder().uri("/open").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn protected_auth_layer_without_token_collection_leaves_route_open() {
+        let mut app = App::default();
+        {
+            let mut shared_info = GLOBAL_SHARED_INFO.write().unwrap();
+            shared_info.token_collection = "tokens".to_string();
+            shared_info.jwt_secret = "secret".to_string();
+            shared_info.auth_cookie_name = "auth".to_string();
+        }
+        app.push_route(
+            "/protected",
+            get(|| async { "ok" }),
+            Some("GET"),
+            true,
+            None,
+        );
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .uri("/protected")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn home_fallback_public_and_middlewares_are_built() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("asset.txt"), "asset").unwrap();
+
+        let mut app = App::new(Config {
+            server: Some(ServerConfig {
+                enable_cors: Some(true),
+                allowed_origin: Some("http://example.com".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        app.pages
+            .lock()
+            .unwrap()
+            .push_link("GET".to_string(), "/x".to_string(), &[]);
+        app.build_home_route();
+        app.build_public_router(
+            "public-assets".to_string(),
+            temp_dir.path().to_string_lossy().to_string(),
+        );
+        app.build_fallback();
+        app.build_middlewares();
+
+        let router = app.take_router_for_test();
+        let home = router
+            .clone()
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(home.status(), StatusCode::OK);
+        assert_eq!(home.headers().get(CONTENT_TYPE).unwrap(), "text/html");
+
+        let public = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/assets/asset.txt")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(public.status(), StatusCode::OK);
+
+        let fallback = router
+            .oneshot(
+                Request::builder()
+                    .uri("/missing")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(fallback.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn cors_can_be_disabled_and_public_v2_can_mount_route() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("file.txt"), "file").unwrap();
+
+        let mut app = App::new(Config {
+            server: Some(ServerConfig {
+                enable_cors: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        app.build_public_router_v2(&temp_dir.path().as_os_str().to_os_string(), "/static");
+        app.build_middlewares();
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/static/file.txt")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn collections_references_and_finish_reset_state() {
+        let mut app = App::default();
+        app.db.create("users");
+        app.db.create("orders");
+        app.build_collections_references();
+        app.build_collections_route();
+        App::show_greetings();
+        app.push_uploads_config("missing-folder".to_string(), false);
+        app.finish();
+
+        assert!(app.db.list_collections().is_empty());
+        assert!(
+            app.pages
+                .lock()
+                .unwrap()
+                .render_index()
+                .contains("mock_routes = []")
+        );
     }
 }
