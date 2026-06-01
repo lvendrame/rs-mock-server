@@ -5,16 +5,21 @@ use crate::{
     route_builder::{PrintRoute, Route, RouteGenerator, route_params::RouteParams},
 };
 
+/// Public static directory route generated from a `public` folder.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RoutePublic {
+    /// Public directory path.
     pub path: OsString,
+    /// Route prefix used to serve the directory.
     pub route: String,
+    /// Whether this route requires auth middleware.
     pub is_protected: bool,
 }
 
 static PUBLIC_ROUTE_NAME: &str = "public";
 
 impl RoutePublic {
+    /// Parses route parameters as a public static directory route.
     pub fn try_parse(route_params: RouteParams) -> Route {
         if route_params.file_stem == PUBLIC_ROUTE_NAME
             || route_params

@@ -22,32 +22,53 @@ static ROLES_FIELD: &str = "roles";
 static JWT_SECRET: &str = "1!2@3#4$5%6â7&8*9(0)-_=+±§";
 static COOKIE_NAME: &str = "auth_token";
 
+/// Default Fosk collection for authenticated users.
 pub static USER_COLLECTION: &str = "internal_auth_users";
+/// Default Fosk collection for issued auth tokens.
 pub static TOKEN_COLLECTION: &str = "internal_auth_tokens";
 
+/// Default login endpoint suffix.
 pub static LOGIN_ENDPOINT: &str = "/login";
+/// Default logout endpoint suffix.
 pub static LOGOUT_ENDPOINT: &str = "/logout";
+/// Default route for user management.
 pub static USERS_ENDPOINT: &str = "/users";
 
+/// Authentication route set generated from a `{auth}` mock file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouteAuth {
+    /// Source auth definition path.
     pub path: OsString,
+    /// Base auth route.
     pub route: String,
+    /// Optional response delay in milliseconds.
     pub delay: Option<u16>,
+    /// Login endpoint suffix.
     pub login_endpoint: String,
+    /// Logout endpoint suffix.
     pub logout_endpoint: String,
+    /// Route that exposes the users collection.
     pub users_route: String,
+    /// Token storage collection configuration.
     pub token_collection: CollectionConfig,
+    /// User storage collection configuration.
     pub user_collection: CollectionConfig,
+    /// Username field in auth payloads.
     pub username_field: String,
+    /// Password field in auth payloads.
     pub password_field: String,
+    /// Roles field in user records.
     pub roles_field: String,
+    /// Secret used to sign JWT tokens.
     pub jwt_secret: String,
+    /// Auth cookie name.
     pub cookie_name: String,
+    /// Whether user passwords are stored encrypted.
     pub encrypt_password: bool,
 }
 
 impl RouteAuth {
+    /// Parses route parameters as an authentication route definition.
     pub fn try_parse(route_params: RouteParams) -> Route {
         if RE_FILE_AUTH.is_match(&route_params.file_stem) {
             let config = route_params.config.clone();

@@ -1,3 +1,5 @@
+//! Handlers for generated REST collection routes.
+
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use axum::{
@@ -16,6 +18,7 @@ use crate::{
     route_builder::{RouteRegistrator, RouteRest},
 };
 
+/// Registers `GET /resource` to list all items in a collection.
 pub fn create_get_all(
     app: &mut App,
     route: &str,
@@ -39,6 +42,7 @@ pub fn create_get_all(
     app.push_route(route, list_router, Some("GET"), is_protected, None);
 }
 
+/// Registers `POST /resource` to insert an item into a collection.
 pub fn create_insert(
     app: &mut App,
     route: &str,
@@ -60,6 +64,7 @@ pub fn create_insert(
     app.push_route(route, create_router, Some("POST"), is_protected, None);
 }
 
+/// Registers `GET /resource/{id}` to retrieve one collection item.
 pub fn create_get_item(
     app: &mut App,
     id_route: &str,
@@ -81,6 +86,7 @@ pub fn create_get_item(
     app.push_route(id_route, get_router, Some("GET"), is_protected, None);
 }
 
+/// Registers `PUT /resource/{id}` to replace one collection item.
 pub fn create_full_update(
     app: &mut App,
     id_route: &str,
@@ -104,6 +110,7 @@ pub fn create_full_update(
     app.push_route(id_route, put_router, Some("PUT"), is_protected, None);
 }
 
+/// Registers `PATCH /resource/{id}` to partially update one collection item.
 pub fn create_partial_update(
     app: &mut App,
     id_route: &str,
@@ -127,6 +134,7 @@ pub fn create_partial_update(
     app.push_route(id_route, patch_router, Some("PATCH"), is_protected, None);
 }
 
+/// Registers `DELETE /resource/{id}` to remove one collection item.
 pub fn create_delete(
     app: &mut App,
     id_route: &str,
@@ -148,6 +156,7 @@ pub fn create_delete(
     app.push_route(id_route, delete_router, Some("DELETE"), is_protected, None);
 }
 
+/// Loads initial collection data and registers all REST CRUD routes.
 pub fn build_rest_routes(app: &mut App, config: &RouteRest) -> Arc<DbCollection> {
     let collection_name = config.collection_name.clone();
     let collection = app.db.create_with_config(

@@ -1,5 +1,6 @@
 use crate::link::Link;
 
+/// Renderer for the embedded mock-server home page.
 pub struct Pages {
     links: Vec<Link>,
     index_template: &'static str,
@@ -23,14 +24,17 @@ impl Default for Pages {
 }
 
 impl Pages {
+    /// Creates an empty home page renderer with embedded assets.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Adds a route entry to the home page.
     pub fn push_link(&mut self, method: String, route: String, options: &[String]) {
         self.links.push(Link::new(method, route, options));
     }
 
+    /// Renders the full home page HTML with route data and assets inlined.
     pub fn render_index(&self) -> String {
         let json = serde_json::to_string(&self.links);
         let mock_routes = format!("let mock_routes = {};", json.unwrap());

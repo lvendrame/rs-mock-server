@@ -165,6 +165,7 @@ fn generate_token(
     response
 }
 
+/// Registers the login route and token issuing behavior for an auth definition.
 pub fn create_login_route(app: &mut App, auth_def: &RouteAuth) {
     let login_route = format!("{}{}", auth_def.route, auth_def.login_endpoint);
     let token_collection = auth_def.token_collection.name.clone();
@@ -261,7 +262,7 @@ fn extract_token_from_request(req: &Request, cookie_name: &str) -> Option<String
 type AuthMiddlewareReturn =
     Pin<Box<dyn std::future::Future<Output = Result<Response<Body>, StatusCode>> + Send + 'static>>;
 
-// For when you need access to the token collection (token revocation)
+/// Creates authentication middleware that validates JWTs and token revocation state.
 pub fn make_auth_middleware(
     token_collection: &Arc<DbCollection>,
     jwt_secret: &str,
@@ -295,6 +296,7 @@ pub fn make_auth_middleware(
     }
 }
 
+/// Registers the logout route and revokes the presented token.
 pub fn create_logout_route(app: &mut App, auth_def: &RouteAuth) {
     let logout_route = format!("{}{}", auth_def.route, auth_def.logout_endpoint);
 
@@ -325,6 +327,7 @@ pub fn create_logout_route(app: &mut App, auth_def: &RouteAuth) {
     app.route(&logout_route, logout_router, Some("POST"), None);
 }
 
+/// Creates auth storage, user REST routes, login, and logout routes.
 pub fn build_auth_routes(app: &mut App, auth_def: &RouteAuth) {
     println!("Starting loading Auth route");
 

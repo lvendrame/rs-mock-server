@@ -161,6 +161,7 @@ fn create_uploaded_list_route(app: &mut App, upload_def: &RouteUpload) {
     app.route(&route, upload_list_router, Some("GET"), None);
 }
 
+/// Registers upload, download, and list-file routes for an upload directory.
 pub fn build_upload_routes(app: &mut App, upload_def: &RouteUpload) {
     create_upload_route(app, upload_def);
 

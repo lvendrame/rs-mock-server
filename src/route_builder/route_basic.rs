@@ -24,16 +24,22 @@ const ELEMENT_DESCRIPTOR: usize = 4;
 const ELEMENT_ROUTE_NAME: usize = 2;
 const ELEMENT_PARAM: usize = 4;
 
+/// Extra path segment behavior parsed from basic route filenames.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum SubRoute {
+    /// No extra path segment.
     #[default]
     None,
+    /// Dynamic `{id}` path segment.
     Id,
+    /// Multiple static routes generated from an inclusive integer range.
     Range(u32, u32),
+    /// Static path segment.
     Static(String),
 }
 
 impl SubRoute {
+    /// Parses an optional filename descriptor into a sub-route mode.
     pub fn from(pattern: Option<regex::Match<'_>>) -> Self {
         if pattern.is_none() {
             return Self::None;
@@ -66,16 +72,23 @@ impl Display for SubRoute {
     }
 }
 
+/// Static file-backed route generated from a mock file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouteBasic {
+    /// Source mock file path.
     pub path: OsString,
+    /// HTTP method served by the file.
     pub method: Method,
+    /// Base route path.
     pub route: String,
+    /// Optional extra route segment behavior.
     pub sub_route: SubRoute,
+    /// Whether this route requires auth middleware.
     pub is_protected: bool,
 }
 
 impl RouteBasic {
+    /// Parses a filesystem entry as a basic static response route.
     pub fn try_parse(route_params: RouteParams) -> Route {
         let config = route_params.config.clone();
         let route_config = config.route.clone().unwrap_or_default();

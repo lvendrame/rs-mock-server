@@ -8,13 +8,17 @@ use crate::{
     },
 };
 
+/// Discovers, orders, and registers routes from a mock directory tree.
 #[derive(Debug, Default)]
 pub struct RouteManager {
+    /// Optional authentication route, limited to one per server.
     pub auth_route: Route,
+    /// Parsed non-auth routes.
     pub routes: Vec<Route>,
 }
 
 impl RouteManager {
+    /// Creates an empty route manager.
     pub fn new() -> Self {
         Self {
             auth_route: Route::None,
@@ -22,6 +26,7 @@ impl RouteManager {
         }
     }
 
+    /// Loads route definitions from a root directory using an optional parent config.
     pub fn from_dir(root_path: &str, config: Option<Config>) -> Self {
         let start_time = std::time::Instant::now();
         println!("Start - Loading routes");

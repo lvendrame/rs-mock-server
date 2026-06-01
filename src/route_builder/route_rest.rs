@@ -15,18 +15,27 @@ static RE_FILE_REST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\$)?rest(\{(.+)\}
 const ELEMENT_IS_PROTECTED: usize = 1;
 const ELEMENT_DESCRIPTOR: usize = 3;
 
+/// REST collection route set generated from a `rest` mock file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouteRest {
+    /// Source REST definition path.
     pub path: OsString,
+    /// Base route for collection operations.
     pub route: String,
+    /// Field used as the item identifier.
     pub id_key: String,
+    /// Identifier generation strategy.
     pub id_type: IdType,
+    /// Fosk collection name backing this route.
     pub collection_name: String,
+    /// Optional response delay in milliseconds.
     pub delay: Option<u16>,
+    /// Whether this route requires auth middleware.
     pub is_protected: bool,
 }
 
 impl RouteRest {
+    /// Creates a REST route definition.
     pub fn new(
         route: String,
         path: OsString,
@@ -76,6 +85,7 @@ impl RouteRest {
         }
     }
 
+    /// Parses route parameters as a REST collection route definition.
     pub fn try_parse(route_params: RouteParams) -> Route {
         if let Some(captures) = RE_FILE_REST.captures(&route_params.file_stem) {
             let config = route_params.config.clone();

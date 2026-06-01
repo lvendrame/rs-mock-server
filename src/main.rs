@@ -1,3 +1,10 @@
+//! Command-line entry point for `rs-mock-server`.
+//!
+//! The server maps files and directories under a mock folder into static,
+//! REST, upload, authentication, collections, and GraphQL routes for local API
+//! development and testing.
+#![cfg_attr(doc, warn(missing_docs))]
+
 use clap::Parser;
 use notify::{RecursiveMode, Watcher};
 use std::time::{Duration, Instant};
@@ -10,11 +17,17 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 use crate::app::App;
 use crate::route_builder::config::{Config, ServerConfig};
 
+/// Application bootstrap, router assembly, and shared server state.
 pub mod app;
+/// HTTP handlers for generated mock routes.
 pub mod handlers;
+/// Link model used by the generated home page.
 pub mod link;
+/// Embedded home page renderer.
 pub mod pages;
+/// File and directory route discovery.
 pub mod route_builder;
+/// Upload cleanup configuration.
 pub mod upload_configuration;
 
 const DEFAULT_PORT: u16 = 4520;

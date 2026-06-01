@@ -71,6 +71,7 @@ fn schema_to_json(schema: &SchemaWithRefs) -> Value {
     Value::Object(j_map)
 }
 
+/// Registers the route that returns schemas for all loaded collections.
 pub fn create_all_collections_info_route(app: &mut App) {
     let collection_route = format!("{}/collections", MOCK_SERVER_ROUTE);
 
@@ -264,6 +265,7 @@ fn create_db_download(app: &mut App) {
     );
 }
 
+/// Registers internal collection metadata, upload, and download routes.
 pub fn create_collections_routes(app: &mut App) {
     create_all_collections_info_route(app);
     create_collection_info_route(app);

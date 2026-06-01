@@ -34,25 +34,36 @@ use crate::{
     upload_configuration::UploadConfiguration,
 };
 
+/// Shared authentication metadata used by protected route middleware.
 #[derive(Default)]
 pub struct GlobalSharedInfo {
+    /// Secret used to sign and verify authentication tokens.
     pub jwt_secret: String,
+    /// Fosk collection that stores active auth tokens.
     pub token_collection: String,
+    /// Cookie name used to read and write auth tokens.
     pub auth_cookie_name: String,
 }
 
+/// Prefix reserved for mock-server internal endpoints.
 pub const MOCK_SERVER_ROUTE: &str = "/mock-server";
+/// Global authentication metadata populated when auth routes are registered.
 pub static GLOBAL_SHARED_INFO: RwLock<GlobalSharedInfo> = RwLock::new(GlobalSharedInfo {
     jwt_secret: String::new(),
     token_collection: String::new(),
     auth_cookie_name: String::new(),
 });
 
+/// Runtime application state and Axum router builder.
 pub struct App {
+    /// Router under construction.
     pub router: RefCell<Router>,
+    /// Home page model populated as routes are registered.
     pub pages: Arc<Mutex<Pages>>,
     uploads_configurations: Vec<UploadConfiguration>,
+    /// In-memory Fosk database used by REST, auth, collections, and GraphQL routes.
     pub db: Arc<Db>,
+    /// Effective server configuration.
     pub server_config: Config,
 }
 
@@ -81,6 +92,7 @@ impl Default for App {
 }
 
 impl App {
+    /// Creates an application using the provided server configuration.
     pub fn new(server_config: Config) -> Self {
         let router = RefCell::new(Router::new());
         let pages = Arc::new(Mutex::new(Pages::new()));
@@ -95,6 +107,7 @@ impl App {
         }
     }
 
+    /// Returns the configured mock folder, or the default folder when unset.
     pub fn get_folder(&self) -> String {
         self.server_config
             .server
@@ -105,6 +118,7 @@ impl App {
             .unwrap_or(DEFAULT_FOLDER.to_string())
     }
 
+    /// Returns the configured server port, or the default port when unset.
     pub fn get_port(&self) -> u16 {
         self.server_config
             .server
@@ -114,6 +128,7 @@ impl App {
             .unwrap_or(DEFAULT_PORT)
     }
 
+    /// Stores upload cleanup behavior for a registered upload route.
     pub fn push_uploads_config(&mut self, uploads_path: String, clean_uploads: bool) {
         self.uploads_configurations
             .push(UploadConfiguration::new(uploads_path, clean_uploads));
@@ -133,6 +148,7 @@ impl App {
         let _old_route = self.router.replace(new_router);
     }
 
+    /// Registers an Axum method router and optionally exposes it on the home page.
     pub fn route(
         &mut self,
         path: &str,
@@ -153,6 +169,7 @@ impl App {
         }
     }
 
+    /// Wraps a method router with authentication middleware when the route is protected.
     pub fn try_add_auth_middleware_layer(
         &mut self,
         router: MethodRouter,
@@ -244,6 +261,7 @@ impl App {
         (StatusCode::NOT_FOUND, "nothing to see here")
     }
 
+    /// Registers a public static directory using the legacy filename convention.
     pub fn build_public_router(&mut self, file_name: String, path: String) {
         let public_end_point = if let Some((_, to)) = file_name.split_once('-') {
             to
@@ -259,16 +277,19 @@ impl App {
         self.replace_router(new_router);
     }
 
+    /// Registers a public static directory at an explicit route prefix.
     pub fn build_public_router_v2(&mut self, path: &OsString, route: &str) {
         let static_files = ServeDir::new(path);
         let new_router = self.router.take().nest_service(route, static_files);
         self.replace_router(new_router);
     }
 
+    /// Registers internal collection inspection routes.
     pub fn build_collections_route(&mut self) {
         create_collections_routes(self);
     }
 
+    /// Infers references between loaded Fosk collections.
     pub fn build_collections_references(&mut self) {
         let collections = self.db.list_collections();
 
@@ -282,6 +303,7 @@ impl App {
         }
     }
 
+    /// Prints the startup banner.
     pub fn show_greetings() {
         let banner = r"
                                   ___     ___
@@ -318,6 +340,7 @@ impl App {
         axum::serve(listener, self.get_router()).await.unwrap();
     }
 
+    /// Builds routes, middleware, and collection references, then starts the HTTP server.
     pub async fn initialize(&mut self) {
         self.build_dyn_routes();
         self.build_home_route();
@@ -328,6 +351,7 @@ impl App {
         self.start_server().await;
     }
 
+    /// Cleans upload folders and resets runtime state after shutdown.
     pub fn finish(&mut self) {
         println!("\n");
 

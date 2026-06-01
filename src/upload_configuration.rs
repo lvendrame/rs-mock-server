@@ -1,11 +1,15 @@
 use std::ffi::OsStr;
 
+/// Runtime cleanup policy for one upload directory.
 pub struct UploadConfiguration {
+    /// Directory where uploaded files are stored.
     pub uploads_path: String,
+    /// Whether uploaded files should be removed when the server stops.
     pub clean_uploads: bool,
 }
 
 impl UploadConfiguration {
+    /// Creates an upload cleanup configuration.
     pub fn new(uploads_path: String, clean_uploads: bool) -> Self {
         Self {
             uploads_path,
@@ -13,6 +17,7 @@ impl UploadConfiguration {
         }
     }
 
+    /// Removes uploaded files when cleanup is enabled, preserving TOML config files.
     pub fn clean_upload_folder(&self) {
         use std::fs;
 

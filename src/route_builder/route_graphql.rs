@@ -13,15 +13,21 @@ static RE_FOLDER_GRAPHQL: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\$)?graphql$
 
 const ELEMENT_IS_PROTECTED: usize = 1;
 
+/// GraphQL route set generated from a `graphql` directory.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouteGraphQL {
+    /// GraphQL directory path.
     pub path: OsString,
+    /// Base route for GraphQL and GraphiQL endpoints.
     pub route: String,
+    /// Optional response delay in milliseconds.
     pub delay: Option<u16>,
+    /// Whether this route requires auth middleware.
     pub is_protected: bool,
 }
 
 impl RouteGraphQL {
+    /// Creates a GraphQL route definition.
     pub fn new(path: OsString, route: String, is_protected: bool, delay: Option<u16>) -> Self {
         Self {
             path,
@@ -31,6 +37,7 @@ impl RouteGraphQL {
         }
     }
 
+    /// Parses route parameters as a GraphQL directory route definition.
     pub fn try_parse(route_params: RouteParams) -> Route {
         if let Some(captures) = RE_FOLDER_GRAPHQL.captures(&route_params.file_stem) {
             let config = route_params.config.clone();

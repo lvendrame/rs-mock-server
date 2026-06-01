@@ -1,5 +1,8 @@
+//! Utility helpers shared by route handlers.
+
 use std::{ffi::OsString, path::Path};
 
+/// Returns the lowercase-sensitive file extension for a path, or an empty string.
 pub fn get_file_extension(file_path: &OsString) -> String {
     Path::new(file_path)
         .extension()
@@ -8,6 +11,7 @@ pub fn get_file_extension(file_path: &OsString) -> String {
         .to_string()
 }
 
+/// Returns true for file types that can be served as textual responses.
 pub fn is_text_file(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
     extension == "txt"
@@ -17,27 +21,33 @@ pub fn is_text_file(file_path: &OsString) -> bool {
         || extension == "sql"
 }
 
+/// Returns true when the path has a JSON extension.
 pub fn is_json(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
     extension == "json"
 }
 
+/// Returns true when the path has a JGD extension.
 pub fn is_jgd(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
     extension == "jgd"
 }
 
+/// Returns true when the path has a SQL extension.
 pub fn is_sql(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
     extension == "sql"
 }
 
+/// Returns true when the path has a TOML extension.
 pub fn is_toml(file_path: &OsString) -> bool {
     let extension = get_file_extension(file_path);
     extension == "toml"
 }
 
+/// Extension trait for applying optional route response delays.
 pub trait SleepThread {
+    /// Sleeps the current thread when the option contains a delay in milliseconds.
     fn sleep_thread(self);
 }
 

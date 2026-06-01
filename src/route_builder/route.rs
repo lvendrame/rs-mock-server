@@ -10,34 +10,49 @@ use crate::{
     },
 };
 
+/// Collection metadata used by REST and authentication route builders.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CollectionConfig {
+    /// Fosk collection name.
     pub name: String,
+    /// Identifier field stored in collection documents.
     pub id_key: String,
+    /// Identifier generation strategy.
     pub id_type: IdType,
 }
 
+/// Parsed route definition discovered from a mock file or directory.
 #[derive(Debug, Default, PartialEq)]
 pub enum Route {
+    /// No route could be parsed.
     #[default]
     None,
+    /// Authentication route set.
     Auth(Box<RouteAuth>),
+    /// Static file-backed route.
     Basic(RouteBasic),
+    /// REST collection route set.
     Rest(RouteRest),
+    /// GraphQL route set.
     GraphQL(RouteGraphQL),
+    /// Static directory route.
     Public(RoutePublic),
+    /// File upload route set.
     Upload(RouteUpload),
 }
 
 impl Route {
+    /// Returns true when this route contains no registration work.
     pub fn is_none(&self) -> bool {
         *self == Route::None
     }
 
+    /// Returns true when this route can register one or more HTTP routes.
     pub fn is_some(&self) -> bool {
         *self != Route::None
     }
 
+    /// Parses route parameters into the first matching route kind.
     pub fn try_parse(route_params: &RouteParams) -> Route {
         if route_params.file_name.starts_with(".") || route_params.file_name.ends_with(".toml") {
             return Route::None;
@@ -80,6 +95,7 @@ impl Route {
         Route::None
     }
 
+    /// Registers this route and prints its mapping when it is present.
     pub fn make_routes_and_print(&self, app: &mut App) {
         if self.is_some() {
             self.make_routes(app);

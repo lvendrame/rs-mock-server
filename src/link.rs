@@ -2,14 +2,19 @@ use std::fmt::Display;
 
 use serde::Serialize;
 
+/// Route link rendered on the generated home page.
 #[derive(Default, Serialize)]
 pub struct Link {
+    /// HTTP method displayed for the route.
     pub method: String,
+    /// Public route path.
     pub route: String,
+    /// Route capabilities used by the home page UI.
     pub options: Vec<String>,
 }
 
 impl Link {
+    /// Creates a home page route link and copies its option labels.
     pub fn new(method: String, route: String, options: &[String]) -> Link {
         Link {
             method,

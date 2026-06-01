@@ -15,21 +15,32 @@ const ELEMENT_IS_PROTECTED: usize = 1;
 const ELEMENT_IS_TEMPORARY: usize = 2;
 const ELEMENT_ROUTE: usize = 4;
 
+/// Path parameter used by generated download routes.
 pub const FILE_NAME_PARAM: &str = "{file_name}";
 
+/// Upload route set generated from a `{upload}` directory.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouteUpload {
+    /// Upload directory path.
     pub path: OsString,
+    /// Base route for upload operations.
     pub route: String,
+    /// Whether uploaded files are removed when the server stops.
     pub is_temporary: bool,
+    /// Whether this route requires auth middleware.
     pub is_protected: bool,
+    /// Optional response delay in milliseconds.
     pub delay: Option<u16>,
+    /// Optional upload endpoint suffix.
     pub upload_endpoint: Option<String>,
+    /// Optional download endpoint suffix.
     pub download_endpoint: Option<String>,
+    /// Optional list-files endpoint suffix.
     pub list_files_endpoint: Option<String>,
 }
 
 impl RouteUpload {
+    /// Parses route parameters as an upload directory route definition.
     pub fn try_parse(route_params: RouteParams) -> Route {
         if let Some(captures) = RE_DIR_UPLOAD.captures(&route_params.file_name) {
             let config = route_params.config.clone();
@@ -74,6 +85,7 @@ impl RouteUpload {
         Route::None
     }
 
+    /// Builds a full route by appending an optional endpoint suffix to the base route.
     pub fn get_route(&self, endpoint: &Option<String>) -> String {
         match endpoint {
             Some(endpoint) => format!("{}{}", self.route, endpoint),
@@ -81,10 +93,12 @@ impl RouteUpload {
         }
     }
 
+    /// Returns the generated upload route.
     pub fn get_upload_route(&self) -> String {
         self.get_route(&self.upload_endpoint)
     }
 
+    /// Returns the generated download route with a `{file_name}` path parameter.
     pub fn get_download_route(&self) -> String {
         format!(
             "{}/{}",
@@ -93,6 +107,7 @@ impl RouteUpload {
         )
     }
 
+    /// Returns the generated list-files route.
     pub fn get_list_files_route(&self) -> String {
         self.get_route(&self.list_files_endpoint)
     }

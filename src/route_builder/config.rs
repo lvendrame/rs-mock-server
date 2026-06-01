@@ -136,12 +136,14 @@ impl TryFrom<&DirEntry> for Config {
     }
 }
 
+/// Lookup table for TOML configuration files found in one directory.
 #[derive(Debug, Default)]
 pub struct ConfigStore {
     map_configs: HashMap<String, Config>,
 }
 
 impl ConfigStore {
+    /// Loads all TOML files in a directory, keyed by lowercase file stem.
     pub fn try_from_dir(dir_path: &str) -> Result<Self, std::io::Error> {
         let mut store = Self::default();
         fs::read_dir(dir_path)?
@@ -170,6 +172,7 @@ impl ConfigStore {
         Ok(store)
     }
 
+    /// Returns a cloned configuration by case-insensitive key.
     pub fn get(&self, key: &str) -> Option<Config> {
         self.map_configs
             .get(key.to_ascii_lowercase().as_str())
@@ -177,11 +180,14 @@ impl ConfigStore {
     }
 }
 
+/// Merge behavior where child values override parent defaults.
 pub trait Mergeable {
+    /// Merges this value with a parent value.
     fn merge(self, parent: Self) -> Self;
 }
 
 impl Config {
+    /// Merges this configuration with an optional parent configuration.
     pub fn merge(self, parent: Option<Self>) -> Self {
         match parent {
             Some(parent) => Self {
@@ -195,6 +201,7 @@ impl Config {
         }
     }
 
+    /// Merges this configuration with a borrowed parent configuration.
     pub fn merge_with_ref(self, parent: &Self) -> Self {
         let parent = parent.clone();
         Self {
@@ -206,6 +213,7 @@ impl Config {
         }
     }
 
+    /// Sets the route protection flag.
     pub fn with_protect(mut self, protect: bool) -> Self {
         let mut route = self.route.unwrap_or_default();
         route.protect = Some(protect);
@@ -214,6 +222,7 @@ impl Config {
         self
     }
 
+    /// Sets the collection name.
     pub fn with_collection_name(mut self, name: &str) -> Self {
         let mut collection = self.collection.unwrap_or_default();
         collection.name = Some(name.to_string());
@@ -222,6 +231,7 @@ impl Config {
         self
     }
 
+    /// Sets the collection identifier field.
     pub fn with_id_key(mut self, id_key: &str) -> Self {
         let mut collection = self.collection.unwrap_or_default();
         collection.id_key = Some(id_key.to_string());
@@ -230,6 +240,7 @@ impl Config {
         self
     }
 
+    /// Sets the collection identifier strategy.
     pub fn with_id_type(mut self, id_type: IdType) -> Self {
         let mut collection = self.collection.unwrap_or_default();
         collection.id_type = Some(id_type);

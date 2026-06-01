@@ -5,19 +5,29 @@ use std::{
 
 use crate::route_builder::config::{Config, ConfigStore};
 
+/// Filesystem and configuration data used while parsing one route candidate.
 #[derive(Debug, Clone)]
 pub struct RouteParams {
+    /// Parent route path accumulated from ancestor directories.
     pub parent_route: String,
+    /// Full route path for this entry before file-specific parsing.
     pub full_route: String,
+    /// Entry filename.
     pub file_name: String,
+    /// Filename without extension.
     pub file_stem: String,
+    /// Entry filesystem path.
     pub file_path: OsString,
+    /// Entry file extension, or an empty string for directories and extensionless files.
     pub file_extension: String,
+    /// Effective configuration after parent and local TOML merges.
     pub config: Config,
+    /// Whether the entry is a directory.
     pub is_dir: bool,
 }
 
 impl RouteParams {
+    /// Builds route parsing parameters for a directory entry.
     pub fn new(
         parent_route: &str,
         entry: &DirEntry,

@@ -1,3 +1,5 @@
+//! Handlers for file-backed mock responses.
+
 use std::{ffi::OsString, fs, sync::Arc};
 
 use axum::{
@@ -23,6 +25,7 @@ fn get_file_content(file_path: &OsString) -> String {
     fs::read_to_string(file_path).unwrap()
 }
 
+/// Builds a router that streams a non-text file with an inferred content type.
 pub fn build_stream_handler(file_path: OsString, method: &str) -> MethodRouter {
     let handler = move || {
         let file_path = file_path.clone();
@@ -67,6 +70,7 @@ pub fn build_stream_handler(file_path: OsString, method: &str) -> MethodRouter {
     }
 }
 
+/// Builds a router that serves text, JGD-generated JSON, or SQL query results.
 pub fn content_handler(app: &mut App, file_path: OsString, method: &str) -> MethodRouter {
     let file_path = file_path.clone();
     let db = Arc::clone(&app.db);
@@ -109,7 +113,7 @@ pub fn content_handler(app: &mut App, file_path: OsString, method: &str) -> Meth
     }
 }
 
-// Helper to create a MethodRouter from a string
+/// Builds the correct method router for a mock file based on its extension.
 pub fn build_method_router(app: &mut App, file_path: &OsString, method: &str) -> MethodRouter {
     let file_path = file_path.clone();
     if is_text_file(&file_path) {

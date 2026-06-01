@@ -26,9 +26,10 @@ use crate::{
 };
 use std::collections::{HashMap, HashSet};
 
+/// Folder under a GraphQL route that seeds Fosk collections.
 pub const COLLECTIONS_FOLDER: &str = "/collections";
 
-/// Build a dynamic Async-GraphQL Schema from Fosk collections
+/// Builds a dynamic Async-GraphQL schema from loaded Fosk collections.
 pub fn build_dynamic_schema(db: &Db) -> Schema {
     struct CollectionMeta {
         raw: String,
@@ -282,6 +283,7 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
     schema.finish().unwrap()
 }
 
+/// Registers the GraphiQL IDE route.
 pub fn create_graphiql_route(app: &mut App) {
     // Serve GraphiQL IDE
     let router =
@@ -664,6 +666,7 @@ async fn execute_graphql_operations(
 
 // -------------------------------------------------------------------------------
 
+/// Registers the GraphQL endpoint for dynamic collection queries and mutations.
 pub fn create_graphql_route(
     app: &mut App,
     route: &str,
@@ -745,6 +748,7 @@ pub fn create_graphql_route(
     app.push_route(route, router, Some("POST"), is_protected, None);
 }
 
+/// Loads JSON and JGD collection seed files from a GraphQL `collections` folder.
 pub fn load_folder_collections(app: &mut App, path: OsString) -> Result<(), Error> {
     let mut path = path.clone();
     path.push(COLLECTIONS_FOLDER);
@@ -802,6 +806,7 @@ pub fn load_folder_collections(app: &mut App, path: OsString) -> Result<(), Erro
     Ok(())
 }
 
+/// Loads GraphQL seed collections and registers GraphQL plus GraphiQL routes.
 pub fn build_graphql_routes(app: &mut App, config: &RouteGraphQL) {
     let result = load_folder_collections(app, config.path.clone());
     if let Err(error) = result {
