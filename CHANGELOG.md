@@ -247,3 +247,7 @@
 ## 0.6.16 (2025-12-05)
 
 -   fix: bug to load app without collections when building references (Luis Vendrame)
+
+## 0.7.0 (2026-06-02)
+
+-   feat: use as a library also

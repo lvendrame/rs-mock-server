@@ -195,11 +195,11 @@ impl App {
         RouteManager::from_dir(&dir, Some(self.server_config.clone())).make_routes(self);
     }
 
-    fn build_home_route(&mut self) {
+    fn build_home_route(&mut self, route: &str) {
         let pages = Arc::clone(&self.pages);
 
         self.route(
-            "/",
+            route,
             get(|| async move {
                 let body = pages.lock().unwrap().render_index();
                 let mut headers = HeaderMap::new();
@@ -327,7 +327,28 @@ impl App {
         let _ = std::io::stdout().write_all(banner.replace("{{{{}}}}", &version).as_bytes());
     }
 
-    async fn start_server(&self) {
+    fn build_router(&mut self, include_fallback: bool, home_route: &str) -> Router {
+        self.build_dyn_routes();
+        self.build_home_route(home_route);
+        self.build_collections_route();
+        if include_fallback {
+            self.build_fallback();
+        }
+        self.build_middlewares();
+        self.build_collections_references();
+        self.get_router()
+    }
+
+    /// Builds the mock server routes as an Axum router without starting a server.
+    ///
+    /// This is the library entry point for embedding `rs-mock-server` into a
+    /// host Axum application. It does not install the CLI fallback handler, so
+    /// unmatched requests remain under the host application's control.
+    pub fn into_router(mut self) -> Router {
+        self.build_router(false, MOCK_SERVER_ROUTE)
+    }
+
+    async fn start_server(&self, router: Router) {
         let address = format!("0.0.0.0:{}", self.get_port());
 
         let listener = TcpListener::bind(address.clone()).await.unwrap();
@@ -337,18 +358,13 @@ impl App {
         let link = Link::new(&link, &link);
         println!("🚀 Listening on {}", link);
 
-        axum::serve(listener, self.get_router()).await.unwrap();
+        axum::serve(listener, router).await.unwrap();
     }
 
     /// Builds routes, middleware, and collection references, then starts the HTTP server.
     pub async fn initialize(&mut self) {
-        self.build_dyn_routes();
-        self.build_home_route();
-        self.build_collections_route();
-        self.build_fallback();
-        self.build_middlewares();
-        self.build_collections_references();
-        self.start_server().await;
+        let router = self.build_router(true, "/");
+        self.start_server(router).await;
     }
 
     /// Cleans upload folders and resets runtime state after shutdown.
@@ -501,7 +517,7 @@ mod tests {
             .lock()
             .unwrap()
             .push_link("GET".to_string(), "/x".to_string(), &[]);
-        app.build_home_route();
+        app.build_home_route("/");
         app.build_public_router(
             "public-assets".to_string(),
             temp_dir.path().to_string_lossy().to_string(),
@@ -540,6 +556,92 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(fallback.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn into_router_embeds_mock_routes_without_owning_host_fallback() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("health.json"), r#"{"status":"ok"}"#).unwrap();
+
+        let mock_folder = temp_dir.path().to_string_lossy().to_string();
+        let mock_router = App::new(config(Some(&mock_folder), None)).into_router();
+        let host_router = Router::new()
+            .route("/", get(|| async { "host index" }))
+            .route("/host", get(|| async { "host" }))
+            .merge(mock_router)
+            .fallback(|| async { (StatusCode::IM_A_TEAPOT, "host fallback") });
+
+        let mock_home = host_router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(MOCK_SERVER_ROUTE)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(mock_home.status(), StatusCode::OK);
+        assert_eq!(mock_home.headers().get(CONTENT_TYPE).unwrap(), "text/html");
+
+        let mock_response = host_router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(mock_response.status(), StatusCode::OK);
+        assert_eq!(
+            to_bytes(mock_response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+            r#"{"status":"ok"}"#
+        );
+
+        let host_index = host_router
+            .clone()
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(host_index.status(), StatusCode::OK);
+        assert_eq!(
+            to_bytes(host_index.into_body(), usize::MAX).await.unwrap(),
+            "host index"
+        );
+
+        let host_response = host_router
+            .clone()
+            .oneshot(Request::builder().uri("/host").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(host_response.status(), StatusCode::OK);
+        assert_eq!(
+            to_bytes(host_response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+            "host"
+        );
+
+        let fallback_response = host_router
+            .oneshot(
+                Request::builder()
+                    .uri("/missing")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(fallback_response.status(), StatusCode::IM_A_TEAPOT);
+        assert_eq!(
+            to_bytes(fallback_response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+            "host fallback"
+        );
     }
 
     #[tokio::test]

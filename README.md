@@ -39,6 +39,50 @@ rs-mock-server
 rs-mock-server --port 8080 --folder ./my-api-mocks
 ```
 
+### Library Usage
+
+`rs-mock-server` can also be used as a Rust dependency. The package name uses
+hyphens, but the import path is `rs_mock_server`.
+
+```toml
+[dependencies]
+axum = "0.8"
+rs-mock-server = "0.7.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+```
+
+```rust
+use axum::{routing::get, Router};
+use rs_mock_server::{App, Config, ServerConfig};
+
+#[tokio::main]
+async fn main() {
+    let config = Config {
+        server: Some(ServerConfig {
+            folder: Some("./mocks".into()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let mock_routes = App::new(config).into_router();
+    let app = Router::new()
+        .route("/health", get(|| async { "host app" }))
+        .merge(mock_routes);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080")
+        .await
+        .unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+```
+
+`App::into_router()` builds the mock routes without binding a socket or owning
+the host server lifecycle. In embedded mode, the rs-mock-server home UI is
+available at `/mock-server`, leaving `/` and the fallback behavior under the
+host application's control. CLI hot reload remains available through the
+`rs-mock-server` binary.
+
 ### Create Your First Endpoints
 
 ```bash

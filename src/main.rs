@@ -1,37 +1,12 @@
-//! Command-line entry point for `rs-mock-server`.
-//!
-//! The server maps files and directories under a mock folder into static,
-//! REST, upload, authentication, collections, and GraphQL routes for local API
-//! development and testing.
-#![cfg_attr(doc, warn(missing_docs))]
-
 use clap::Parser;
 use notify::{RecursiveMode, Watcher};
+use rs_mock_server::{App, Config, DEFAULT_FOLDER, DEFAULT_PORT, ServerConfig};
 use std::time::{Duration, Instant};
 use std::{path::Path, sync::Arc};
 use tokio::sync::Mutex;
 use tokio::{signal, sync::mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
-
-use crate::app::App;
-use crate::route_builder::config::{Config, ServerConfig};
-
-/// Application bootstrap, router assembly, and shared server state.
-pub mod app;
-/// HTTP handlers for generated mock routes.
-pub mod handlers;
-/// Link model used by the generated home page.
-pub mod link;
-/// Embedded home page renderer.
-pub mod pages;
-/// File and directory route discovery.
-pub mod route_builder;
-/// Upload cleanup configuration.
-pub mod upload_configuration;
-
-const DEFAULT_PORT: u16 = 4520;
-const DEFAULT_FOLDER: &str = "mocks";
 
 /// rs-mock-server is a simple mock server for testing APIs.
 /// It serves static files as API responses based on their filenames and directory structure.
