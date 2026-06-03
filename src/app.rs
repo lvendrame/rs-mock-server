@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     ffi::OsString,
     io::Write,
+    net::SocketAddr,
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -13,7 +14,6 @@ use axum::{
 use fosk::Db;
 use http::{HeaderMap, HeaderValue, StatusCode, header::CONTENT_TYPE};
 use terminal_link::Link;
-use tokio::net::TcpListener;
 use tower::{
     Layer, ServiceBuilder,
     layer::util::{Identity, Stack},
@@ -31,6 +31,7 @@ use crate::{
         config::{Config, ServerConfig},
         route_manager::RouteManager,
     },
+    tls::{TlsMode, is_https, resolve_tls_mode, rustls_config},
     upload_configuration::UploadConfiguration,
 };
 
@@ -350,15 +351,37 @@ impl App {
 
     async fn start_server(&self, router: Router) {
         let address = format!("0.0.0.0:{}", self.get_port());
+        let server_config = self.server_config.server.clone().unwrap_or_default();
+        let tls_mode = resolve_tls_mode(&server_config).unwrap_or_else(|err| panic!("{}", err));
 
-        let listener = TcpListener::bind(address.clone()).await.unwrap();
         App::show_greetings();
+        self.print_listening_link(&tls_mode);
 
-        let link = format!("http://localhost:{}", self.get_port());
+        match tls_mode {
+            TlsMode::Disabled => {
+                let listener = tokio::net::TcpListener::bind(address.clone())
+                    .await
+                    .unwrap();
+                axum::serve(listener, router).await.unwrap();
+            }
+            mode => {
+                let config = rustls_config(&mode)
+                    .await
+                    .unwrap_or_else(|err| panic!("{}", err));
+                let address: SocketAddr = address.parse().unwrap();
+                axum_server::bind_rustls(address, config)
+                    .serve(router.into_make_service())
+                    .await
+                    .unwrap();
+            }
+        }
+    }
+
+    fn print_listening_link(&self, tls_mode: &TlsMode) {
+        let scheme = if is_https(tls_mode) { "https" } else { "http" };
+        let link = format!("{}://localhost:{}", scheme, self.get_port());
         let link = Link::new(&link, &link);
         println!("🚀 Listening on {}", link);
-
-        axum::serve(listener, router).await.unwrap();
     }
 
     /// Builds routes, middleware, and collection references, then starts the HTTP server.

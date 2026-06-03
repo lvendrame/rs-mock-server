@@ -22,6 +22,8 @@ pub mod link;
 pub mod pages;
 /// File and directory route discovery.
 pub mod route_builder;
+/// Local HTTPS configuration and certificate handling.
+pub mod tls;
 /// Upload cleanup configuration.
 pub mod upload_configuration;
 

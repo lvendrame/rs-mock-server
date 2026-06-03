@@ -25,6 +25,7 @@ exclude = [
 
 [dependencies]
 axum = { version = "0.8.9", features = ["multipart"] }
+axum-server = { version = "0.8.0", features = ["tls-rustls"] }
 clap = { version = "4.6.1", features = ["derive"] }
 fosk = "0.1.13"
 http = "1.4.1"
@@ -52,6 +53,7 @@ async-graphql-axum = "7.2.1"
 graphql-parser = "0.4"
 ratatui = "0.30.0"
 crossterm = "0.29.0"
+rcgen = "0.14.8"
 
 [dev-dependencies]
 tempfile = "3.27.0"

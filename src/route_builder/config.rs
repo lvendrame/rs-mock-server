@@ -43,6 +43,12 @@ pub struct ServerConfig {
     pub enable_cors: Option<bool>,
     /// Allowed origin for CORS requests.
     pub allowed_origin: Option<String>,
+    /// Enable HTTPS with a generated localhost certificate.
+    pub ssl: Option<bool>,
+    /// Path to a PEM-encoded TLS certificate.
+    pub ssl_cert: Option<String>,
+    /// Path to a PEM-encoded TLS private key.
+    pub ssl_key: Option<String>,
 }
 
 /// Route-specific configuration settings.
@@ -293,6 +299,9 @@ impl Mergeable for Option<ServerConfig> {
                 folder: child.folder.merge(parent.folder),
                 enable_cors: child.enable_cors.merge(parent.enable_cors),
                 allowed_origin: child.allowed_origin.merge(parent.allowed_origin),
+                ssl: child.ssl.merge(parent.ssl),
+                ssl_cert: child.ssl_cert.merge(parent.ssl_cert),
+                ssl_key: child.ssl_key.merge(parent.ssl_key),
             }),
         }
     }
@@ -406,12 +415,14 @@ mod tests {
             folder: None,
             enable_cors: Some(false),
             allowed_origin: None,
+            ..Default::default()
         };
         let parent = ServerConfig {
             port: None,
             folder: Some("mocks".to_string()),
             enable_cors: Some(true),
             allowed_origin: Some("example.com".to_string()),
+            ..Default::default()
         };
         let merged = Some(child.clone()).merge(Some(parent.clone())).unwrap();
         assert_eq!(merged.port, Some(3000));
@@ -515,6 +526,7 @@ mod tests {
                 folder: None,
                 enable_cors: None,
                 allowed_origin: None,
+                ..Default::default()
             }),
             route: None,
             collection: None,
@@ -527,6 +539,7 @@ mod tests {
                 folder: Some("dir".into()),
                 enable_cors: Some(true),
                 allowed_origin: Some("o".into()),
+                ..Default::default()
             }),
             route: Some(RouteConfig {
                 delay: Some(5),

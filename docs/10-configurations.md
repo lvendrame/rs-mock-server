@@ -20,6 +20,9 @@ Example `rs-mock-server.toml`:
  folder = "./mocks"    # mocks directory
  enable_cors = true    # allow CORS requests
  allowed_origin = "*"  # CORS origin
+ ssl = false           # serve HTTPS with a generated localhost certificate
+ ssl_cert = "cert.pem" # optional PEM certificate path
+ ssl_key = "key.pem"   # optional PEM private key path
 
  [route]
  delay = 50            # artificial delay (ms)
@@ -28,6 +31,10 @@ Example `rs-mock-server.toml`:
 ```
 
 Omitted sections fall back to default behavior documented elsewhere.
+
+For localhost HTTPS testing, set `ssl = true` to let rs-mock-server create a
+cached self-signed localhost certificate. To use a locally trusted certificate
+from a tool such as `mkcert`, set both `ssl_cert` and `ssl_key`.
 
 ---
 

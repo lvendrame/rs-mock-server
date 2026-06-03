@@ -249,8 +249,28 @@ Options:
   -d, --disable-cors                     Disable CORS, by default CORS is enabled
   -a, --allowed-origin <ALLOWED_ORIGIN>  Allowed origin, by default all origins are allowed
   -g, --generate                         Open the interactive mock file and configuration generator
+  --ssl                                  Serve over HTTPS with a generated localhost certificate
+  --ssl-cert <SSL_CERT>                  PEM certificate path for HTTPS
+  --ssl-key <SSL_KEY>                    PEM private key path for HTTPS
   -h, --help                             Print help
   -V, --version                          Print version
+```
+
+### Local HTTPS
+
+Use `--ssl` to test HTTPS locally with a cached self-signed certificate:
+
+```bash
+rs-mock-server --ssl
+```
+
+Browsers may warn about the generated certificate. For browser-trusted local
+HTTPS, generate a certificate with `mkcert` and pass both files:
+
+```bash
+mkcert -install
+mkcert localhost 127.0.0.1 ::1
+rs-mock-server --ssl-cert ./localhost+2.pem --ssl-key ./localhost+2-key.pem
 ```
 
 ---
