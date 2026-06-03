@@ -12,7 +12,7 @@ use axum::{
 use http::{HeaderMap, HeaderValue, header::CONTENT_TYPE};
 use jgd_rs::generate_jgd_from_file;
 use mime_guess::from_path;
-use serde_json::json;
+use serde_json::{Map, Value, json};
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
@@ -80,7 +80,15 @@ pub fn content_handler(app: &mut App, file_path: OsString, method: &str) -> Meth
         async move {
             if is_jgd(&file_path) {
                 let json = generate_jgd_from_file(&file_path.into());
-                serde_json::to_string_pretty(&json).unwrap().into_response()
+                match json {
+                    Ok(Value::Array(items)) => {
+                        let mut data: Map<String, Value> = Map::new();
+                        data.insert("data".to_string(), Value::Array(items));
+                        serde_json::to_string_pretty(&data).unwrap().into_response()
+                    }
+                    Ok(json) => serde_json::to_string_pretty(&json).unwrap().into_response(),
+                    Err(_) => StatusCode::BAD_REQUEST.into_response(),
+                }
             } else if is_sql(&file_path) {
                 let sql = fs::read_to_string(file_path).unwrap();
                 let (mut req_parts, _req_body) = req.into_parts();

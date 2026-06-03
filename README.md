@@ -124,6 +124,7 @@ echo '[{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]' > mocks/api/users/
 -   🌐 **Public Directory Serving**: Serve a directory of static files (e.g., a frontend build) from a root public folder, or map a folder like public-assets to a custom /assets route.
 -   🔄 **Hot Reload**: Automatically restarts the server when files are added, modified, or deleted in the mock directory.
 -   🌐 **Web Interface**: Access the root URL to get an interactive web interface for testing all your endpoints directly in the browser.
+-   🧰 **Interactive Generator**: Use `--generate` to create mock routes and the main configuration through a guided terminal wizard.
 -   🔧 **Configurable**: Easily change the port and mock directory via command-line arguments.
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
 -   🗄️ **SQL Routes**: Use `.sql` files to create GET endpoints that execute SQL queries against the in-memory database and return results as JSON.
@@ -175,6 +176,7 @@ The following table shows how different filename patterns are mapped to routes, 
 -   **[SQL Routes](docs/09-sql-routes.md)** - Execute `.sql` files as GET endpoints against in-memory database
 -   **[Configurations](docs/10-configurations.md)** - Create a `.toml` file to create specific configurations for your server and your routes
 -   **[GraphQL](docs/11-graphql.md)** - Learn how to build GraphQL queries and mutations.
+-   **[Generator](docs/12-generator.md)** - Create routes and configuration with the interactive wizard
 
 ### 🚀 Quick Examples
 
@@ -246,6 +248,7 @@ Options:
   -f, --folder <FOLDER>                  Directory to load mock files from [default: mocks]
   -d, --disable-cors                     Disable CORS, by default CORS is enabled
   -a, --allowed-origin <ALLOWED_ORIGIN>  Allowed origin, by default all origins are allowed
+  -g, --generate                         Open the interactive mock file and configuration generator
   -h, --help                             Print help
   -V, --version                          Print version
 ```

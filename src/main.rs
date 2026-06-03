@@ -1,6 +1,8 @@
 use clap::Parser;
 use notify::{RecursiveMode, Watcher};
-use rs_mock_server::{App, Config, DEFAULT_FOLDER, DEFAULT_PORT, ServerConfig};
+use rs_mock_server::{
+    App, Config, DEFAULT_FOLDER, DEFAULT_PORT, ServerConfig, generator::run_generator,
+};
 use std::time::{Duration, Instant};
 use std::{path::Path, sync::Arc};
 use tokio::sync::Mutex;
@@ -28,6 +30,10 @@ struct Args {
     /// Allowed origin, by default all origins are allowed
     #[arg(short, long)]
     allowed_origin: Option<String>,
+
+    /// Open the interactive mock file and configuration generator
+    #[arg(short, long)]
+    generate: bool,
 }
 
 enum SessionResult {
@@ -148,6 +154,13 @@ async fn main() {
         .init();
 
     let args = Args::parse();
+
+    if args.generate {
+        if let Err(err) = run_generator(&args.folder) {
+            eprintln!("Generator failed: {}", err);
+        }
+        return;
+    }
 
     let config = if let Ok(file) = std::fs::read_to_string("./rs-mock-server.toml") {
         match Config::try_from(file.as_str()) {

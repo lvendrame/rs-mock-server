@@ -12,6 +12,8 @@ pub const DEFAULT_FOLDER: &str = "mocks";
 
 /// Application bootstrap, router assembly, and shared server state.
 pub mod app;
+/// Interactive mock route and configuration generator.
+pub mod generator;
 /// HTTP handlers for generated mock routes.
 pub mod handlers;
 /// Link model used by the generated home page.
