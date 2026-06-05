@@ -8,9 +8,9 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
 };
-use fosk::{DbCollection, DbConfig};
+use fosk::{DbCollection, DbConfig, IdType};
 use jgd_rs::generate_jgd_from_file;
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::{
     app::App,
@@ -55,8 +55,18 @@ pub fn create_insert(
     let create_router = post(move |Json(payload): Json<Value>| async move {
         delay.sleep_thread();
 
+        let id_type = create_collection.get_config().id_type;
+
         match create_collection.add(payload) {
             Some(item) => (StatusCode::CREATED, Json(item)).into_response(),
+            None if id_type == IdType::None => (
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "error": "duplicate_id",
+                    "message": "An item with the same id already exists"
+                })),
+            )
+                .into_response(),
             None => StatusCode::BAD_REQUEST.into_response(),
         }
     });
@@ -341,6 +351,87 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn rest_none_id_post_conflicts_when_add_rejects_payload() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("rest.json");
+        std::fs::write(&file_path, r#"[{"id":"1","name":"Ada"}]"#).unwrap();
+
+        let mut app = App::default();
+        let config = RouteRest::new(
+            "/users".to_string(),
+            file_path.into_os_string(),
+            "id".to_string(),
+            IdType::None,
+            false,
+            "users".to_string(),
+            None,
+        );
+        build_rest_routes(&mut app, &config);
+
+        let router = app.take_router_for_test();
+        let duplicate = router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/users",
+                json!({"id":"1","name":"Grace"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            body_json(duplicate).await,
+            json!({
+                "error": "duplicate_id",
+                "message": "An item with the same id already exists"
+            })
+        );
+
+        let existing = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/users/1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(existing.status(), StatusCode::OK);
+        assert_eq!(body_json(existing).await["name"], "Ada");
+
+        let rejected = router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/users",
+                json!({"name":"No ID"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(rejected.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            body_json(rejected).await,
+            json!({
+                "error": "duplicate_id",
+                "message": "An item with the same id already exists"
+            })
+        );
+
+        let created = router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/users",
+                json!({"id":"2","name":"Grace"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::CREATED);
+        assert_eq!(body_json(created).await["name"], "Grace");
     }
 
     #[tokio::test]
