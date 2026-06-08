@@ -4,7 +4,7 @@ Use `.sql` files to create GET endpoints that execute SQL queries and return the
 
 ## Overview
 
-When the server detects a file with a `.sql` extension in the `mocks` directory, it automatically creates a `GET` endpoint matching the file's path. The SQL in the file is executed against an in-memory database, and the results are returned as JSON.
+When the server detects a file with a `.sql` extension in the `mocks` directory, it automatically creates a `GET` endpoint matching the file's path. The SQL in the file is executed against the Fosk in-memory database, and the results are returned as JSON.
 
 ## Basic SQL Route
 
@@ -39,9 +39,37 @@ Generates:
 -   **GET** `/reports/sales/{2020}` to `/reports/sales/{2022}`
     Binds param value to the SQL placeholder.
 
+## Report Queries
+
+Fosk supports more than simple selects. SQL route files can use joins,
+aggregates, grouping, `HAVING`, ordering, limits, offsets, and aliases.
+
+Example:
+
+```sql
+select
+  c.name as customer,
+  count(distinct o.id) as orders,
+  count(*) as lines,
+  sum(oi.quantity) as units
+from warehouse_customers c
+join warehouse_orders o on o.customer_id = c.id
+join warehouse_order_items oi on oi.order_id = o.id
+group by c.name
+having sum(oi.quantity) > 20
+order by units desc, customer asc
+limit 10
+```
+
+See `mocks/warehouse-reports` for executable examples covering joins,
+`group by`, `having`, `order by`, `limit`, aggregate functions, and
+parameterized detail reports.
+
 ## Internal Collections
 
-SQL routes share the same in-memory database as REST APIs. Available collections correspond to REST route names (e.g., `users`, `products`).
+SQL routes share the same in-memory database as REST APIs and startup collection
+files. Available collections correspond to REST route names and files loaded
+from `{collections}`.
 
 ### Listing Collections
 
@@ -80,4 +108,9 @@ Example:
 
 ## Fosk In-Memory Database
 
-Under the hood, SQL routes use the [Fosk](https://github.com/lvendrame/fosk) crate for in-memory data storage and query execution.
+Under the hood, SQL routes use the [Fosk](https://github.com/lvendrame/fosk)
+crate for in-memory data storage and query execution. Fosk 0.1.15 supports
+`SELECT`, `WHERE`, `GROUP BY`, `HAVING`, inner/left/right/full joins,
+`ORDER BY`, `LIMIT`, `OFFSET`, positional `?` parameters, `IN (?)`, and
+aggregates such as `COUNT`, `COUNT(DISTINCT ...)`, `SUM`, `AVG`, `MIN`, and
+`MAX`.

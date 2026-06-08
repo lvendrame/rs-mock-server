@@ -1,6 +1,10 @@
-use std::fs::{self, DirEntry};
+use std::{
+    fs::{self, DirEntry},
+    path::Path,
+};
 
 use crate::{
+    DEFAULT_COLLECTIONS_FOLDER, DEFAULT_SCHEMAS_FOLDER,
     app::App,
     route_builder::{
         Route, RouteGenerator, RouteParams,
@@ -75,6 +79,10 @@ impl RouteManager {
         config: &Option<Config>,
         config_store: &ConfigStore,
     ) {
+        if is_reserved_data_folder_entry(entry, config) {
+            return;
+        }
+
         let route_params = RouteParams::new(
             parent_route,
             entry,
@@ -114,6 +122,69 @@ impl RouteManager {
     }
 }
 
+fn is_reserved_data_folder_entry(entry: &DirEntry, config: &Option<Config>) -> bool {
+    is_configured_folder_entry(
+        entry,
+        config,
+        DEFAULT_COLLECTIONS_FOLDER,
+        |config| {
+            config
+                .collections
+                .as_ref()
+                .and_then(|collections| collections.folder.as_ref())
+        },
+        |config| crate::collection_files::resolve_collections_config(config).folder,
+    ) || is_configured_folder_entry(
+        entry,
+        config,
+        DEFAULT_SCHEMAS_FOLDER,
+        |config| {
+            config
+                .schemas
+                .as_ref()
+                .and_then(|schemas| schemas.folder.as_ref())
+        },
+        |config| crate::schema_files::resolve_schemas_config(config).folder,
+    )
+}
+
+fn is_configured_folder_entry(
+    entry: &DirEntry,
+    config: &Option<Config>,
+    default_folder: &str,
+    configured_folder: impl for<'a> Fn(&'a Config) -> Option<&'a String>,
+    resolved_folder: impl Fn(&Config) -> std::path::PathBuf,
+) -> bool {
+    if !entry
+        .file_type()
+        .map(|file_type| file_type.is_dir())
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    if entry.file_name().to_string_lossy() == default_folder {
+        return true;
+    }
+
+    let config = config.clone().unwrap_or_default();
+    if configured_folder(&config)
+        .and_then(|folder| Path::new(folder).file_name())
+        .is_some_and(|folder| entry.file_name() == folder)
+    {
+        return true;
+    }
+
+    let resolved = resolved_folder(&config);
+    entry.path() == resolved || same_existing_path(&entry.path(), &resolved)
+}
+
+fn same_existing_path(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
 impl RouteGenerator for RouteManager {
     fn make_routes(&self, app: &mut App) {
         self.auth_route.make_routes_and_print(app);
@@ -127,7 +198,7 @@ impl RouteGenerator for RouteManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::route_builder::config::{Config, RouteConfig};
+    use crate::route_builder::config::{CollectionsConfig, Config, RouteConfig};
     use tempfile::TempDir;
 
     #[test]
@@ -141,6 +212,21 @@ mod tests {
         )
         .unwrap();
         std::fs::create_dir(temp_dir.path().join("public-assets")).unwrap();
+        std::fs::create_dir(temp_dir.path().join("{collections}")).unwrap();
+        std::fs::write(
+            temp_dir
+                .path()
+                .join("{collections}")
+                .join("warehouse_locations.json"),
+            r#"[{"id":"loc-1"}]"#,
+        )
+        .unwrap();
+        std::fs::create_dir(temp_dir.path().join("{schemas}")).unwrap();
+        std::fs::write(
+            temp_dir.path().join("{schemas}").join("users"),
+            r#"{"id":"Id"}"#,
+        )
+        .unwrap();
 
         let manager = RouteManager::from_dir(
             temp_dir.path().to_str().unwrap(),
@@ -167,6 +253,78 @@ mod tests {
                 .iter()
                 .any(|route| matches!(route, Route::Public(_)))
         );
+        assert!(
+            !manager
+                .routes
+                .iter()
+                .any(|route| format!("{route:?}").contains("schemas"))
+        );
+        assert!(
+            !manager
+                .routes
+                .iter()
+                .any(|route| format!("{route:?}").contains("collections"))
+        );
+    }
+
+    #[test]
+    fn from_dir_skips_configured_schema_folder() {
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::create_dir(temp_dir.path().join("schema-files")).unwrap();
+        std::fs::write(
+            temp_dir.path().join("schema-files").join("users"),
+            r#"{"id":"Id"}"#,
+        )
+        .unwrap();
+        std::fs::write(temp_dir.path().join("get.json"), "{}").unwrap();
+
+        let manager = RouteManager::from_dir(
+            temp_dir.path().to_str().unwrap(),
+            Some(Config {
+                server: Some(crate::ServerConfig {
+                    folder: Some(temp_dir.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                }),
+                schemas: Some(crate::route_builder::config::SchemasConfig {
+                    folder: Some("schema-files".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(manager.routes.len(), 1);
+    }
+
+    #[test]
+    fn from_dir_skips_configured_collection_folder() {
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::create_dir(temp_dir.path().join("seed-data")).unwrap();
+        std::fs::write(
+            temp_dir
+                .path()
+                .join("seed-data")
+                .join("warehouse_locations.json"),
+            r#"[{"id":"loc-1"}]"#,
+        )
+        .unwrap();
+        std::fs::write(temp_dir.path().join("get.json"), "{}").unwrap();
+
+        let manager = RouteManager::from_dir(
+            temp_dir.path().to_str().unwrap(),
+            Some(Config {
+                server: Some(crate::ServerConfig {
+                    folder: Some(temp_dir.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                }),
+                collections: Some(CollectionsConfig {
+                    folder: Some("seed-data".to_string()),
+                }),
+                ..Default::default()
+            }),
+        );
+
+        assert_eq!(manager.routes.len(), 1);
     }
 
     #[test]

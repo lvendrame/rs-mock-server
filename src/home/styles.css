@@ -73,11 +73,13 @@ nav ul > li.collapsible > ul {
     opacity: 0;
 
     /* Define the smooth transitions for both properties */
-    transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in;
+    transition:
+        max-height 0.3s ease-in-out,
+        opacity 0.2s ease-in;
 }
 
 nav ul > li.collapsible.expanded > ul {
-    max-height: 90dvh; /* Adjust if you have very long lists */
+    max-height: fit-content; /* Adjust if you have very long lists */
     opacity: 1;
 }
 

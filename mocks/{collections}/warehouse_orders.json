@@ -1,0 +1,10 @@
+[
+  { "id": "ord-1001", "customer_id": "cust-atlas", "warehouse_id": "wh-lisbon", "status": "released", "priority": "high", "created_at": "2026-05-28" },
+  { "id": "ord-1002", "customer_id": "cust-nova", "warehouse_id": "wh-madrid", "status": "picking", "priority": "normal", "created_at": "2026-05-29" },
+  { "id": "ord-1003", "customer_id": "cust-harbor", "warehouse_id": "wh-porto", "status": "packed", "priority": "normal", "created_at": "2026-05-30" },
+  { "id": "ord-1004", "customer_id": "cust-verdant", "warehouse_id": "wh-valencia", "status": "cold_hold", "priority": "urgent", "created_at": "2026-05-31" },
+  { "id": "ord-1005", "customer_id": "cust-alpine", "warehouse_id": "wh-lyon", "status": "released", "priority": "normal", "created_at": "2026-06-01" },
+  { "id": "ord-1006", "customer_id": "cust-orbit", "warehouse_id": "wh-lyon", "status": "picking", "priority": "high", "created_at": "2026-06-02" },
+  { "id": "ord-1007", "customer_id": "cust-atlas", "warehouse_id": "wh-madrid", "status": "packed", "priority": "normal", "created_at": "2026-06-03" },
+  { "id": "ord-1008", "customer_id": "cust-verdant", "warehouse_id": "wh-valencia", "status": "released", "priority": "high", "created_at": "2026-06-04" }
+]

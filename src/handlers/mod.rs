@@ -20,6 +20,10 @@ pub use auth_handlers::*;
 pub mod collections_handlers;
 pub use collections_handlers::*;
 
+/// Internal schema upload and download handlers.
+pub mod schema_handlers;
+pub use schema_handlers::*;
+
 /// GraphQL and GraphiQL handlers.
 pub mod graphql_handlers;
 pub use graphql_handlers::*;

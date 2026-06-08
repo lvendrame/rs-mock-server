@@ -1,0 +1,10 @@
+[
+  { "id": "sku-ambient-001", "name": "Ambient Storage Tote", "category": "storage", "unit_price": 18.5, "temperature_controlled": false },
+  { "id": "sku-ambient-002", "name": "Retail Display Kit", "category": "merchandising", "unit_price": 42.0, "temperature_controlled": false },
+  { "id": "sku-secure-001", "name": "Encrypted Payment Terminal", "category": "electronics", "unit_price": 139.9, "temperature_controlled": false },
+  { "id": "sku-return-001", "name": "Return Inspection Pack", "category": "returns", "unit_price": 12.75, "temperature_controlled": false },
+  { "id": "sku-cold-001", "name": "Chilled Produce Crate", "category": "grocery", "unit_price": 26.4, "temperature_controlled": true },
+  { "id": "sku-frozen-001", "name": "Frozen Meal Case", "category": "grocery", "unit_price": 31.2, "temperature_controlled": true },
+  { "id": "sku-parts-001", "name": "Hydraulic Brake Set", "category": "parts", "unit_price": 84.0, "temperature_controlled": false },
+  { "id": "sku-parts-002", "name": "Carbon Handlebar", "category": "parts", "unit_price": 112.5, "temperature_controlled": false }
+]

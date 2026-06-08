@@ -1,0 +1,7 @@
+{
+  "payment_id": "None:String",
+  "invoice_id": "String!",
+  "paid_on": "String",
+  "amount": "Float!",
+  "method": "String!"
+}

@@ -129,6 +129,8 @@ echo '[{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]' > mocks/api/users/
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
 -   🗄️ **SQL Routes**: Use `.sql` files to create GET endpoints that execute SQL queries against the in-memory database and return results as JSON.
 -   ⚛️ **GraphQL**: Create your GraphQL queries and mutations, also load collections to load data.
+-   📦 **Collection Loading**: Initialize Fosk collections from JSON or JGD files in the default `{collections}` folder.
+-   📐 **Schema Loading**: Initialize Fosk collection schemas from compact JSON files in the default `{schemas}` folder or through upload endpoints.
 
 ---
 
@@ -161,6 +163,55 @@ The following table shows how different filename patterns are mapped to routes, 
 | `[filename].[ext]`    | `avatar.png`      | `GET /api/users/avatar`                                                                                                                        | **Static File**. Any filename that doesn't match the patterns above is served as a static asset.<br>The `Content-Type` header is automatically set based on the file's extension. |
 | `[filename].jgd`      | `users.jgd`       | `GET /api/users/users`                                                                                                                         | **JGD File**. JSON Generation Definition files that dynamically generate realistic JSON data<br>using the [JGD-rs library](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs). |
 
+### Collection Files
+
+Create `mocks/{collections}` to load Fosk collections at startup without creating REST routes. Each `.json` or `.jgd` file is loaded as one collection using the file stem as the collection name.
+
+```bash
+mkdir -p 'mocks/{collections}'
+cat > 'mocks/{collections}/warehouse_locations.json' <<'JSON'
+[
+  { "id": "wh-lisbon", "name": "Lisbon Fulfillment Hub" },
+  { "id": "wh-porto", "name": "Porto Returns Center" }
+]
+JSON
+```
+
+JSON files use the same array format accepted by `rest.json`; JGD files use the same generated data format accepted by `rest.jgd`.
+
+### Collection Schema Files
+
+Create `mocks/{schemas}` to load Fosk schemas at startup. The complete database schema file is `db.schema`; any other file in the folder is loaded as a single collection schema using the file stem as the collection name.
+
+```bash
+mkdir -p 'mocks/{schemas}'
+cat > 'mocks/{schemas}/db.schema' <<'JSON'
+{
+  "users": {
+    "user_id": "Id",
+    "name": "String!"
+  },
+  "orders": {
+    "order_id": "Uuid",
+    "user_id": "Int!",
+    "total": "Float!"
+  }
+}
+JSON
+```
+
+A single collection schema is a compact JSON object:
+
+```json
+{
+  "user_id": "Id",
+  "name": "String!",
+  "age": "Int"
+}
+```
+
+Use `/mock-server/schemas` to upload a full DB schema, `/mock-server/schemas/{name}` to upload one collection schema, `/mock-server/schemas/download` to download all schemas, and `/mock-server/schemas/{name}/download` to download one schema.
+
 ## Documentation
 
 ### 📚 Feature Guides
@@ -177,6 +228,8 @@ The following table shows how different filename patterns are mapped to routes, 
 -   **[Configurations](docs/10-configurations.md)** - Create a `.toml` file to create specific configurations for your server and your routes
 -   **[GraphQL](docs/11-graphql.md)** - Learn how to build GraphQL queries and mutations.
 -   **[Generator](docs/12-generator.md)** - Create routes and configuration with the interactive wizard
+-   **[Schema Loading](docs/13-schema-loading.md)** - Initialize and exchange compact Fosk collection schemas
+-   **[Collection Loading](docs/14-collection-loading.md)** - Initialize Fosk collections from JSON and JGD files
 
 ### 🚀 Quick Examples
 

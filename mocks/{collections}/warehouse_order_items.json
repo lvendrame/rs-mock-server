@@ -1,0 +1,15 @@
+[
+  { "id": "item-1001-1", "order_id": "ord-1001", "product_id": "sku-ambient-001", "quantity": 40, "unit_price": 18.5 },
+  { "id": "item-1001-2", "order_id": "ord-1001", "product_id": "sku-secure-001", "quantity": 8, "unit_price": 139.9 },
+  { "id": "item-1002-1", "order_id": "ord-1002", "product_id": "sku-ambient-002", "quantity": 75, "unit_price": 42.0 },
+  { "id": "item-1002-2", "order_id": "ord-1002", "product_id": "sku-return-001", "quantity": 50, "unit_price": 12.75 },
+  { "id": "item-1003-1", "order_id": "ord-1003", "product_id": "sku-return-001", "quantity": 100, "unit_price": 12.75 },
+  { "id": "item-1004-1", "order_id": "ord-1004", "product_id": "sku-cold-001", "quantity": 90, "unit_price": 26.4 },
+  { "id": "item-1004-2", "order_id": "ord-1004", "product_id": "sku-frozen-001", "quantity": 45, "unit_price": 31.2 },
+  { "id": "item-1005-1", "order_id": "ord-1005", "product_id": "sku-parts-001", "quantity": 22, "unit_price": 84.0 },
+  { "id": "item-1005-2", "order_id": "ord-1005", "product_id": "sku-parts-002", "quantity": 12, "unit_price": 112.5 },
+  { "id": "item-1006-1", "order_id": "ord-1006", "product_id": "sku-secure-001", "quantity": 16, "unit_price": 139.9 },
+  { "id": "item-1007-1", "order_id": "ord-1007", "product_id": "sku-ambient-001", "quantity": 120, "unit_price": 18.5 },
+  { "id": "item-1007-2", "order_id": "ord-1007", "product_id": "sku-ambient-002", "quantity": 65, "unit_price": 42.0 },
+  { "id": "item-1008-1", "order_id": "ord-1008", "product_id": "sku-cold-001", "quantity": 70, "unit_price": 26.4 }
+]

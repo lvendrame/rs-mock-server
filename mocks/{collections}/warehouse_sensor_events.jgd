@@ -1,0 +1,20 @@
+{
+  "$format": "jgd/v1",
+  "version": "1.1",
+  "root": {
+    "count": 25,
+    "fields": {
+      "id": "${uuid.v4}",
+      "sensor_tag": "${number.numberWithFormat(SENS-####)}",
+      "warehouse_tag": "${number.numberWithFormat(WH-####)}",
+      "temperature_c": {
+        "number": {
+          "min": -18,
+          "max": 8,
+          "integer": false
+        }
+      },
+      "healthy": "${boolean.boolean(92)}"
+    }
+  }
+}

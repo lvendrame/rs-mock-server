@@ -1,0 +1,17 @@
+[
+  { "id": "asset-001", "warehouse_id": "wh-lisbon", "zone_id": "zone-lis-a", "serial": "FORK-10001", "kind": "forklift", "status": "ready", "temperature_controlled": false },
+  { "id": "asset-002", "warehouse_id": "wh-lisbon", "zone_id": "zone-lis-b", "serial": "LOCK-10002", "kind": "secure cage", "status": "ready", "temperature_controlled": false },
+  { "id": "asset-003", "warehouse_id": "wh-lisbon", "zone_id": "zone-lis-a", "serial": "SORT-10003", "kind": "sorter", "status": "maintenance", "temperature_controlled": false },
+  { "id": "asset-004", "warehouse_id": "wh-porto", "zone_id": "zone-por-a", "serial": "SCAN-20001", "kind": "scanner bank", "status": "ready", "temperature_controlled": false },
+  { "id": "asset-005", "warehouse_id": "wh-porto", "zone_id": "zone-por-b", "serial": "BENCH-20002", "kind": "inspection bench", "status": "reserved", "temperature_controlled": false },
+  { "id": "asset-006", "warehouse_id": "wh-madrid", "zone_id": "zone-mad-a", "serial": "DOCK-30001", "kind": "dock door", "status": "ready", "temperature_controlled": false },
+  { "id": "asset-007", "warehouse_id": "wh-madrid", "zone_id": "zone-mad-a", "serial": "BELT-30002", "kind": "conveyor", "status": "ready", "temperature_controlled": false },
+  { "id": "asset-008", "warehouse_id": "wh-madrid", "zone_id": "zone-mad-b", "serial": "FORK-30003", "kind": "forklift", "status": "reserved", "temperature_controlled": false },
+  { "id": "asset-009", "warehouse_id": "wh-valencia", "zone_id": "zone-val-a", "serial": "COLD-40001", "kind": "cold room", "status": "ready", "temperature_controlled": true },
+  { "id": "asset-010", "warehouse_id": "wh-valencia", "zone_id": "zone-val-b", "serial": "FREEZ-40002", "kind": "freezer rack", "status": "ready", "temperature_controlled": true },
+  { "id": "asset-011", "warehouse_id": "wh-valencia", "zone_id": "zone-val-a", "serial": "SENS-40003", "kind": "temperature sensor", "status": "maintenance", "temperature_controlled": true },
+  { "id": "asset-012", "warehouse_id": "wh-lyon", "zone_id": "zone-lyo-a", "serial": "PART-50001", "kind": "parts carousel", "status": "ready", "temperature_controlled": false },
+  { "id": "asset-013", "warehouse_id": "wh-lyon", "zone_id": "zone-lyo-a", "serial": "PICK-50002", "kind": "pick light", "status": "ready", "temperature_controlled": false },
+  { "id": "asset-014", "warehouse_id": "wh-lyon", "zone_id": "zone-lyo-b", "serial": "PACK-50003", "kind": "packing line", "status": "reserved", "temperature_controlled": false },
+  { "id": "asset-015", "warehouse_id": "wh-lisbon", "zone_id": "zone-lis-b", "serial": "SAFE-10004", "kind": "safe", "status": "ready", "temperature_controlled": false }
+]

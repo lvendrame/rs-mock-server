@@ -1,0 +1,6 @@
+[
+  { "id": "carrier-luso", "name": "Luso Freight", "mode": "road", "temperature_certified": false },
+  { "id": "carrier-iberia", "name": "Iberia Express Cargo", "mode": "road", "temperature_certified": true },
+  { "id": "carrier-rhone", "name": "Rhone Logistics", "mode": "road", "temperature_certified": false },
+  { "id": "carrier-airfast", "name": "AirFast Europe", "mode": "air", "temperature_certified": true }
+]

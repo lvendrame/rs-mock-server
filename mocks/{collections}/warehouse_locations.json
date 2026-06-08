@@ -1,0 +1,42 @@
+[
+  {
+    "id": "wh-lisbon",
+    "name": "Lisbon Fulfillment Hub",
+    "city": "Lisbon",
+    "country": "PT",
+    "capacity": 24000,
+    "region": "southwest"
+  },
+  {
+    "id": "wh-porto",
+    "name": "Porto Returns Center",
+    "city": "Porto",
+    "country": "PT",
+    "capacity": 8500,
+    "region": "north"
+  },
+  {
+    "id": "wh-madrid",
+    "name": "Madrid Cross Dock",
+    "city": "Madrid",
+    "country": "ES",
+    "capacity": 18000,
+    "region": "central"
+  },
+  {
+    "id": "wh-valencia",
+    "name": "Valencia Cold Chain",
+    "city": "Valencia",
+    "country": "ES",
+    "capacity": 11200,
+    "region": "east"
+  },
+  {
+    "id": "wh-lyon",
+    "name": "Lyon Spare Parts Depot",
+    "city": "Lyon",
+    "country": "FR",
+    "capacity": 9200,
+    "region": "northwest"
+  }
+]

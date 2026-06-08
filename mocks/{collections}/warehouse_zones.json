@@ -1,0 +1,12 @@
+[
+  { "id": "zone-lis-a", "warehouse_id": "wh-lisbon", "code": "LIS-A", "kind": "ambient", "capacity": 7000 },
+  { "id": "zone-lis-b", "warehouse_id": "wh-lisbon", "code": "LIS-B", "kind": "high-value", "capacity": 3200 },
+  { "id": "zone-por-a", "warehouse_id": "wh-porto", "code": "POR-A", "kind": "returns", "capacity": 4600 },
+  { "id": "zone-por-b", "warehouse_id": "wh-porto", "code": "POR-B", "kind": "inspection", "capacity": 2100 },
+  { "id": "zone-mad-a", "warehouse_id": "wh-madrid", "code": "MAD-A", "kind": "cross-dock", "capacity": 8200 },
+  { "id": "zone-mad-b", "warehouse_id": "wh-madrid", "code": "MAD-B", "kind": "ambient", "capacity": 5200 },
+  { "id": "zone-val-a", "warehouse_id": "wh-valencia", "code": "VAL-A", "kind": "cold", "capacity": 4100 },
+  { "id": "zone-val-b", "warehouse_id": "wh-valencia", "code": "VAL-B", "kind": "frozen", "capacity": 2600 },
+  { "id": "zone-lyo-a", "warehouse_id": "wh-lyon", "code": "LYO-A", "kind": "parts", "capacity": 3800 },
+  { "id": "zone-lyo-b", "warehouse_id": "wh-lyon", "code": "LYO-B", "kind": "ambient", "capacity": 2900 }
+]

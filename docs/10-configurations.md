@@ -10,7 +10,7 @@ This document explains how to customize the mock server and its routes using TOM
 
 ## 1. Server-Level Configuration
 
-Place a file named `rs-mock-server.toml` in the current working directory before starting the server. Only the `[server]` and `[route]` tables are supported here; omitted settings use defaults.
+Place a file named `rs-mock-server.toml` in the current working directory before starting the server. The `[server]`, `[route]`, `[collections]`, and `[schemas]` tables are supported here; omitted settings use defaults.
 
 Example `rs-mock-server.toml`:
 
@@ -28,6 +28,13 @@ Example `rs-mock-server.toml`:
  delay = 50            # artificial delay (ms)
  remap = "/v1"         # route prefix
  protect = false       # require auth by default
+
+ [collections]
+ folder = "{collections}" # collection seed folder relative to [server].folder
+
+ [schemas]
+ folder = "{schemas}"  # schema folder relative to [server].folder
+ db_schema = "db.schema" # complete database schema file
 ```
 
 Omitted sections fall back to default behavior documented elsewhere.
@@ -35,6 +42,41 @@ Omitted sections fall back to default behavior documented elsewhere.
 For localhost HTTPS testing, set `ssl = true` to let rs-mock-server create a
 cached self-signed localhost certificate. To use a locally trusted certificate
 from a tool such as `mkcert`, set both `ssl_cert` and `ssl_key`.
+
+### Collection Loading
+
+The `[collections]` table controls startup loading for Fosk collection files.
+By default, rs-mock-server looks in `<server.folder>/{collections}`. Each
+`.json` or `.jgd` file in that folder is loaded as one collection, using its
+file stem as the collection name.
+
+```toml
+[collections]
+folder = "{collections}"
+```
+
+JSON files use the same array format accepted by `rest.json`; JGD files use the
+same generated data format accepted by `rest.jgd`. Relative collection folders
+are resolved under `[server].folder`; absolute folders are used as provided. See
+[Collection Loading](14-collection-loading.md) for examples.
+
+### Schema Loading
+
+The `[schemas]` table controls startup loading for compact Fosk schema files.
+By default, rs-mock-server looks in `<server.folder>/{schemas}`. The `db.schema`
+file is loaded first as a complete database schema. Any other non-TOML file in
+the same folder is loaded as a single collection schema, using its file stem as
+the collection name.
+
+```toml
+[schemas]
+folder = "{schemas}"
+db_schema = "db.schema"
+```
+
+Use an absolute `folder` path to load schemas from outside the mock root. See
+[Schema Loading](13-schema-loading.md) for the schema file format and HTTP
+upload/download endpoints.
 
 ---
 

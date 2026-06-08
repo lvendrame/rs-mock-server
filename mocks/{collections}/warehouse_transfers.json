@@ -1,0 +1,7 @@
+[
+  { "id": "trf-7001", "product_id": "sku-ambient-001", "from_warehouse_id": "wh-madrid", "to_warehouse_id": "wh-lisbon", "quantity": 60, "status": "in_transit" },
+  { "id": "trf-7002", "product_id": "sku-secure-001", "from_warehouse_id": "wh-lisbon", "to_warehouse_id": "wh-porto", "quantity": 12, "status": "received" },
+  { "id": "trf-7003", "product_id": "sku-cold-001", "from_warehouse_id": "wh-valencia", "to_warehouse_id": "wh-madrid", "quantity": 40, "status": "planned" },
+  { "id": "trf-7004", "product_id": "sku-parts-001", "from_warehouse_id": "wh-lyon", "to_warehouse_id": "wh-madrid", "quantity": 20, "status": "in_transit" },
+  { "id": "trf-7005", "product_id": "sku-return-001", "from_warehouse_id": "wh-porto", "to_warehouse_id": "wh-madrid", "quantity": 80, "status": "received" }
+]

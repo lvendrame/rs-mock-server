@@ -1,0 +1,9 @@
+[
+  { "id": "ship-9001", "order_id": "ord-1001", "carrier_id": "carrier-luso", "warehouse_id": "wh-lisbon", "status": "loaded", "shipped_at": "2026-06-01", "delivered_at": null },
+  { "id": "ship-9002", "order_id": "ord-1002", "carrier_id": "carrier-iberia", "warehouse_id": "wh-madrid", "status": "in_transit", "shipped_at": "2026-06-02", "delivered_at": null },
+  { "id": "ship-9003", "order_id": "ord-1003", "carrier_id": "carrier-luso", "warehouse_id": "wh-porto", "status": "delivered", "shipped_at": "2026-06-01", "delivered_at": "2026-06-03" },
+  { "id": "ship-9004", "order_id": "ord-1004", "carrier_id": "carrier-airfast", "warehouse_id": "wh-valencia", "status": "held", "shipped_at": null, "delivered_at": null },
+  { "id": "ship-9005", "order_id": "ord-1005", "carrier_id": "carrier-rhone", "warehouse_id": "wh-lyon", "status": "loaded", "shipped_at": "2026-06-04", "delivered_at": null },
+  { "id": "ship-9006", "order_id": "ord-1006", "carrier_id": "carrier-airfast", "warehouse_id": "wh-lyon", "status": "booked", "shipped_at": null, "delivered_at": null },
+  { "id": "ship-9007", "order_id": "ord-1007", "carrier_id": "carrier-iberia", "warehouse_id": "wh-madrid", "status": "delivered", "shipped_at": "2026-06-04", "delivered_at": "2026-06-05" }
+]

@@ -419,4 +419,24 @@ const mock_routes = [
         route: "/mock-server/collections/{name}/download",
         options: ["download"],
     },
+    {
+        method: "POST",
+        route: "/mock-server/schemas",
+        options: ["upload"],
+    },
+    {
+        method: "GET",
+        route: "/mock-server/schemas/download",
+        options: ["download"],
+    },
+    {
+        method: "POST",
+        route: "/mock-server/schemas/{name}",
+        options: ["upload"],
+    },
+    {
+        method: "GET",
+        route: "/mock-server/schemas/{name}/download",
+        options: ["download"],
+    },
 ];

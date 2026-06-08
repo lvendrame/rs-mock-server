@@ -1,0 +1,14 @@
+[
+  { "id": "inv-001", "warehouse_id": "wh-lisbon", "zone_id": "zone-lis-a", "product_id": "sku-ambient-001", "on_hand": 420, "reserved": 80, "reorder_point": 120 },
+  { "id": "inv-002", "warehouse_id": "wh-lisbon", "zone_id": "zone-lis-b", "product_id": "sku-secure-001", "on_hand": 96, "reserved": 42, "reorder_point": 35 },
+  { "id": "inv-003", "warehouse_id": "wh-porto", "zone_id": "zone-por-a", "product_id": "sku-return-001", "on_hand": 260, "reserved": 15, "reorder_point": 90 },
+  { "id": "inv-004", "warehouse_id": "wh-madrid", "zone_id": "zone-mad-a", "product_id": "sku-ambient-002", "on_hand": 360, "reserved": 140, "reorder_point": 130 },
+  { "id": "inv-005", "warehouse_id": "wh-madrid", "zone_id": "zone-mad-b", "product_id": "sku-ambient-001", "on_hand": 280, "reserved": 110, "reorder_point": 120 },
+  { "id": "inv-006", "warehouse_id": "wh-valencia", "zone_id": "zone-val-a", "product_id": "sku-cold-001", "on_hand": 190, "reserved": 130, "reorder_point": 75 },
+  { "id": "inv-007", "warehouse_id": "wh-valencia", "zone_id": "zone-val-b", "product_id": "sku-frozen-001", "on_hand": 88, "reserved": 50, "reorder_point": 60 },
+  { "id": "inv-008", "warehouse_id": "wh-lyon", "zone_id": "zone-lyo-a", "product_id": "sku-parts-001", "on_hand": 74, "reserved": 44, "reorder_point": 40 },
+  { "id": "inv-009", "warehouse_id": "wh-lyon", "zone_id": "zone-lyo-a", "product_id": "sku-parts-002", "on_hand": 52, "reserved": 22, "reorder_point": 30 },
+  { "id": "inv-010", "warehouse_id": "wh-lisbon", "zone_id": "zone-lis-a", "product_id": "sku-ambient-002", "on_hand": 240, "reserved": 30, "reorder_point": 80 },
+  { "id": "inv-011", "warehouse_id": "wh-porto", "zone_id": "zone-por-b", "product_id": "sku-secure-001", "on_hand": 34, "reserved": 10, "reorder_point": 35 },
+  { "id": "inv-012", "warehouse_id": "wh-madrid", "zone_id": "zone-mad-a", "product_id": "sku-return-001", "on_hand": 180, "reserved": 60, "reorder_point": 90 }
+]

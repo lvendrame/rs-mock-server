@@ -24,7 +24,7 @@ use tower_http::{
 
 use crate::{
     DEFAULT_FOLDER, DEFAULT_PORT,
-    handlers::{create_collections_routes, make_auth_middleware},
+    handlers::{create_collections_routes, create_schema_routes, make_auth_middleware},
     pages::Pages,
     route_builder::{
         RouteGenerator, RouteRegistrator,
@@ -196,6 +196,28 @@ impl App {
         RouteManager::from_dir(&dir, Some(self.server_config.clone())).make_routes(self);
     }
 
+    fn load_schema_files(&mut self) {
+        match crate::schema_files::load_schema_files(&self.db, &self.server_config) {
+            Ok(loaded) => {
+                for message in loaded {
+                    println!("{}", message);
+                }
+            }
+            Err(err) => println!("Unable to load schema files. Details: {}", err),
+        }
+    }
+
+    fn load_collection_files(&mut self) {
+        match crate::collection_files::load_collection_files(&self.db, &self.server_config) {
+            Ok(loaded) => {
+                for message in loaded {
+                    println!("{}", message);
+                }
+            }
+            Err(err) => println!("Unable to load collection files. Details: {}", err),
+        }
+    }
+
     fn build_home_route(&mut self, route: &str) {
         let pages = Arc::clone(&self.pages);
 
@@ -290,6 +312,11 @@ impl App {
         create_collections_routes(self);
     }
 
+    /// Registers internal schema upload and download routes.
+    pub fn build_schemas_route(&mut self) {
+        create_schema_routes(self);
+    }
+
     /// Infers references between loaded Fosk collections.
     pub fn build_collections_references(&mut self) {
         let collections = self.db.list_collections();
@@ -330,8 +357,11 @@ impl App {
 
     fn build_router(&mut self, include_fallback: bool, home_route: &str) -> Router {
         self.build_dyn_routes();
+        self.load_schema_files();
+        self.load_collection_files();
         self.build_home_route(home_route);
         self.build_collections_route();
+        self.build_schemas_route();
         if include_fallback {
             self.build_fallback();
         }

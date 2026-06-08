@@ -1,0 +1,15 @@
+{
+  "catalog_suppliers": {
+    "supplier_id": "Id",
+    "name": "String!",
+    "country": "String!",
+    "active": "Bool!"
+  },
+  "catalog_invoices": {
+    "invoice_id": "Uuid",
+    "supplier_id": "Int!",
+    "issued_on": "String!",
+    "total": "Float!",
+    "status": "String!"
+  }
+}

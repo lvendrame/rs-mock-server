@@ -28,6 +28,10 @@ pub struct Config {
     pub auth: Option<AuthConfig>,
     /// Upload configuration options.
     pub upload: Option<UploadConfig>,
+    /// Collection file loading configuration options.
+    pub collections: Option<CollectionsConfig>,
+    /// Schema file loading configuration options.
+    pub schemas: Option<SchemasConfig>,
 }
 
 /// Server configuration settings such as port, static folder, and CORS.
@@ -78,6 +82,15 @@ pub struct CollectionConfig {
     pub id_type: Option<IdType>,
 }
 
+/// Collection file loading configuration.
+///
+/// Defines where startup collection seed files are loaded from.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CollectionsConfig {
+    /// Folder containing collection seed files, relative to the mock root unless absolute.
+    pub folder: Option<String>,
+}
+
 /// Authentication-related configuration.
 ///
 /// Includes user credentials, cookie settings, JWT secret,
@@ -122,6 +135,17 @@ pub struct UploadConfig {
     pub list_files_endpoint: Option<String>,
     /// Use temporary storage for uploads.
     pub temporary: Option<bool>,
+}
+
+/// Schema file loading configuration.
+///
+/// Defines where compact Fosk schema files are loaded from at startup.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SchemasConfig {
+    /// Folder containing schema files, relative to the mock root unless absolute.
+    pub folder: Option<String>,
+    /// File name containing the complete database schema.
+    pub db_schema: Option<String>,
 }
 
 impl TryFrom<&str> for Config {
@@ -202,6 +226,8 @@ impl Config {
                 collection: self.collection, //.merge(parent.collection), don't merge collections
                 auth: self.auth,             //.merge(parent.auth), don't merge auths
                 upload: self.upload,         //.merge(parent.upload), don't merge upload
+                collections: self.collections.merge(parent.collections),
+                schemas: self.schemas.merge(parent.schemas),
             },
             None => self,
         }
@@ -216,6 +242,8 @@ impl Config {
             collection: self.collection, //.merge(parent.collection), don't merge collections
             auth: self.auth,             //.merge(parent.auth), don't merge auths
             upload: self.upload,         //.merge(parent.upload), don't merge upload
+            collections: self.collections.merge(parent.collections),
+            schemas: self.schemas.merge(parent.schemas),
         }
     }
 
@@ -264,6 +292,8 @@ impl Mergeable for Config {
             collection: self.collection, //.merge(parent.collection), don't merge collections
             auth: self.auth,             //.merge(parent.auth), don't merge auths
             upload: self.upload,         //.merge(parent.upload), don't merge upload
+            collections: self.collections.merge(parent.collections),
+            schemas: self.schemas.merge(parent.schemas),
         }
     }
 }
@@ -274,6 +304,8 @@ impl Mergeable for Option<Config> {
             (None, None) => None,
             (None, Some(p)) => Some(Config {
                 route: None.merge(p.route),
+                collections: None.merge(p.collections),
+                schemas: None.merge(p.schemas),
                 ..Default::default()
             }),
             (Some(child), None) => Some(child),
@@ -283,6 +315,8 @@ impl Mergeable for Option<Config> {
                 collection: child.collection, //.merge(parent.collection), don't merge collections
                 auth: child.auth,             //.merge(parent.auth), don't merge auths
                 upload: child.upload,         //.merge(parent.upload), don't merge upload
+                collections: child.collections.merge(parent.collections),
+                schemas: child.schemas.merge(parent.schemas),
             }),
         }
     }
@@ -375,6 +409,33 @@ impl Mergeable for Option<UploadConfig> {
                 download_endpoint: child.download_endpoint.merge(parent.download_endpoint),
                 list_files_endpoint: child.list_files_endpoint.merge(parent.list_files_endpoint),
                 temporary: child.temporary.merge(parent.temporary),
+            }),
+        }
+    }
+}
+
+impl Mergeable for Option<SchemasConfig> {
+    fn merge(self, parent: Self) -> Self {
+        match (self, parent) {
+            (None, None) => None,
+            (None, Some(p)) => Some(p),
+            (Some(child), None) => Some(child),
+            (Some(child), Some(parent)) => Some(SchemasConfig {
+                folder: child.folder.merge(parent.folder),
+                db_schema: child.db_schema.merge(parent.db_schema),
+            }),
+        }
+    }
+}
+
+impl Mergeable for Option<CollectionsConfig> {
+    fn merge(self, parent: Self) -> Self {
+        match (self, parent) {
+            (None, None) => None,
+            (None, Some(p)) => Some(p),
+            (Some(child), None) => Some(child),
+            (Some(child), Some(parent)) => Some(CollectionsConfig {
+                folder: child.folder.merge(parent.folder),
             }),
         }
     }
@@ -532,6 +593,8 @@ mod tests {
             collection: None,
             auth: None,
             upload: None,
+            collections: None,
+            schemas: None,
         };
         let parent = Config {
             server: Some(ServerConfig {
@@ -549,6 +612,8 @@ mod tests {
             collection: None,
             auth: None,
             upload: None,
+            collections: None,
+            schemas: None,
         };
         let merged_opt = Some(child.clone()).merge(Some(parent.clone()));
         let merged = merged_opt.unwrap();
@@ -578,6 +643,8 @@ mod tests {
             collection: None,
             auth: None,
             upload: None,
+            collections: None,
+            schemas: None,
         };
         let parent = Config {
             server: None,
@@ -589,6 +656,8 @@ mod tests {
             collection: None,
             auth: None,
             upload: None,
+            collections: None,
+            schemas: None,
         };
         let merged = child.merge(Some(parent));
         let route = merged.route.unwrap();
@@ -627,5 +696,60 @@ mod tests {
 
         let config = Config::try_from(&entry).unwrap();
         assert_eq!(config.route.unwrap().protect, Some(true));
+    }
+
+    #[test]
+    fn test_schemas_config_deserializes_and_merges() {
+        let config = Config::try_from(
+            r#"
+            [schemas]
+            folder = "schema-files"
+            db_schema = "database.schema"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.schemas,
+            Some(SchemasConfig {
+                folder: Some("schema-files".to_string()),
+                db_schema: Some("database.schema".to_string()),
+            })
+        );
+
+        let child = Some(SchemasConfig {
+            folder: None,
+            db_schema: Some("custom.schema".to_string()),
+        });
+        let parent = Some(SchemasConfig {
+            folder: Some("{schemas}".to_string()),
+            db_schema: Some("db.schema".to_string()),
+        });
+        let merged = child.merge(parent).unwrap();
+        assert_eq!(merged.folder.as_deref(), Some("{schemas}"));
+        assert_eq!(merged.db_schema.as_deref(), Some("custom.schema"));
+    }
+
+    #[test]
+    fn test_collections_config_deserializes_and_merges() {
+        let config = Config::try_from(
+            r#"
+            [collections]
+            folder = "seed-data"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.collections,
+            Some(CollectionsConfig {
+                folder: Some("seed-data".to_string()),
+            })
+        );
+
+        let child = Some(CollectionsConfig { folder: None });
+        let parent = Some(CollectionsConfig {
+            folder: Some("{collections}".to_string()),
+        });
+        let merged = child.merge(parent).unwrap();
+        assert_eq!(merged.folder.as_deref(), Some("{collections}"));
     }
 }
