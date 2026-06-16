@@ -262,3 +262,7 @@
 ## 0.7.2 (2026-06-16)
 
 - chore: bump fosk to 0.2.0
+
+## 0.7.3 (2026-06-16)
+
+- chore: bump dependencies on cargo.lock
