@@ -104,7 +104,9 @@ fn load_collection_file(db: &Arc<Db>, path: &Path) -> Result<String, String> {
         ));
     }
 
-    collection.load_from_file(&path_to_os_string(path))
+    collection
+        .load_from_file(&path_to_os_string(path))
+        .map_err(|error| error.to_string())
 }
 
 fn collection_name_from_path(path: &Path) -> Result<String, String> {
@@ -209,8 +211,8 @@ mod tests {
         let loaded = load_collection_files(&db, &config).unwrap();
 
         assert_eq!(loaded.len(), 2);
-        assert_eq!(db.get("warehouse_locations").unwrap().count(), 2);
-        assert_eq!(db.get("warehouse_assets").unwrap().count(), 3);
+        assert_eq!(db.get("warehouse_locations").unwrap().count().unwrap(), 2);
+        assert_eq!(db.get("warehouse_assets").unwrap().count().unwrap(), 3);
     }
 
     #[test]

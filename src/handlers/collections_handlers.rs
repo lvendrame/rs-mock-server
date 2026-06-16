@@ -13,7 +13,10 @@ use http::{
 use mime_guess::from_ext;
 use serde_json::{Map, Value};
 
-use crate::app::{App, MOCK_SERVER_ROUTE};
+use crate::{
+    app::{App, MOCK_SERVER_ROUTE},
+    handlers::{load_collection_error_response, read_error_response},
+};
 
 fn field_info_to_json(field_info: &FieldInfo) -> Value {
     let mut j_fi: Map<String, Value> = Map::new();
@@ -134,13 +137,10 @@ fn create_collection_load_from_file(app: &mut App) {
                     None => db.create(&name),
                 };
 
-                let response = collection.load_from_json(json, false);
-
-                if let Err(err) = response {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, err).into_response();
-                }
-
-                return StatusCode::OK.into_response();
+                return match collection.load_from_json(json, false) {
+                    Ok(_) => StatusCode::OK.into_response(),
+                    Err(err) => load_collection_error_response(err),
+                };
             }
 
             StatusCode::BAD_REQUEST.into_response()
@@ -205,7 +205,12 @@ fn create_collection_download(app: &mut App) {
             return StatusCode::NOT_FOUND.into_response();
         };
 
-        let result: Result<Vec<u8>, serde_json::Error> = serde_json::to_vec(&collection.get_all());
+        let items = match collection.get_all() {
+            Ok(items) => items,
+            Err(err) => return read_error_response(err),
+        };
+
+        let result: Result<Vec<u8>, serde_json::Error> = serde_json::to_vec(&items);
 
         let Ok(contents) = result else {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -282,6 +287,7 @@ mod tests {
         body::{Body, to_bytes},
         http::{Method, Request, header::CONTENT_TYPE},
     };
+    use fosk::DbConfig;
     use serde_json::json;
     use tower::ServiceExt;
 
@@ -439,5 +445,115 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(empty_upload.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn collection_load_rejects_non_array_root_json() {
+        let mut app = App::default();
+        create_collections_routes(&mut app);
+        let router = app.take_router_for_test();
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/mock-server/collections/projects")
+                    .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+                    .body(multipart_json(r#"{"not":"an array"}"#).into_body())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["error"], "invalid_payload");
+    }
+
+    #[tokio::test]
+    async fn collection_load_rejects_non_object_batch_item() {
+        let mut app = App::default();
+        create_collections_routes(&mut app);
+        let router = app.take_router_for_test();
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/mock-server/collections/projects")
+                    .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+                    .body(multipart_json(r#"["x"]"#).into_body())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["error"], "invalid_payload");
+        assert_eq!(body["message"], "Item at index 0 must be a JSON object");
+    }
+
+    #[tokio::test]
+    async fn collection_load_rejects_batch_item_missing_id() {
+        let mut app = App::default();
+        app.db.create_with_config("projects", DbConfig::none("id"));
+        create_collections_routes(&mut app);
+        let router = app.take_router_for_test();
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/mock-server/collections/projects")
+                    .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+                    .body(multipart_json(r#"[{"name":"No ID"}]"#).into_body())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["error"], "missing_id");
+        assert_eq!(
+            body["message"],
+            "Item at index 0 is missing the required id field 'id'"
+        );
+    }
+
+    #[tokio::test]
+    async fn collection_load_rejects_duplicate_id_within_batch() {
+        let mut app = App::default();
+        app.db.create_with_config("projects", DbConfig::none("id"));
+        create_collections_routes(&mut app);
+        let router = app.take_router_for_test();
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/mock-server/collections/projects")
+                    .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+                    .body(
+                        multipart_json(r#"[{"id":"p1","name":"First"},{"id":"p1","name":"Second"}]"#)
+                            .into_body(),
+                    )
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["error"], "duplicate_id");
+        assert_eq!(
+            body["message"],
+            "Item at index 1 duplicates existing id 'p1'"
+        );
     }
 }

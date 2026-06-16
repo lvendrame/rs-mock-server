@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 
 use crate::{
     app::{App, GLOBAL_SHARED_INFO},
-    handlers::{SleepThread, build_rest_routes},
+    handlers::{SleepThread, build_rest_routes, error_response, write_error_response},
     route_builder::{RouteAuth, RouteRest},
 };
 
@@ -137,7 +137,14 @@ fn generate_token(
             ); // add token
         }
 
-        token_collection.add(user_data);
+        if let Err(err) = token_collection.add(user_data) {
+            eprintln!("⚠️ Failed to store auth token: {}", err);
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal_error",
+                "Failed to persist authentication token",
+            );
+        }
     }
 
     // Create cookie with JWT token
@@ -286,8 +293,10 @@ pub fn make_auth_middleware(
                 Err(status) => return Err(status),
             };
 
-            if !token_collection.exists(&token) {
-                return Err(StatusCode::UNAUTHORIZED);
+            match token_collection.exists(&token) {
+                Ok(false) => return Err(StatusCode::UNAUTHORIZED),
+                Ok(true) => {}
+                Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
             }
 
             let response = next.run(req).await;
@@ -315,7 +324,9 @@ pub fn create_logout_route(app: &mut App, auth_def: &RouteAuth) {
             };
 
             // Remove token from auth collection (logout/revoke)
-            token_collection.delete(&token);
+            if let Err(err) = token_collection.delete(&token) {
+                return write_error_response(err);
+            }
 
             Json(serde_json::json!({
                 "message": "Successfully logged out"
@@ -362,7 +373,7 @@ pub fn build_auth_routes(app: &mut App, auth_def: &RouteAuth) {
 
     println!("✔️ Built REST routes for {}", users_routes);
 
-    if users_collection.count() == 0 {
+    if users_collection.count().unwrap_or(0) == 0 {
         return eprintln!("⚠️ Authentication routes were not created");
     }
 
@@ -544,7 +555,7 @@ mod tests {
         let token = body["token"].as_str().unwrap();
         assert!(decode_jwt(token, &auth.jwt_secret).is_ok());
         assert!(decode_jwt("invalid", &auth.jwt_secret).is_err());
-        assert!(token_collection.exists(token));
+        assert!(token_collection.exists(token).unwrap());
 
         let _middleware =
             make_auth_middleware(&token_collection, &auth.jwt_secret, &auth.cookie_name);

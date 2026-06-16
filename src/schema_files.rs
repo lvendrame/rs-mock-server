@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use fosk::{Db, DbCollection, IdType, JsonPrimitive, SchemaDict};
+use fosk::{CollectionReadError, Db, DbCollection, IdType, JsonPrimitive, SchemaDict};
 use serde_json::{Map, Value};
 
 use crate::{DEFAULT_SCHEMAS_DB_FILE, DEFAULT_SCHEMAS_FOLDER, route_builder::config::Config};
@@ -114,13 +114,20 @@ fn regular_type_spec(ty: &JsonPrimitive, nullable: bool) -> String {
 }
 
 /// Serializes one collection's current schema to Fosk's compact schema format.
-pub fn collection_schema_to_compact_json(collection: &DbCollection) -> Option<Value> {
-    let schema = collection.schema()?;
-    Some(schema_to_compact_json(&schema, collection))
+pub fn collection_schema_to_compact_json(
+    collection: &DbCollection,
+) -> Result<Option<Value>, CollectionReadError> {
+    let Some(schema) = collection.schema()? else {
+        return Ok(None);
+    };
+    Ok(Some(schema_to_compact_json(&schema, collection)?))
 }
 
-fn schema_to_compact_json(schema: &SchemaDict, collection: &DbCollection) -> Value {
-    let config = collection.get_config();
+fn schema_to_compact_json(
+    schema: &SchemaDict,
+    collection: &DbCollection,
+) -> Result<Value, CollectionReadError> {
+    let config = collection.get_config()?;
     let mut fields = Map::new();
 
     for (name, field_info) in &schema.fields {
@@ -136,7 +143,7 @@ fn schema_to_compact_json(schema: &SchemaDict, collection: &DbCollection) -> Val
         fields.insert(name.clone(), Value::String(type_spec));
     }
 
-    Value::Object(fields)
+    Ok(Value::Object(fields))
 }
 
 /// Serializes all loaded collection schemas to a reloadable compact DB schema.
@@ -146,7 +153,7 @@ pub fn db_schemas_to_compact_json(db: &Db) -> Value {
         let Some(collection) = db.get(&collection_name) else {
             continue;
         };
-        let Some(schema) = collection_schema_to_compact_json(&collection) else {
+        let Ok(Some(schema)) = collection_schema_to_compact_json(&collection) else {
             continue;
         };
         schemas.insert(collection_name, schema);
@@ -227,7 +234,9 @@ mod tests {
             .unwrap();
 
         let collection = db.get("users").unwrap();
-        let schema = collection_schema_to_compact_json(&collection).unwrap();
+        let schema = collection_schema_to_compact_json(&collection)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(
             schema,
@@ -237,5 +246,17 @@ mod tests {
                 "age": "Int"
             })
         );
+    }
+
+    #[test]
+    fn collection_schema_to_compact_json_describes_none_id_type() {
+        let db = Db::new();
+        let collection = db.create_with_config("notes", DbConfig::none("id"));
+
+        let schema = collection_schema_to_compact_json(&collection)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(schema, json!({ "id": "None:String" }));
     }
 }

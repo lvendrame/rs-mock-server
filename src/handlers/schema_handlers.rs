@@ -14,6 +14,7 @@ use serde_json::Value;
 
 use crate::{
     app::{App, MOCK_SERVER_ROUTE},
+    handlers::read_error_response,
     schema_files::{collection_schema_to_compact_json, db_schemas_to_compact_json},
 };
 
@@ -104,8 +105,10 @@ fn create_collection_schema_download_route(app: &mut App) {
         let Some(collection) = db.get(&name) else {
             return StatusCode::NOT_FOUND.into_response();
         };
-        let Some(schema) = collection_schema_to_compact_json(&collection) else {
-            return StatusCode::NOT_FOUND.into_response();
+        let schema = match collection_schema_to_compact_json(&collection) {
+            Ok(Some(schema)) => schema,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(err) => return read_error_response(err),
         };
 
         json_download_response(&format!("{name}.schema"), &schema)

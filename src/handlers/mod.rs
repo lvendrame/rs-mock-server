@@ -31,3 +31,7 @@ pub use graphql_handlers::*;
 /// Shared handler utilities.
 pub mod utils;
 pub use utils::*;
+
+/// Shared mapping from fosk collection errors to HTTP error responses.
+pub mod error_response;
+pub use error_response::*;

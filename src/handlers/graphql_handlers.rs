@@ -10,7 +10,7 @@ use axum::{
     extract::Json,
     routing::{get, post},
 };
-use fosk::{Db, IdType, JsonPrimitive};
+use fosk::{CollectionReadError, Db, IdType, JsonPrimitive};
 use graphql_parser::query::{
     Definition, Document, OperationDefinition, Selection, Value as GqlValue, parse_query,
 };
@@ -154,6 +154,7 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
                         let coll = db.get(&coll_name).unwrap();
                         let items: Vec<GValue> = coll
                             .get_all()
+                            .map_err(|err| GQLError::new(err.to_string()))?
                             .into_iter()
                             .map(|item| GValue::from_json(item).unwrap_or(GValue::Null))
                             .collect();
@@ -265,8 +266,8 @@ pub fn build_dynamic_schema(db: &Db) -> Schema {
     for meta in &collections {
         if let Some(def) = db.schema_with_refs_of(&meta.raw)
             && let Some(coll) = db.get(&meta.raw)
+            && let Ok(config) = coll.get_config()
         {
-            let config = coll.get_config();
             let id_key = config.id_key.clone();
             mutation = mutation.field(build_create_field(
                 &meta.type_name,
@@ -407,16 +408,16 @@ fn expand_list_with_selection(
     items: Vec<serde_json::Value>,
     selection_set: &graphql_parser::query::SelectionSet<String>,
     db: &Db,
-) -> Vec<serde_json::Value> {
+) -> Result<Vec<serde_json::Value>, CollectionReadError> {
     let mut expanded_items = items;
     for path in expansion_paths(selection_set) {
-        expanded_items = collection.expand_list(expanded_items, &path, db);
+        expanded_items = collection.expand_list(expanded_items, &path, db)?;
     }
 
-    expanded_items
+    Ok(expanded_items
         .into_iter()
         .map(|item| filter_value(item, selection_set))
-        .collect()
+        .collect())
 }
 
 fn expand_row_with_selection(
@@ -424,13 +425,13 @@ fn expand_row_with_selection(
     item: serde_json::Value,
     selection_set: &graphql_parser::query::SelectionSet<String>,
     db: &Db,
-) -> serde_json::Value {
+) -> Result<serde_json::Value, CollectionReadError> {
     let mut expanded_item = item;
     for path in expansion_paths(selection_set) {
-        expanded_item = collection.expand_row(&expanded_item, &path, db);
+        expanded_item = collection.expand_row(&expanded_item, &path, db)?;
     }
 
-    filter_value(expanded_item, selection_set)
+    Ok(filter_value(expanded_item, selection_set))
 }
 
 // Helper to filter JSON values based on selection set
@@ -476,7 +477,7 @@ fn execute_query(
     db: &Db,
     result: &mut serde_json::Map<String, serde_json::Value>,
     query: &graphql_parser::query::Query<'_, String>,
-) {
+) -> Result<(), CollectionReadError> {
     fn should_skip_field(name: &str) -> bool {
         name.starts_with("__")
     }
@@ -486,18 +487,18 @@ fn execute_query(
         collection: &Arc<fosk::DbCollection>,
         field_name: &str,
         field: &graphql_parser::query::Field<'_, String>,
-    ) -> Vec<serde_json::Value> {
+    ) -> Result<Vec<serde_json::Value>, CollectionReadError> {
         if field.arguments.is_empty() {
             return collection.get_all();
         }
 
-        let id_key = collection.get_config().id_key;
+        let id_key = collection.get_config()?.id_key;
         if field.arguments.len() == 1 && field.arguments[0].0 == id_key {
             let arg_val = graphql_value_to_json(&field.arguments[0].1);
-            if let Some(item) = collection.get(arg_val.as_str().unwrap_or("")) {
-                return vec![item];
+            if let Some(item) = collection.get(arg_val.as_str().unwrap_or(""))? {
+                return Ok(vec![item]);
             }
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
         let mut clauses = Vec::new();
@@ -512,8 +513,9 @@ fn execute_query(
             field_name,
             clauses.join(" AND ")
         );
-        db.query_with_args(&sql, serde_json::Value::Array(args_json))
-            .unwrap_or_default()
+        Ok(db
+            .query_with_args(&sql, serde_json::Value::Array(args_json))
+            .unwrap_or_default())
     }
 
     for sel in &query.selection_set.items {
@@ -523,24 +525,27 @@ fn execute_query(
             }
 
             let field_name = field.name.as_str();
-            let value = db
-                .get(field_name)
-                .map(|collection| {
-                    let items = fetch_collection_items(db, &collection, field_name, field);
+            let value = match db.get(field_name) {
+                Some(collection) => {
+                    let items = fetch_collection_items(db, &collection, field_name, field)?;
                     let filtered =
-                        expand_list_with_selection(&collection, items, &field.selection_set, db);
+                        expand_list_with_selection(&collection, items, &field.selection_set, db)?;
                     serde_json::Value::Array(filtered)
-                })
-                .unwrap_or(serde_json::Value::Null);
+                }
+                None => serde_json::Value::Null,
+            };
 
             result.insert(field.name.clone(), value);
         }
     }
+
+    Ok(())
 }
 
 fn execute_operation(
     db: &Db,
     result: &mut serde_json::Map<String, serde_json::Value>,
+    errors: &mut Vec<String>,
     mutation: &graphql_parser::query::Mutation<'_, String>,
 ) {
     fn json_value_to_id(value: serde_json::Value) -> Option<String> {
@@ -555,17 +560,18 @@ fn execute_operation(
         db: &Db,
         collection_name: &str,
         field: &graphql_parser::query::Field<'_, String>,
-    ) -> serde_json::Value {
+    ) -> Result<serde_json::Value, String> {
         if let Some(collection) = db.get(collection_name) {
             let mut new_map = serde_json::Map::new();
             for (arg_name, arg_val) in &field.arguments {
                 new_map.insert(arg_name.clone(), graphql_value_to_json(arg_val));
             }
             let new_item = serde_json::Value::Object(new_map);
-            let created = collection.add(new_item.clone()).unwrap_or(new_item);
+            let created = collection.add(new_item).map_err(|err| err.to_string())?;
             expand_row_with_selection(&collection, created, &field.selection_set, db)
+                .map_err(|err| err.to_string())
         } else {
-            serde_json::Value::Null
+            Ok(serde_json::Value::Null)
         }
     }
 
@@ -573,9 +579,12 @@ fn execute_operation(
         db: &Db,
         collection_name: &str,
         field: &graphql_parser::query::Field<'_, String>,
-    ) -> serde_json::Value {
+    ) -> Result<serde_json::Value, String> {
         if let Some(collection) = db.get(collection_name) {
-            let id_key = collection.get_config().id_key;
+            let id_key = collection
+                .get_config()
+                .map_err(|err| err.to_string())?
+                .id_key;
             let mut id_value = None;
             let mut update_map = serde_json::Map::new();
             for (arg_name, arg_val) in &field.arguments {
@@ -589,14 +598,15 @@ fn execute_operation(
 
             if let Some(id) = id_value {
                 let partial = serde_json::Value::Object(update_map);
-                collection
+                Ok(collection
                     .update_partial(&id, partial)
-                    .unwrap_or(serde_json::Value::Null)
+                    .map_err(|err| err.to_string())?
+                    .unwrap_or(serde_json::Value::Null))
             } else {
-                serde_json::Value::Null
+                Ok(serde_json::Value::Null)
             }
         } else {
-            serde_json::Value::Null
+            Ok(serde_json::Value::Null)
         }
     }
 
@@ -604,9 +614,12 @@ fn execute_operation(
         db: &Db,
         collection_name: &str,
         field: &graphql_parser::query::Field<'_, String>,
-    ) -> serde_json::Value {
+    ) -> Result<serde_json::Value, String> {
         if let Some(collection) = db.get(collection_name) {
-            let id_key = collection.get_config().id_key;
+            let id_key = collection
+                .get_config()
+                .map_err(|err| err.to_string())?
+                .id_key;
             let id_value = field
                 .arguments
                 .iter()
@@ -614,27 +627,40 @@ fn execute_operation(
                 .and_then(|(_, val)| json_value_to_id(graphql_value_to_json(val)));
 
             if let Some(id) = id_value {
-                let deleted = collection.delete(&id).unwrap_or(serde_json::Value::Null);
-                expand_row_with_selection(&collection, deleted, &field.selection_set, db)
+                match collection.delete(&id).map_err(|err| err.to_string())? {
+                    Some(deleted) => {
+                        expand_row_with_selection(&collection, deleted, &field.selection_set, db)
+                            .map_err(|err| err.to_string())
+                    }
+                    None => Ok(serde_json::Value::Null),
+                }
             } else {
-                serde_json::Value::Null
+                Ok(serde_json::Value::Null)
             }
         } else {
-            serde_json::Value::Null
+            Ok(serde_json::Value::Null)
         }
     }
 
     for sel in &mutation.selection_set.items {
         if let Selection::Field(field) = sel {
             let field_name = field.name.as_str();
-            let value = if let Some(collection_name) = field_name.strip_prefix("create") {
+            let outcome = if let Some(collection_name) = field_name.strip_prefix("create") {
                 handle_create(db, collection_name, field)
             } else if let Some(collection_name) = field_name.strip_prefix("update") {
                 handle_update(db, collection_name, field)
             } else if let Some(collection_name) = field_name.strip_prefix("delete") {
                 handle_delete(db, collection_name, field)
             } else {
-                serde_json::Value::Null
+                Ok(serde_json::Value::Null)
+            };
+
+            let value = match outcome {
+                Ok(value) => value,
+                Err(message) => {
+                    errors.push(message);
+                    serde_json::Value::Null
+                }
             };
 
             result.insert(field.name.clone(), value);
@@ -646,22 +672,23 @@ fn execute_operation(
 async fn execute_graphql_operations(
     doc: &Document<'_, String>,
     db: &Db,
-) -> Result<serde_json::Value, String> {
+) -> Result<(serde_json::Value, Vec<String>), String> {
     let mut result = serde_json::Map::new();
+    let mut errors = Vec::new();
 
     for def in &doc.definitions {
         match def {
             Definition::Operation(OperationDefinition::Query(q)) => {
-                execute_query(db, &mut result, q);
+                execute_query(db, &mut result, q).map_err(|err| err.to_string())?;
             }
             Definition::Operation(OperationDefinition::Mutation(m)) => {
-                execute_operation(db, &mut result, m);
+                execute_operation(db, &mut result, &mut errors, m);
             }
             _ => {}
         }
     }
 
-    Ok(serde_json::Value::Object(result))
+    Ok((serde_json::Value::Object(result), errors))
 }
 
 // -------------------------------------------------------------------------------
@@ -734,9 +761,15 @@ pub fn create_graphql_route(
             // Return GraphQL response
             let mut response = GQLResponse::default();
             match result {
-                Ok(data) => {
+                Ok((data, mutation_errors)) => {
                     response.data =
                         async_graphql::Value::from_json(data).unwrap_or(async_graphql::Value::Null);
+                    if !mutation_errors.is_empty() {
+                        response.errors = mutation_errors
+                            .into_iter()
+                            .map(|message| ServerError::new(message, None))
+                            .collect();
+                    }
                 }
                 Err(err) => {
                     response.errors = vec![ServerError::new(err, None)];
@@ -830,6 +863,7 @@ mod tests {
         body::{Body, to_bytes},
         http::{Method, Request, header::CONTENT_TYPE},
     };
+    use fosk::DbConfig;
     use graphql_parser::parse_query;
     use graphql_parser::query::{Definition, OperationDefinition};
     use serde_json::{Value, json};
@@ -1060,6 +1094,55 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("Unknown collection")
+        );
+    }
+
+    #[tokio::test]
+    async fn graphql_create_mutation_surfaces_duplicate_and_missing_id_errors() {
+        let mut app = App::default();
+        let collection = app.db.create_with_config("items", DbConfig::none("id"));
+        collection.add(json!({"id": "1", "name": "First"})).unwrap();
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        create_graphiql_route(&mut app);
+        create_graphql_route(
+            &mut app,
+            "/graphql",
+            temp_dir.path().as_os_str().to_os_string(),
+            false,
+            None,
+        );
+        let router = app.take_router_for_test();
+
+        let duplicate = router
+            .clone()
+            .oneshot(graphql_request(
+                r#"mutation { createItems(id: "1", name: "Second") { id } }"#,
+            ))
+            .await
+            .unwrap();
+        let duplicate_body = response_json(duplicate).await;
+        assert!(duplicate_body["data"]["createItems"].is_null());
+        assert!(
+            duplicate_body["errors"][0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("duplicate collection id '1'")
+        );
+
+        let missing_id = router
+            .oneshot(graphql_request(
+                r#"mutation { createItems(name: "NoId") { id } }"#,
+            ))
+            .await
+            .unwrap();
+        let missing_id_body = response_json(missing_id).await;
+        assert!(missing_id_body["data"]["createItems"].is_null());
+        assert!(
+            missing_id_body["errors"][0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("missing required id field 'id'")
         );
     }
 

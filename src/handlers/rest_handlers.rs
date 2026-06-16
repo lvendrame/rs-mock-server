@@ -8,13 +8,13 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
 };
-use fosk::{DbCollection, DbConfig, IdType};
+use fosk::{DbCollection, DbConfig};
 use jgd_rs::generate_jgd_from_file;
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 use crate::{
     app::App,
-    handlers::{SleepThread, is_jgd},
+    handlers::{SleepThread, add_error_response, is_jgd, read_error_response, write_error_response},
     route_builder::{RouteRegistrator, RouteRest},
 };
 
@@ -31,12 +31,15 @@ pub fn create_get_all(
     let list_router = get(move || async move {
         delay.sleep_thread();
 
-        let items = list_collection.get_all();
+        match list_collection.get_all() {
+            Ok(items) => {
+                let mut data: Map<String, Value> = Map::new();
+                data.insert("data".to_string(), Value::Array(items));
 
-        let mut data: Map<String, Value> = Map::new();
-        data.insert("data".to_string(), Value::Array(items));
-
-        Json(data).into_response()
+                Json(data).into_response()
+            }
+            Err(err) => read_error_response(err),
+        }
     });
 
     app.push_route(route, list_router, Some("GET"), is_protected, None);
@@ -55,19 +58,9 @@ pub fn create_insert(
     let create_router = post(move |Json(payload): Json<Value>| async move {
         delay.sleep_thread();
 
-        let id_type = create_collection.get_config().id_type;
-
         match create_collection.add(payload) {
-            Some(item) => (StatusCode::CREATED, Json(item)).into_response(),
-            None if id_type == IdType::None => (
-                StatusCode::CONFLICT,
-                Json(json!({
-                    "error": "duplicate_id",
-                    "message": "An item with the same id already exists"
-                })),
-            )
-                .into_response(),
-            None => StatusCode::BAD_REQUEST.into_response(),
+            Ok(item) => (StatusCode::CREATED, Json(item)).into_response(),
+            Err(err) => add_error_response(err),
         }
     });
 
@@ -88,8 +81,9 @@ pub fn create_get_item(
         delay.sleep_thread();
 
         match get_collection.get(&id) {
-            Some(item) => Json(item).into_response(),
-            None => StatusCode::NOT_FOUND.into_response(),
+            Ok(Some(item)) => Json(item).into_response(),
+            Ok(None) => StatusCode::NOT_FOUND.into_response(),
+            Err(err) => read_error_response(err),
         }
     });
 
@@ -111,8 +105,9 @@ pub fn create_full_update(
             delay.sleep_thread();
 
             match update_collection.update(&id, payload) {
-                Some(item) => Json(item).into_response(),
-                None => StatusCode::NOT_FOUND.into_response(),
+                Ok(Some(item)) => Json(item).into_response(),
+                Ok(None) => StatusCode::NOT_FOUND.into_response(),
+                Err(err) => write_error_response(err),
             }
         },
     );
@@ -135,8 +130,9 @@ pub fn create_partial_update(
             delay.sleep_thread();
 
             match patch_collection.update_partial(&id, payload) {
-                Some(item) => Json(item).into_response(),
-                None => StatusCode::NOT_FOUND.into_response(),
+                Ok(Some(item)) => Json(item).into_response(),
+                Ok(None) => StatusCode::NOT_FOUND.into_response(),
+                Err(err) => write_error_response(err),
             }
         },
     );
@@ -158,8 +154,9 @@ pub fn create_delete(
         delay.sleep_thread();
 
         match delete_collection.delete(&id) {
-            Some(item) => Json(item).into_response(),
-            None => StatusCode::NOT_FOUND.into_response(),
+            Ok(Some(item)) => Json(item).into_response(),
+            Ok(None) => StatusCode::NOT_FOUND.into_response(),
+            Err(err) => write_error_response(err),
         }
     });
 
@@ -178,13 +175,15 @@ pub fn build_rest_routes(app: &mut App, config: &RouteRest) -> Arc<DbCollection>
         match generate_jgd_from_file(&PathBuf::from_str(config.path.to_str().unwrap()).unwrap()) {
             Ok(jgd_json) => {
                 let value = collection.load_from_json(jgd_json, false);
-                value.map(|items| {
-                    format!(
-                        "✔️ Generated {} initial items from {}",
-                        items.len(),
-                        config.path.to_string_lossy()
-                    )
-                })
+                value
+                    .map(|items| {
+                        format!(
+                            "✔️ Generated {} initial items from {}",
+                            items.len(),
+                            config.path.to_string_lossy()
+                        )
+                    })
+                    .map_err(|error| error.to_string())
             }
             Err(error) => Err(format!(
                 "Error to generate JGD Json for file {}. Details: {}",
@@ -193,7 +192,9 @@ pub fn build_rest_routes(app: &mut App, config: &RouteRest) -> Arc<DbCollection>
             )),
         }
     } else {
-        collection.load_from_file(&config.path)
+        collection
+            .load_from_file(&config.path)
+            .map_err(|error| error.to_string())
     };
 
     // load_initial_data(file_path, &collection);
@@ -264,7 +265,7 @@ mod tests {
             None,
         );
         let collection = build_rest_routes(&mut app, &config);
-        assert_eq!(collection.count(), 1);
+        assert_eq!(collection.count().unwrap(), 1);
 
         let router = app.take_router_for_test();
         let list = router
@@ -354,7 +355,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rest_none_id_post_conflicts_when_add_rejects_payload() {
+    async fn rest_post_duplicate_id_returns_conflict() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let file_path = temp_dir.path().join("rest.json");
         std::fs::write(&file_path, r#"[{"id":"1","name":"Ada"}]"#).unwrap();
@@ -386,7 +387,7 @@ mod tests {
             body_json(duplicate).await,
             json!({
                 "error": "duplicate_id",
-                "message": "An item with the same id already exists"
+                "message": "An item with id '1' already exists"
             })
         );
 
@@ -403,24 +404,6 @@ mod tests {
         assert_eq!(existing.status(), StatusCode::OK);
         assert_eq!(body_json(existing).await["name"], "Ada");
 
-        let rejected = router
-            .clone()
-            .oneshot(json_request(
-                Method::POST,
-                "/users",
-                json!({"name":"No ID"}),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(rejected.status(), StatusCode::CONFLICT);
-        assert_eq!(
-            body_json(rejected).await,
-            json!({
-                "error": "duplicate_id",
-                "message": "An item with the same id already exists"
-            })
-        );
-
         let created = router
             .clone()
             .oneshot(json_request(
@@ -432,6 +415,78 @@ mod tests {
             .unwrap();
         assert_eq!(created.status(), StatusCode::CREATED);
         assert_eq!(body_json(created).await["name"], "Grace");
+    }
+
+    #[tokio::test]
+    async fn rest_post_missing_id_returns_bad_request() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("rest.json");
+        std::fs::write(&file_path, r#"[{"id":"1","name":"Ada"}]"#).unwrap();
+
+        let mut app = App::default();
+        let config = RouteRest::new(
+            "/users".to_string(),
+            file_path.into_os_string(),
+            "id".to_string(),
+            IdType::None,
+            false,
+            "users".to_string(),
+            None,
+        );
+        build_rest_routes(&mut app, &config);
+
+        let router = app.take_router_for_test();
+        let rejected = router
+            .clone()
+            .oneshot(json_request(
+                Method::POST,
+                "/users",
+                json!({"name":"No ID"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(rejected.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body_json(rejected).await,
+            json!({
+                "error": "missing_id",
+                "message": "The request body is missing the required id field 'id'"
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn rest_post_non_object_payload_returns_bad_request() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("rest.json");
+        std::fs::write(&file_path, r#"[{"id":"1","name":"Ada"}]"#).unwrap();
+
+        let mut app = App::default();
+        let config = RouteRest::new(
+            "/users".to_string(),
+            file_path.into_os_string(),
+            "id".to_string(),
+            IdType::None,
+            false,
+            "users".to_string(),
+            None,
+        );
+        build_rest_routes(&mut app, &config);
+
+        let router = app.take_router_for_test();
+        let rejected = router
+            .clone()
+            .oneshot(json_request(Method::POST, "/users", json!(["x"])))
+            .await
+            .unwrap();
+        assert_eq!(rejected.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body_json(rejected).await,
+            json!({
+                "error": "invalid_payload",
+                "message": "The request body must be a JSON object"
+            })
+        );
     }
 
     #[tokio::test]
