@@ -18,7 +18,7 @@ use tokio_util::io::ReaderStream;
 
 use crate::{
     app::App,
-    handlers::{is_jgd, is_sql, is_text_file},
+    handlers::{is_jgd, is_sql, is_text_file, query},
 };
 
 fn get_file_content(file_path: &OsString) -> String {
@@ -65,6 +65,7 @@ pub fn build_stream_handler(file_path: OsString, method: &str) -> MethodRouter {
         "PATCH" => patch(handler),
         "DELETE" => delete(handler),
         "OPTIONS" => options(handler),
+        "QUERY" => query(handler),
         // Fallback for an unknown method string
         _ => get(|| async { "Unknown method in filename" }),
     }
@@ -116,6 +117,7 @@ pub fn content_handler(app: &mut App, file_path: OsString, method: &str) -> Meth
         "PATCH" => patch(handler),
         "DELETE" => delete(handler),
         "OPTIONS" => options(handler),
+        "QUERY" => query(handler),
         // Fallback for an unknown method string
         _ => get(|| async { "Unknown method in filename" }),
     }
@@ -139,6 +141,59 @@ mod tests {
         http::Request,
     };
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn query_handler_serves_text_files() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("hello.txt");
+        std::fs::write(&file_path, "hello").unwrap();
+
+        let mut app = App::default();
+        let router = build_method_router(&mut app, &file_path.into_os_string(), "QUERY");
+        app.route("/hello", router, Some("QUERY"), None);
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .method("QUERY")
+                    .uri("/hello")
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+            "hello"
+        );
+    }
+
+    #[tokio::test]
+    async fn query_handler_rejects_other_methods() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("hello.txt");
+        std::fs::write(&file_path, "hello").unwrap();
+
+        let mut app = App::default();
+        let router = build_method_router(&mut app, &file_path.into_os_string(), "QUERY");
+        app.route("/hello", router, Some("QUERY"), None);
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/hello")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+    }
 
     #[tokio::test]
     async fn content_handler_serves_text_files() {

@@ -12,8 +12,9 @@ use crate::{
     },
 };
 
-static RE_FILE_METHODS: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^(\$)?(get|post|put|patch|delete|options)(\{(.+)\})?$").unwrap());
+static RE_FILE_METHODS: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(\$)?(get|post|put|patch|delete|options|query)(\{(.+)\})?$").unwrap()
+});
 
 static RE_FILE_PARAM: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\$)?(.+?)(\{(.+)\})$").unwrap());
 
@@ -233,6 +234,78 @@ mod tests {
     }
 
     #[test]
+    fn test_try_parse_query_method() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "query.json");
+        let route_params = RouteParams::new(
+            "/api/search",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::from_bytes(b"QUERY").unwrap());
+                assert_eq!(route_basic.route, "/api/search");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_query_method_with_id_descriptor() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "query{id}.json");
+        let route_params = RouteParams::new(
+            "/api/items",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::from_bytes(b"QUERY").unwrap());
+                assert_eq!(route_basic.route, "/api/items");
+                assert_eq!(route_basic.sub_route, SubRoute::Id);
+                assert!(!route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
+    fn test_try_parse_protected_query_method() {
+        let temp_dir = TempDir::new().unwrap();
+        let entry = create_test_file(temp_dir.path(), "$query.json");
+        let route_params = RouteParams::new(
+            "/api/data",
+            &entry,
+            Config::default().with_protect(false),
+            &ConfigStore::default(),
+        );
+
+        let result = RouteBasic::try_parse(route_params);
+
+        match result {
+            Route::Basic(route_basic) => {
+                assert_eq!(route_basic.method, Method::from_bytes(b"QUERY").unwrap());
+                assert_eq!(route_basic.route, "/api/data");
+                assert_eq!(route_basic.sub_route, SubRoute::None);
+                assert!(route_basic.is_protected);
+            }
+            _ => panic!("Expected Route::Basic"),
+        }
+    }
+
+    #[test]
     fn test_try_parse_post_method() {
         let temp_dir = TempDir::new().unwrap();
         let entry = create_test_file(temp_dir.path(), "post.json");
@@ -413,6 +486,7 @@ mod tests {
             ("patch.json", Method::PATCH),
             ("delete.json", Method::DELETE),
             ("options.json", Method::OPTIONS),
+            ("query.json", Method::from_bytes(b"QUERY").unwrap()),
         ];
 
         for (filename, expected_method) in methods {

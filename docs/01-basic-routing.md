@@ -38,6 +38,7 @@ rs-mock-server supports all standard HTTP methods:
 -   `PATCH` - Partially update resources
 -   `DELETE` - Remove resources
 -   `OPTIONS` - Handle preflight requests
+-   `QUERY` - Body-bearing read/search ([RFC 10008](https://www.rfc-editor.org/info/rfc10008)). Per the RFC, a `QUERY` request without a `Content-Type` header is rejected with `400` (even with no body), and every response carries an `Accept-Query: */*` header.
 
 ## Examples
 

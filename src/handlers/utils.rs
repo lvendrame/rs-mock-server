@@ -2,6 +2,15 @@
 
 use std::{ffi::OsString, path::Path};
 
+use axum::{
+    extract::Request,
+    handler::Handler,
+    http::{HeaderName, HeaderValue, StatusCode, header::CONTENT_TYPE},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::{MethodRouter, any},
+};
+
 /// Returns the lowercase-sensitive file extension for a path, or an empty string.
 pub fn get_file_extension(file_path: &OsString) -> String {
     Path::new(file_path)
@@ -60,11 +69,149 @@ impl SleepThread for Option<u16> {
     }
 }
 
+/// `Accept-Query` response header value, advertised per RFC 10008 ยง7. This
+/// server doesn't parse or validate request content against any particular
+/// format — mock routes return their configured response regardless of
+/// body — so `*/*` is the accurate claim, not a specific media type.
+const ACCEPT_QUERY_MEDIA_TYPE: &str = "*/*";
+
+/// Routes requests with the HTTP `QUERY` verb (RFC 10008), a safe,
+/// idempotent, body-bearing read.
+///
+/// Axum's `MethodFilter` has no bit for non-standard methods, so the only
+/// way to claim a path for `QUERY` is `any()`; this wraps it with the
+/// RFC's normative server requirements: requests with any other method get
+/// 405, requests with content but no `Content-Type` get 400, and every
+/// response carries an `Accept-Query` header advertising the accepted
+/// content type.
+pub fn query<H, T, S>(handler: H) -> MethodRouter<S>
+where
+    H: Handler<T, S>,
+    T: 'static,
+    S: Clone + Send + Sync + 'static,
+{
+    any(handler).layer(middleware::from_fn(enforce_query_semantics))
+}
+
+async fn enforce_query_semantics(req: Request, next: Next) -> Response {
+    let mut response = if req.method().as_str() != "QUERY" {
+        StatusCode::METHOD_NOT_ALLOWED.into_response()
+    } else if !req.headers().contains_key(CONTENT_TYPE) {
+        // RFC 10008 ยง2: "Servers MUST fail the request if the Content-Type
+        // request field is missing" — unconditionally, even with no body.
+        StatusCode::BAD_REQUEST.into_response()
+    } else {
+        next.run(req).await
+    };
+
+    response.headers_mut().insert(
+        HeaderName::from_static("accept-query"),
+        HeaderValue::from_static(ACCEPT_QUERY_MEDIA_TYPE),
+    );
+    response
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{
+        Router,
+        body::{Body, to_bytes},
+        http::Request,
+    };
     use std::ffi::OsString;
     use std::time::Instant;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn query_routes_requests_with_query_method() {
+        let app = Router::new().route("/search", query(|| async { "found" }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("QUERY")
+                    .uri("/search")
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("accept-query").unwrap(),
+            ACCEPT_QUERY_MEDIA_TYPE
+        );
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+            "found"
+        );
+    }
+
+    #[tokio::test]
+    async fn query_rejects_empty_body_without_content_type() {
+        let app = Router::new().route("/search", query(|| async { "found" }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("QUERY")
+                    .uri("/search")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // RFC 10008: Content-Type is mandatory even for an empty body.
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn query_rejects_non_query_methods() {
+        let app = Router::new().route("/search", query(|| async { "found" }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/search")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(
+            response.headers().get("accept-query").unwrap(),
+            ACCEPT_QUERY_MEDIA_TYPE
+        );
+    }
+
+    #[tokio::test]
+    async fn query_rejects_body_without_content_type() {
+        let app = Router::new().route("/search", query(|| async { "found" }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("QUERY")
+                    .uri("/search")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response.headers().get("accept-query").unwrap(),
+            ACCEPT_QUERY_MEDIA_TYPE
+        );
+    }
 
     #[test]
     fn file_type_helpers_detect_supported_extensions() {

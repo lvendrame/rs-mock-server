@@ -70,6 +70,7 @@ pub fn method_from_str(value: &str) -> Method {
         "CONNECT" => Method::CONNECT,
         "PATCH" => Method::PATCH,
         "TRACE" => Method::TRACE,
+        "QUERY" => Method::from_bytes(b"QUERY").unwrap(),
         _ => Method::GET,
     }
 }

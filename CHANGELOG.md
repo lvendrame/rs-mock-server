@@ -263,6 +263,10 @@
 
 - chore: bump fosk to 0.2.0
 
-## 0.7.3 (2026-06-16)
+## 0.7.4 (2026-06-16)
 
 - chore: bump dependencies on cargo.lock
+
+## 0.7.5 (2026-06-16)
+
+- feat: add support to query http verb

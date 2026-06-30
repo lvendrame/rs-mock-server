@@ -80,6 +80,22 @@ fn preview(content: &str) -> Vec<Line<'static>> {
     content.lines().map(preview_line).collect()
 }
 
+fn operation_label(operation: &WriteOperation) -> String {
+    format!("{} {}", operation_kind(operation), operation.path.display())
+}
+
+fn operation_kind(operation: &WriteOperation) -> &'static str {
+    if operation.content.is_some() {
+        "file"
+    } else {
+        "dir"
+    }
+}
+
+fn preview_line(line: &str) -> Line<'static> {
+    Line::from(format!("  {}", line))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,20 +163,4 @@ mod tests {
         assert!(app.force);
         assert_eq!(app.status, "Force overwrite: true");
     }
-}
-
-fn operation_label(operation: &WriteOperation) -> String {
-    format!("{} {}", operation_kind(operation), operation.path.display())
-}
-
-fn operation_kind(operation: &WriteOperation) -> &'static str {
-    if operation.content.is_some() {
-        "file"
-    } else {
-        "dir"
-    }
-}
-
-fn preview_line(line: &str) -> Line<'static> {
-    Line::from(format!("  {}", line))
 }
