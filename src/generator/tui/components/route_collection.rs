@@ -51,8 +51,7 @@ fn route_leaf(route: &str) -> String {
     route
         .split('/')
         .filter(|segment| !segment.is_empty())
-        .filter(|segment| !(segment.starts_with('{') && segment.ends_with('}')))
-        .next_back()
+        .rfind(|segment| !(segment.starts_with('{') && segment.ends_with('}')))
         .and_then(|segment| segment.split('{').next())
         .unwrap_or("items")
         .to_string()

@@ -1,6 +1,6 @@
 //! Handlers for generated REST collection routes.
 
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use axum::{
     extract::{Json, Path as AxumPath},
@@ -9,12 +9,12 @@ use axum::{
     routing::{delete, get, patch, post, put},
 };
 use fosk::{DbCollection, DbConfig};
-use jgd_rs::generate_jgd_from_file;
 use serde_json::{Map, Value};
 
 use crate::{
     app::App,
-    handlers::{SleepThread, add_error_response, is_jgd, read_error_response, write_error_response},
+    collection_files::load_collection_seed,
+    handlers::{SleepThread, add_error_response, read_error_response, write_error_response},
     route_builder::{RouteRegistrator, RouteRest},
 };
 
@@ -171,31 +171,7 @@ pub fn build_rest_routes(app: &mut App, config: &RouteRest) -> Arc<DbCollection>
         DbConfig::from(config.id_type, &config.id_key),
     );
 
-    let result: Result<String, String> = if is_jgd(&config.path) {
-        match generate_jgd_from_file(&PathBuf::from_str(config.path.to_str().unwrap()).unwrap()) {
-            Ok(jgd_json) => {
-                let value = collection.load_from_json(jgd_json, false);
-                value
-                    .map(|items| {
-                        format!(
-                            "✔️ Generated {} initial items from {}",
-                            items.len(),
-                            config.path.to_string_lossy()
-                        )
-                    })
-                    .map_err(|error| error.to_string())
-            }
-            Err(error) => Err(format!(
-                "Error to generate JGD Json for file {}. Details: {}",
-                config.path.to_string_lossy(),
-                error
-            )),
-        }
-    } else {
-        collection
-            .load_from_file(&config.path)
-            .map_err(|error| error.to_string())
-    };
+    let result = load_collection_seed(&collection, Path::new(&config.path));
 
     // load_initial_data(file_path, &collection);
     match result {
@@ -352,6 +328,44 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn rest_routes_load_csv_seed_data() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("rest.csv");
+        std::fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fosk-import/people.csv"),
+            &file_path,
+        )
+        .unwrap();
+
+        let mut app = App::default();
+        let config = RouteRest::new(
+            "/csv-users".to_string(),
+            file_path.into_os_string(),
+            "id".to_string(),
+            IdType::None,
+            false,
+            "csv_users".to_string(),
+            None,
+        );
+        build_rest_routes(&mut app, &config);
+
+        let response = app
+            .take_router_for_test()
+            .oneshot(
+                Request::builder()
+                    .uri("/csv-users")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        assert_eq!(body["data"][0]["name"], "Ada Lovelace");
+        assert_eq!(body["data"][0]["active"], true);
     }
 
     #[tokio::test]

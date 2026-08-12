@@ -539,8 +539,10 @@ mod tests {
                     .uri("/mock-server/collections/projects")
                     .header(CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
                     .body(
-                        multipart_json(r#"[{"id":"p1","name":"First"},{"id":"p1","name":"Second"}]"#)
-                            .into_body(),
+                        multipart_json(
+                            r#"[{"id":"p1","name":"First"},{"id":"p1","name":"Second"}]"#,
+                        )
+                        .into_body(),
                     )
                     .unwrap(),
             )

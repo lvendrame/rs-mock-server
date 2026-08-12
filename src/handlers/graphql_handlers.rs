@@ -1,4 +1,4 @@
-use std::{ffi::OsString, fs, io::Error, path::PathBuf, str::FromStr};
+use std::{ffi::OsString, fs, io::Error, path::PathBuf};
 
 use async_graphql::{
     Error as GQLError, Request as GQLRequest, Response as GQLResponse, ServerError,
@@ -21,7 +21,7 @@ use jgd_rs::generate_jgd_from_file;
 
 use crate::{
     app::App,
-    handlers::{SleepThread, is_jgd, is_json},
+    handlers::SleepThread,
     route_builder::{RouteRegistrator, route_graphql::RouteGraphQL},
 };
 use std::collections::{HashMap, HashSet};
@@ -781,7 +781,7 @@ pub fn create_graphql_route(
     app.push_route(route, router, Some("POST"), is_protected, None);
 }
 
-/// Loads JSON and JGD collection seed files from a GraphQL `collections` folder.
+/// Loads supported collection seed files from a GraphQL `collections` folder.
 pub fn load_folder_collections(app: &mut App, path: OsString) -> Result<(), Error> {
     let mut path = path.clone();
     path.push(COLLECTIONS_FOLDER);
@@ -793,46 +793,15 @@ pub fn load_folder_collections(app: &mut App, path: OsString) -> Result<(), Erro
 
     fs::read_dir(path)?
         .filter_map(Result::ok)
-        .filter(|file| is_jgd(&file.file_name()) || is_json(&file.file_name()))
+        .filter(|file| crate::collection_files::is_collection_file(&file.path()))
         .for_each(|file| {
             let binding = file.path();
             let name = binding.file_stem().unwrap().to_string_lossy();
             let collection = app.db.create(&name);
 
-            if is_jgd(&file.file_name()) {
-                match generate_jgd_from_file(
-                    &PathBuf::from_str(file.path().to_str().unwrap()).unwrap(),
-                ) {
-                    Ok(jgd_json) => {
-                        let value = collection.load_from_json(jgd_json, false);
-                        match value {
-                            Ok(items) => {
-                                println!(
-                                    "✔️ Loaded collection {} with {} initial items from {}",
-                                    name,
-                                    items.len(),
-                                    binding.to_string_lossy()
-                                );
-                            }
-                            Err(error) => println!(
-                                "Error to load JSON for file {}. Details: {}",
-                                binding.to_string_lossy(),
-                                error
-                            ),
-                        }
-                    }
-                    Err(error) => println!(
-                        "Error to generate JGD JSON for file {}. Details: {}",
-                        binding.to_string_lossy(),
-                        error
-                    ),
-                }
-            } else {
-                let result = collection.load_from_file(&binding.as_os_str().to_os_string());
-                match result {
-                    Ok(value) => println!("{}", value),
-                    Err(error) => println!("{}", error),
-                }
+            match crate::collection_files::load_collection_seed(&collection, &binding) {
+                Ok(value) => println!("{}", value),
+                Err(error) => println!("{}", error),
             }
         });
 
@@ -913,6 +882,11 @@ mod tests {
             r#"[{"id":"1","name":"Ada","active":true,"score":1.5,"age":42,"ignored":"x"}]"#,
         )
         .unwrap();
+        std::fs::copy(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fosk-import/people.csv"),
+            collections.join("People.csv"),
+        )
+        .unwrap();
 
         let mut app = App::default();
         let config = RouteGraphQL::new(
@@ -947,6 +921,17 @@ mod tests {
         let body = response_json(query).await;
         assert_eq!(body["data"]["Users"][0]["name"], "Ada");
         assert!(body["data"]["Users"][0].get("ignored").is_none());
+
+        let csv_query = router
+            .clone()
+            .oneshot(graphql_request(r#"query { People { id name active } }"#))
+            .await
+            .unwrap();
+        assert_eq!(csv_query.status(), http::StatusCode::OK);
+        assert_eq!(
+            response_json(csv_query).await["data"]["People"][0]["name"],
+            "Ada Lovelace"
+        );
 
         let by_id = router
             .clone()

@@ -8,7 +8,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use fosk::{AddBatchError, AddError, CollectionReadError, CollectionWriteError, LoadCollectionError};
+use fosk::{
+    AddBatchError, AddError, CollectionReadError, CollectionWriteError, LoadCollectionError,
+};
 use serde_json::json;
 
 /// Builds a JSON error response with the given status, machine-readable
@@ -169,7 +171,9 @@ mod tests {
             "The request body is missing the required id field 'id'"
         );
 
-        let response = add_error_response(AddError::DuplicateId { id: "1".to_string() });
+        let response = add_error_response(AddError::DuplicateId {
+            id: "1".to_string(),
+        });
         assert_eq!(response.status(), StatusCode::CONFLICT);
         let body = body_json(response).await;
         assert_eq!(body["error"], "duplicate_id");
@@ -211,7 +215,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CONFLICT);
         let body = body_json(response).await;
         assert_eq!(body["error"], "duplicate_id");
-        assert_eq!(body["message"], "Item at index 3 duplicates existing id '7'");
+        assert_eq!(
+            body["message"],
+            "Item at index 3 duplicates existing id '7'"
+        );
 
         let response = add_batch_error_response(AddBatchError::InvalidIntId { index: 4 });
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -264,6 +271,9 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CONFLICT);
         let body = body_json(response).await;
         assert_eq!(body["error"], "duplicate_id");
-        assert_eq!(body["message"], "Item at index 0 duplicates existing id '1'");
+        assert_eq!(
+            body["message"],
+            "Item at index 0 duplicates existing id '1'"
+        );
     }
 }

@@ -246,8 +246,7 @@ fn route_leaf(route: &str) -> Option<String> {
     route
         .split('/')
         .filter(|segment| !segment.is_empty())
-        .filter(|segment| !(segment.starts_with('{') && segment.ends_with('}')))
-        .next_back()
+        .rfind(|segment| !(segment.starts_with('{') && segment.ends_with('}')))
         .map(ToString::to_string)
 }
 

@@ -1,12 +1,12 @@
 # In-Memory REST APIs
 
-Create fully functional CRUD APIs with automatic ID generation and data persistence using special `rest.json` or `rest.jgd` files.
+Create fully functional CRUD APIs with automatic ID generation and data persistence using `rest.json`, `rest.jgd`, `rest.csv`, or `rest.parquet` files.
 
 ## Overview
 
-When the server detects a file named `rest.json`, `rest.jgd`, or `rest{params}.json/jgd`, it automatically:
+When the server detects `rest` (or `rest{params}`) with a JSON, JGD, CSV, or Parquet extension, it automatically:
 
-1. **Loads initial data** from the JSON array in the file (for `.json`) or generates fake data using JGD (for `.jgd`)
+1. **Loads initial data** from JSON, generated JGD data, CSV rows, or Parquet rows
 2. **Creates a complete REST API** with all CRUD operations
 3. **Maintains data in memory** during the server's lifetime
 4. **Handles ID generation** automatically for new items (except for None ID Type)

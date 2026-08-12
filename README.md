@@ -116,7 +116,7 @@ echo '[{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]' > mocks/api/users/
 -   🚀 **File-System Routing**: Your folder structure defines your API routes. No config files needed.
 -   🧩 **Dynamic Path Generation**: Create routes with parameters (`{id}`), specific values (`{admin}`), and even numeric ranges (`{1-10}`) right from the filename.
 -   ⚙️ **Full HTTP Method Support**: Define `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, and `OPTIONS` endpoints.
--   🔗 **In-Memory REST API**: Create fully functional CRUD APIs with automatic ID generation and data persistence during runtime using special `rest.json` or `rest.jgd` files.
+-   🔗 **In-Memory REST API**: Create fully functional CRUD APIs with automatic ID generation and data persistence during runtime using `rest.json`, `rest.jgd`, `rest.csv`, or `rest.parquet` files.
 -   🔐 **JWT Authentication**: Automatic authentication system with login/logout endpoints and route protection using special `{auth}` files.
 -   📤 **File Upload & Download**: Create upload endpoints with automatic file handling and download capabilities using special `{upload}` folders.
 -   🖼️ **Static File Serving**: Automatically serves any file (like images, CSS, or JS) with its correct `Content-Type` if the filename doesn't match a method pattern.
@@ -129,7 +129,7 @@ echo '[{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]' > mocks/api/users/
 -   ⚡ **Lightweight & Fast**: Built with Rust for minimal resource usage and maximum performance.
 -   🗄️ **SQL Routes**: Use `.sql` files to create GET endpoints that execute SQL queries against the in-memory database and return results as JSON.
 -   ⚛️ **GraphQL**: Create your GraphQL queries and mutations, also load collections to load data.
--   📦 **Collection Loading**: Initialize Fosk collections from JSON or JGD files in the default `{collections}` folder.
+-   📦 **Collection Loading**: Initialize Fosk collections from JSON, JGD, CSV, or Parquet files in the default `{collections}` folder.
 -   📐 **Schema Loading**: Initialize Fosk collection schemas from compact JSON files in the default `{schemas}` folder or through upload endpoints.
 
 ---
@@ -159,13 +159,14 @@ The following table shows how different filename patterns are mapped to routes, 
 | `[method]{start-end}` | `get{1-5}.json`   | `GET /api/users/1`<br>`GET /api/users/2`<br>...<br>`GET /api/users/5`                                                                          | A numeric range that generates multiple distinct routes.                                                                                                                          |
 | `rest[{params}]`      | `rest.json`       | `GET /api/users`<br>`POST /api/users`<br>`GET /api/users/{id}`<br>`PUT /api/users/{id}`<br>`PATCH /api/users/{id}`<br>`DELETE /api/users/{id}` | **In-Memory REST API**.<br>Creates a full CRUD API with automatic ID generation, data persistence,<br>and initial data loading from the JSON array in the file.                   |
 | `rest[{params}]`      | `rest.jgd`        | `GET /api/users`<br>`POST /api/users`<br>`GET /api/users/{id}`<br>`PUT /api/users/{id}`<br>`PATCH /api/users/{id}`<br>`DELETE /api/users/{id}` | **In-Memory REST API with JGD**.<br>Creates a full CRUD API with dynamic fake data generation using JGD<br>as initial data, then maintains persistence during runtime.            |
+| `rest[{params}]`      | `rest.csv` / `rest.parquet` | `GET /api/users`<br>`POST /api/users`<br>`GET /api/users/{id}`<br>`PUT /api/users/{id}`<br>`PATCH /api/users/{id}`<br>`DELETE /api/users/{id}` | **Tabular REST seed**.<br>Loads CSV or Parquet rows into the Fosk collection before registering the CRUD routes. |
 | `{auth}`              | `{auth}.json`     | `POST /api/login`<br>`POST /api/logout`                                                                                                        | **JWT Authentication**. Creates login and logout endpoints with JWT token generation<br>and validation middleware for route protection.                                           |
 | `[filename].[ext]`    | `avatar.png`      | `GET /api/users/avatar`                                                                                                                        | **Static File**. Any filename that doesn't match the patterns above is served as a static asset.<br>The `Content-Type` header is automatically set based on the file's extension. |
 | `[filename].jgd`      | `users.jgd`       | `GET /api/users/users`                                                                                                                         | **JGD File**. JSON Generation Definition files that dynamically generate realistic JSON data<br>using the [JGD-rs library](https://github.com/lvendrame/jgd-rs/tree/main/jgd-rs). |
 
 ### Collection Files
 
-Create `mocks/{collections}` to load Fosk collections at startup without creating REST routes. Each `.json` or `.jgd` file is loaded as one collection using the file stem as the collection name.
+Create `mocks/{collections}` to load Fosk collections at startup without creating REST routes. Each `.json`, `.jgd`, `.csv`, or `.parquet` file is loaded as one collection using the file stem as the collection name.
 
 ```bash
 mkdir -p 'mocks/{collections}'
@@ -177,7 +178,11 @@ cat > 'mocks/{collections}/warehouse_locations.json' <<'JSON'
 JSON
 ```
 
-JSON files use the same array format accepted by `rest.json`; JGD files use the same generated data format accepted by `rest.jgd`.
+JSON and JGD use their corresponding REST seed formats. CSV uses its first row as headers and Fosk's default type inference; Parquet uses its embedded schema and Fosk's default conversions.
+
+The bundled mocks include executable examples copied from Fosk's full demo:
+`GET /import-people` is backed by `mocks/import-people/rest{id-int}.csv`, and
+`GET /import-iris` is backed by `mocks/import-iris/rest{int}.parquet`.
 
 ### Collection Schema Files
 

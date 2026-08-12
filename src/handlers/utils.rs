@@ -224,6 +224,8 @@ mod tests {
         assert!(is_jgd(&OsString::from("data.jgd")));
         assert!(is_sql(&OsString::from("query.sql")));
         assert!(is_toml(&OsString::from("config.toml")));
+        assert!(!is_text_file(&OsString::from("data.csv")));
+        assert!(!is_text_file(&OsString::from("data.parquet")));
         assert!(!is_text_file(&OsString::from("image.png")));
     }
 

@@ -434,21 +434,29 @@ mod tests {
     #[tokio::test]
     async fn auth_routes_login_logout_and_protect_routes() {
         let temp_dir = tempfile::TempDir::new().unwrap();
-        let users_file = temp_dir.path().join("{auth}.json");
-        std::fs::write(
+        let users_file = temp_dir.path().join("{auth}.csv");
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/fosk-import/products-1000.csv"),
             &users_file,
-            r#"[{"id":"1","username":"ada","password":"secret","roles":"admin"}]"#,
         )
         .unwrap();
 
         let mut app = App::default();
-        let auth_def = auth_def(users_file.into_os_string());
+        let mut auth_def = auth_def(users_file.into_os_string());
+        auth_def.user_collection.id_key = "Index".to_string();
+        auth_def.username_field = "Name".to_string();
+        auth_def.password_field = "Description".to_string();
+        auth_def.roles_field = "Brand".to_string();
         build_auth_routes(&mut app, &auth_def);
         let router = app.take_router_for_test();
 
         let bad_payload = router
             .clone()
-            .oneshot(json_request("/auth/login", json!({"username":"ada"})))
+            .oneshot(json_request(
+                "/auth/login",
+                json!({"Name":"Thermostat Drone Heater"}),
+            ))
             .await
             .unwrap();
         assert_eq!(bad_payload.status(), StatusCode::BAD_REQUEST);
@@ -457,7 +465,7 @@ mod tests {
             .clone()
             .oneshot(json_request(
                 "/auth/login",
-                json!({"username":"ada","password":"bad"}),
+                json!({"Name":"Thermostat Drone Heater","Description":"bad"}),
             ))
             .await
             .unwrap();
@@ -467,7 +475,10 @@ mod tests {
             .clone()
             .oneshot(json_request(
                 "/auth/login",
-                json!({"username":"ada","password":"secret"}),
+                json!({
+                    "Name":"Thermostat Drone Heater",
+                    "Description":"Consumer approach woman us those star."
+                }),
             ))
             .await
             .unwrap();

@@ -290,6 +290,12 @@ mod tests {
         let route = Route::try_parse(&route_params);
         assert!(matches!(route, Route::Rest(_)));
 
+        let route_params = create_test_route_params("rest.csv", false, false);
+        assert!(matches!(Route::try_parse(&route_params), Route::Rest(_)));
+
+        let route_params = create_test_route_params("rest.parquet", false, false);
+        assert!(matches!(Route::try_parse(&route_params), Route::Rest(_)));
+
         // These patterns with HTTP methods should be Basic routes, not REST
         let route_params = create_test_route_params("get{id}.json", false, false);
         let route = Route::try_parse(&route_params);

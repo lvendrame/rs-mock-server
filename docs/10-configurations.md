@@ -47,7 +47,7 @@ from a tool such as `mkcert`, set both `ssl_cert` and `ssl_key`.
 
 The `[collections]` table controls startup loading for Fosk collection files.
 By default, rs-mock-server looks in `<server.folder>/{collections}`. Each
-`.json` or `.jgd` file in that folder is loaded as one collection, using its
+`.json`, `.jgd`, `.csv`, or `.parquet` file in that folder is loaded as one collection, using its
 file stem as the collection name.
 
 ```toml

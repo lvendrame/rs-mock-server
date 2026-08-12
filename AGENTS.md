@@ -22,6 +22,10 @@ Use Rust 2024 idioms and `rustfmt` defaults; do not hand-format around `cargo fm
 
 Tests are primarily inline unit tests inside `#[cfg(test)] mod tests` blocks near the code they verify. Add regression tests for route parsing, config behavior, handler edge cases, and mock-file conventions before changing behavior. Use `tempfile` for filesystem-dependent tests instead of relying on global local state. Run `make check-all` before submitting changes.
 
+## Resource and Fixture Integrity
+
+Never invent, synthesize, encode, or substitute test fixtures or other external resources when the task depends on representative real files. Search the workspace and known upstream project locations first. If the required resource cannot be found, ask the user for its location or for permission to create it before proceeding. When the user identifies a canonical resource, copy or reference that exact resource and verify its checksum; do not replace it with generated content or an assumed equivalent.
+
 ## Commit & Pull Request Guidelines
 
 Recent history uses Conventional Commit prefixes such as `fix:`, `feat:`, `docs:`, and `chore:`. Keep commit subjects short and behavior-focused, for example `fix: preserve hot reload on file updates`. Pull requests should describe the user-visible change, list verification performed, link related issues when applicable, and include screenshots only for web UI changes.

@@ -270,3 +270,9 @@
 ## 0.7.5 (2026-06-16)
 
 - feat: add support to query http verb
+
+## 0.8.0 (2026-08-12)
+
+- feat: make tabular fixtures usable as mock collections
+
+    Enable Fosk CSV and Parquet imports across REST, authentication, startup, and GraphQL collection loading. Add executable mock routes, canonical upstream fixtures, documentation, and dependency updates required by Fosk 0.3.1.

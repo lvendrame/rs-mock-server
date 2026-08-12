@@ -24,12 +24,16 @@ The GraphiQL IDE is fed by a dynamic schema constructed from the currently loade
 
 Open `http://localhost:<port>/graphiql` and use the Docs panel to confirm which collections, relations, and mutations are currently available.
 
+Collection files may use JSON, JGD, CSV, or Parquet. CSV and Parquet use
+Fosk's default import options, and their inferred or embedded schemas become
+the GraphQL collection schema.
+
 ## Folder Layout
 
 ```
 mocks/
 ├── graphql/
-│   ├── collections/       # JSON or JGD files loaded as collections
+│   ├── collections/       # JSON, JGD, CSV, or Parquet files loaded as collections
 │   │   └── users.json     # creates `users` collection
 │   ├── getUsers.jgd       # GET /graphql?query=getUsers (static override)
 │   └── ...

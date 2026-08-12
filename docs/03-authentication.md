@@ -4,9 +4,9 @@ Create a complete JWT-based authentication system with login/logout endpoints an
 
 ## Overview
 
-When the server detects a file named `{auth}.json`, it automatically:
+When the server detects an `{auth}` file with a JSON, JGD, CSV, or Parquet extension, it automatically:
 
-1. **Loads user credentials** from the JSON array in the file
+1. **Loads user credentials** from the selected collection seed format
 2. **Creates authentication endpoints** for login and logout
 3. **Creates REST endpoints** for user
 4. **Generates JWT tokens** with secure cookies
@@ -24,7 +24,7 @@ Only **one authentication route is allowed** per server instance. The `{auth}` f
 
 ## Credentials File Format
 
-The `{auth}.json` file should contain an array of user objects with `username` and `password` as required fields:
+JSON auth files contain an array of user objects with `username` and `password` as required fields. JGD, CSV, and Parquet auth files must produce the same fields and use their standard Fosk loading defaults.
 
 ```json
 [

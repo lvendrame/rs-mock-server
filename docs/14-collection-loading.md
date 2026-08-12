@@ -1,6 +1,6 @@
 # Collection Loading
 
-rs-mock-server can initialize Fosk collections from standalone JSON or JGD files
+rs-mock-server can initialize Fosk collections from standalone JSON, JGD, CSV, or Parquet files
 at startup. This is useful when SQL, GraphQL, schema validation, or other
 runtime features need shared data that is not tied to one REST route file.
 
@@ -12,13 +12,15 @@ By default, collections are loaded from:
 mocks/{collections}
 ```
 
-Each `.json` or `.jgd` file in that folder is loaded as one Fosk collection. The
+Each `.json`, `.jgd`, `.csv`, or `.parquet` file in that folder is loaded as one Fosk collection. The
 collection name comes from the file stem:
 
 | File                                      | Collection          |
 | ----------------------------------------- | ------------------- |
 | `mocks/{collections}/warehouse.json`      | `warehouse`         |
 | `mocks/{collections}/warehouse_assets.jgd`| `warehouse_assets`  |
+| `mocks/{collections}/people.csv`           | `people`            |
+| `mocks/{collections}/events.parquet`       | `events`            |
 
 `{collections}` is reserved for collection loading and is not exposed as normal
 mock routes.
@@ -66,6 +68,12 @@ JGD collection files use the same generated data format accepted by `rest.jgd`:
 
 Save that file as `mocks/{collections}/warehouse_assets.jgd` to generate and
 load the `warehouse_assets` collection.
+
+## CSV and Parquet Formats
+
+CSV files use the first row as headers and Fosk's default scalar type inference.
+Parquet files use their embedded schema. Both formats otherwise use Fosk's
+default import options and replace the destination collection at startup.
 
 ## Configuration
 

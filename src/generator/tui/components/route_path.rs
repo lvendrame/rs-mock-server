@@ -94,8 +94,7 @@ fn update_named_route(app: &mut WizardApp, default_name: &str) {
 fn route_leaf(route: &str, default_name: &str) -> String {
     route
         .split('/')
-        .filter(|segment| !segment.is_empty())
-        .next_back()
+        .rfind(|segment| !segment.is_empty())
         .unwrap_or(default_name)
         .to_string()
 }
